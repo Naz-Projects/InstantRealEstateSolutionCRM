@@ -7,6 +7,34 @@
 
 const FIRECRAWL_SCRAPE_URL = "https://api.firecrawl.dev/v1/scrape";
 
+/**
+ * Retry an async operation with jittered backoff. Used to re-issue a whole
+ * scrape when the site returns a bot-block page (HTTP 200 but wrong content),
+ * which Firecrawl's internal HTTP retry can't catch. Throws after all attempts.
+ */
+export async function withRetry<T>(
+  fn: (attempt: number) => Promise<T>,
+  opts: { attempts?: number; baseDelayMs?: number; label?: string } = {},
+): Promise<T> {
+  const { attempts = 3, baseDelayMs = 2000, label = "operation" } = opts;
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (err) {
+      lastError = err;
+      if (attempt < attempts) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * attempt + Math.random() * 600));
+      }
+    }
+  }
+  throw new Error(
+    `${label} failed after ${attempts} attempts: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
+
 export interface FirecrawlAction {
   type: "click" | "write" | "wait" | "press" | "scroll" | "screenshot";
   selector?: string;

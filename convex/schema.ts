@@ -24,11 +24,24 @@ export default defineSchema({
     status: v.union(v.literal("running"), v.literal("complete"), v.literal("failed")),
     listingCount: v.number(),
     enrichedCount: v.number(),
+    // Optional (added later) so pre-existing run rows still validate.
+    phase: v.optional(v.string()), // current pipeline phase for the progress stepper
+    failedCount: v.optional(v.number()), // listings that failed to enrich
     startedAt: v.number(),
     finishedAt: v.optional(v.number()),
     error: v.optional(v.string()),
     triggeredBy: v.string(),
   }).index("by_type", ["type"]),
+
+  // Step-by-step progress events for a run — one row per step, streamed live to
+  // the UI stepper. Separate table (not an array on the run doc) so the ~N
+  // concurrent enrich actions don't contend writing the same document.
+  scrapeEvents: defineTable({
+    runId: v.id("scrapeRuns"),
+    phase: v.string(),
+    message: v.string(),
+    level: v.union(v.literal("info"), v.literal("warn"), v.literal("error")),
+  }).index("by_run", ["runId"]),
 
   // Sheriff sale listings (parcel + Zillow enriched).
   sheriffListings: defineTable({
@@ -57,6 +70,10 @@ export default defineSchema({
     beds: v.string(),
     baths: v.string(),
     sqft: v.string(),
+    // map (geocoded lazily; optional so existing rows still validate)
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
+    geocodeStatus: v.optional(v.union(v.literal("ok"), v.literal("failed"))),
     // workflow
     enrichmentStatus,
     dealStatus,
@@ -81,6 +98,10 @@ export default defineSchema({
     beds: v.string(),
     baths: v.string(),
     sqft: v.string(),
+    // map (geocoded lazily; optional so existing rows still validate)
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
+    geocodeStatus: v.optional(v.union(v.literal("ok"), v.literal("failed"))),
     // workflow
     enrichmentStatus,
     dealStatus,

@@ -42,20 +42,49 @@ out** one `enrich` action per row via `ctx.scheduler` → each enriches and patc
 UI fills in live. Idempotent: skips an already-scraped month/week unless forced.
 
 ## Data model (Convex `convex/schema.ts`)
-- `scrapeRuns` — one per execution (type, label, status, counts) → run history / progress.
+- `scrapeRuns` — one per execution (type, label, status, `phase`, counts incl. `failedCount`) → run history / live progress.
+- `scrapeEvents` — step-by-step log rows (`runId`, `phase`, `message`, `level`) streamed live to the UI stepper. Separate table (not an array on the run) to avoid OCC contention from the fan-out enrich actions.
 - `sheriffListings` — scraped + parcel + Zillow fields + `dealStatus` + `notes`.
 - `legalNotices` — scraped + Zillow fields + `dealStatus` + `notes`.
 - Shared pipeline: `dealStatus` = new → reviewing → contacted → offer → dead.
 
+## Live progress (how the stepper works)
+Each action creates its run FIRST (phase `starting`), then patches `phase` and appends `scrapeEvents` at every
+step (fetch → parse / AI-extract → per-listing parcel→Zillow sub-steps via an `onEvent` callback on the core
+`enrichListing`), and always finalizes (complete/failed) in try/catch. Force re-scrape = `clearMonth`/`clearWeek`
+deletes the period's rows, then re-inserts (clean replace). The UI subscribes to `runs.latestRun` + `runs.listEvents`
+and renders one unified shadcn **stepper** (`src/web/ScrapeProgress.tsx`): real phase drives the active step,
+time-easing animates within a step, enrich shows real n/total, errors show red. **Verified live** (forced limit:10
+sheriff → 10/10 enriched, events incl. real "blocked" errors). NOTE: source has ~53 June sheriff listings.
+
 ## Code map
 - `src/scraper/*` — **runtime-agnostic scraping core** (Firecrawl client, sheriff parse, address clean,
-  parcel, zillow, legalNotices, enrich). Proven against live Firecrawl. Reused by the Convex actions.
-- `convex/*` — `schema`, `sheriffData`/`sheriffActions`, `legalData`/`legalActions`, `runs`, `crons`,
-  `auth.config`, `helpers`. (`*Actions` are `"use node"`; `*Data` are V8 queries/mutations.)
+  parcel, zillow, legalNotices, enrich — `enrichListing` takes an optional `onEvent` progress callback).
+  Proven against live Firecrawl. Reused by the Convex actions.
+- `convex/*` — `schema`, `sheriffData`/`sheriffActions`, `legalData`/`legalActions`, `runs` (run lifecycle +
+  events + `latestRun`/`listEvents` queries), `crons`, `auth.config`, `helpers`. (`*Actions` are `"use node"`;
+  `*Data` are V8 queries/mutations.)
 - `src/web/*` — React app: `main` (Convex provider), `app` (router + IRES shell), `pages` (Dashboard,
-  Sheriff Sales, Legal Notices).
+  Sheriff Sales, Legal Notices), `ScrapeProgress` (live stepper).
+- `src/components/ui/stepper.tsx` + `src/lib/utils.ts` (`cn`) — shadcn scaffolding (`@/` alias →
+  `src`; shadcn semantic tokens added to `src/web/index.css` `@theme`).
 
-## Status (2026-06-01)
+## Sheriff "cushion" deal screen (session 3)
+`src/scraper/deal.ts` (`computeDeal`, unit-tested) turns a row into a deal: parse money, sale-type-aware
+cost-to-clear (TAX: cost=principal; MTG/JUDG: principal+balances), cushion = Zestimate − cost, tier
+(good/ok/thin/**verify**/bad/unknown), risk flags. Risk-flagged rows (tiny-principal junior-foreclosure traps)
+are downgraded to "verify" so they never rank #1. `sheriffData.monthListings` returns rows+deal sorted
+clean-deals-first. The Sheriff table is the buyer's screen: `#` · Cushion(color) · Property · Type · Size ·
+Worth · Debt · Liens · Notes(dropdown) · Zillow · Deal; clickable column sort; split-button scrape menu
+(scrape / retry-failed / force). Retries (`withRetry`) harden the parcel + Zillow scrapes against Reblaze blocks.
+**UI uses lucide-react icons only — never emojis** (`~/.claude` memory `never-use-emojis`).
+
+## Status (2026-06-01, session 4)
 Both pipelines proven **live end-to-end on the real Convex dev deployment** `fearless-donkey-585`
-(project `instantrealestate`). Frontend builds + serves against it. Clerk + Cloudflare + prod deploy are
-the remaining user-side steps. See `next-session-prompt.md`.
+(project `instantrealestate`). **Sheriff Sales** has the full deal screen (cushion/tiers/sort/retry/icons,
+monthly tabs, live progress). **Legal Notices is now at parity** (session 4): weekly tabs (`legalWeeks`),
+value-sorted table (`weekNotices` — sorted by Zestimate, NO cushion since legal has no foreclosure debt),
+`retryFailed`, `enrichLegalOne` runId refactor, shared split scrape button (`ScrapeMenu`) + generalized
+`PeriodTabs`. Frontend builds (tsc+vite) + 39 tests pass; live `legalWeeks`/`weekNotices` verified.
+**Work not yet committed.** One open item: visual eyeball of both pages in `npm run dev` (shared Sheriff
+components were refactored — tsc-clean but pixels unseen). Clerk + Cloudflare + prod deploy still remain.

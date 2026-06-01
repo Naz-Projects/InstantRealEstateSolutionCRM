@@ -30,44 +30,85 @@ function orKey(): string {
 export const runLegalScrape = internalAction({
   args: { triggeredBy: v.string(), force: v.boolean(), limit: v.optional(v.number()) },
   handler: async (ctx, { triggeredBy, force, limit }): Promise<LegalResult> => {
-    const { pdfText, dateFound } = await fetchLatestLegalNoticesPdf(fcKey());
-    const weekDate = dateFound ?? new Date().toISOString().split("T")[0];
-    const all = await extractLegalListings(pdfText, orKey(), weekDate);
-    const listings = limit ? all.slice(0, limit) : all;
+    const runId = await ctx.runMutation(internal.runs.createRun, { type: "legal", triggeredBy });
+    const log = (phase: string, message: string, level: "info" | "warn" | "error" = "info") =>
+      ctx.runMutation(internal.runs.logEvent, { runId, phase, message, level });
 
-    if (!force) {
-      const existing = await ctx.runQuery(internal.legalData.countByWeek, { weekDate });
-      if (existing > 0) return { skipped: true, weekDate, existing };
+    try {
+      await ctx.runMutation(internal.runs.patchRun, { runId, phase: "fetch" });
+      await log("fetch", "Fetching the latest New Castle County legal notices PDF…");
+      const { pdfText, dateFound } = await fetchLatestLegalNoticesPdf(fcKey());
+      const weekDate = dateFound ?? new Date().toISOString().split("T")[0];
+
+      await ctx.runMutation(internal.runs.patchRun, { runId, phase: "extract", label: weekDate });
+      await log("extract", "Running the AI agent to extract estate listings from the notices…");
+      const all = await extractLegalListings(pdfText, orKey(), weekDate);
+      const listings = limit ? all.slice(0, limit) : all;
+      await ctx.runMutation(internal.runs.patchRun, { runId, listingCount: listings.length });
+      await log(
+        "extract",
+        `AI extracted ${all.length} estate listing(s) for ${weekDate}${limit ? ` (limited to ${listings.length} this run)` : ""}.`,
+      );
+
+      if (!force) {
+        const existing = await ctx.runQuery(internal.legalData.countByWeek, { weekDate });
+        if (existing > 0) {
+          await log("skip", `${weekDate} was already scraped (${existing} rows). Use "Force re-scrape" to refresh.`, "warn");
+          await ctx.runMutation(internal.runs.finishRun, { runId, status: "complete" });
+          return { skipped: true, weekDate, existing, runId };
+        }
+      } else {
+        const cleared = await ctx.runMutation(internal.legalData.clearWeek, { weekDate });
+        if (cleared > 0) await log("extract", `Cleared ${cleared} existing ${weekDate} row(s) for a clean refresh.`);
+      }
+
+      if (listings.length === 0) {
+        await log("extract", "No estate listings extracted — the source PDF may have changed or be blocked.", "error");
+        await ctx.runMutation(internal.runs.finishRun, { runId, status: "failed", error: "No listings extracted" });
+        return { weekDate, created: 0, runId };
+      }
+
+      await ctx.runMutation(internal.runs.patchRun, { runId, phase: "enrich" });
+      await log("enrich", `Enriching ${listings.length} properties with Zillow data…`);
+      for (let i = 0; i < listings.length; i++) {
+        const l = listings[i];
+        const noticeId = await ctx.runMutation(internal.legalData.insertNotice, {
+          runId,
+          weekDate,
+          title: l.title,
+          ownerName: l.ownerName,
+          address: l.address,
+          personalRepresentative: l.personalRepresentative,
+        });
+        await ctx.scheduler.runAfter(i * 1500, internal.legalActions.enrichLegalOne, { noticeId, runId });
+      }
+      // Geocode the new rows for the map (idempotent; only missing-coord rows).
+      await ctx.scheduler.runAfter(
+        listings.length * 1500 + 5000,
+        internal.geocodeActions.backfillGeocodes,
+        { type: "legal" },
+      );
+      return { weekDate, created: listings.length, runId };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await log("error", `Scrape failed: ${message}`, "error");
+      await ctx.runMutation(internal.runs.finishRun, { runId, status: "failed", error: message });
+      return { runId };
     }
-
-    const runId = await ctx.runMutation(internal.runs.createRun, {
-      type: "legal",
-      label: weekDate,
-      listingCount: listings.length,
-      triggeredBy,
-    });
-
-    for (let i = 0; i < listings.length; i++) {
-      const l = listings[i];
-      const noticeId = await ctx.runMutation(internal.legalData.insertNotice, {
-        runId,
-        weekDate,
-        title: l.title,
-        ownerName: l.ownerName,
-        address: l.address,
-        personalRepresentative: l.personalRepresentative,
-      });
-      await ctx.scheduler.runAfter(i * 1500, internal.legalActions.enrichLegalOne, { noticeId });
-    }
-    return { weekDate, created: listings.length, runId };
   },
 });
 
 export const enrichLegalOne = internalAction({
-  args: { noticeId: v.id("legalNotices") },
-  handler: async (ctx, { noticeId }): Promise<void> => {
+  // `runId` is the run to track this enrichment against — the scrape's run on a
+  // normal pass, or a separate retry run when re-enriching only the failed rows.
+  args: { noticeId: v.id("legalNotices"), runId: v.id("scrapeRuns") },
+  handler: async (ctx, { noticeId, runId }): Promise<void> => {
     const rec = await ctx.runQuery(internal.legalData.getNotice, { noticeId });
     if (!rec) return;
+
+    const tag = (rec.address || rec.ownerName || "listing").slice(0, 48);
+    const log = (message: string, level: "info" | "warn" | "error" = "info") =>
+      ctx.runMutation(internal.runs.logEvent, { runId, phase: "enrich", message, level });
 
     const addr = zillowAddress(rec.address);
     let zillow: Partial<ZillowData> = {};
@@ -75,13 +116,21 @@ export const enrichLegalOne = internalAction({
 
     if (!addr) {
       errorCode = !rec.address || rec.address === "N/A" ? "NO ADDRESS" : "BAD ADDRESS";
+      await log(`${tag}: skipping Zillow (${errorCode})`, "warn");
     } else {
+      await log(`${tag}: checking Zillow…`);
       try {
         const zd = await scrapeZillow(addr, fcKey());
-        if (zd.zillowUrl && !isDelawareUrl(zd.zillowUrl)) errorCode = "WRONG STATE";
-        else zillow = zd;
+        if (zd.zillowUrl && !isDelawareUrl(zd.zillowUrl)) {
+          errorCode = "WRONG STATE";
+          await log(`${tag}: Zillow match was wrong state — discarded`, "warn");
+        } else {
+          zillow = zd;
+          await log(`${tag}: Zillow found${zd.zestimate ? ` — ${zd.zestimate}` : ""}`);
+        }
       } catch {
         errorCode = "SCRAPE FAILED";
+        await log(`${tag}: Zillow lookup failed (blocked or unavailable)`, "error");
       }
     }
 
@@ -97,7 +146,7 @@ export const enrichLegalOne = internalAction({
         sqft: v2(zillow.sqft),
       },
     });
-    await ctx.runMutation(internal.runs.bumpEnriched, { runId: rec.runId });
+    await ctx.runMutation(internal.runs.bumpEnriched, { runId, failed: errorCode !== null });
   },
 });
 

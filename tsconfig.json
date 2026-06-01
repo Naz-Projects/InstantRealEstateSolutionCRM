@@ -4,6 +4,8 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -15,7 +17,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client", "google.maps"]
   },
   "include": ["src", "scripts", "tests"]
 }

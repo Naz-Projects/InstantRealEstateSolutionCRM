@@ -3,7 +3,7 @@
 // Firecrawl renders the full homedetails page. Extract fields from markdown and
 // the canonical homedetails URL from the first matching link.
 
-import { firecrawlScrape } from "./firecrawl.js";
+import { firecrawlScrape, withRetry } from "./firecrawl.js";
 import type { ZillowData } from "./types.js";
 
 /** Convert a property address into a Zillow search URL. */
@@ -64,25 +64,30 @@ export function isDelawareUrl(url: string): boolean {
  * Scrape Zillow for a property address. Throws on failure after retries.
  * Callers should validate `isDelawareUrl(zillowUrl)` to reject wrong-state matches.
  */
-export async function scrapeZillow(address: string, apiKey: string): Promise<ZillowData> {
+export async function scrapeZillow(address: string, apiKey: string, attempts = 2): Promise<ZillowData> {
   const url = buildZillowSearchUrl(address);
-  const { markdown, rawHtml } = await firecrawlScrape({
-    url,
-    apiKey,
-    formats: ["markdown", "rawHtml"],
-    onlyMainContent: true,
-    waitFor: 3000,
-    timeoutMs: 60000,
-  });
 
-  if (!markdown && !rawHtml) throw new Error("Firecrawl returned empty content");
+  return withRetry(
+    async () => {
+      const { markdown, rawHtml } = await firecrawlScrape({
+        url,
+        apiKey,
+        formats: ["markdown", "rawHtml"],
+        onlyMainContent: true,
+        waitFor: 3000,
+        timeoutMs: 60000,
+        maxRetries: 1,
+      });
 
-  if (markdown.length > 200) {
-    const fields = extractFields(markdown);
-    const zillowUrl =
-      extractHomedetailsUrl(markdown) || extractHomedetailsUrl(rawHtml) || url;
-    return { address, zillowUrl, ...fields };
-  }
+      if (markdown.length > 200) {
+        const fields = extractFields(markdown);
+        const zillowUrl =
+          extractHomedetailsUrl(markdown) || extractHomedetailsUrl(rawHtml) || url;
+        return { address, zillowUrl, ...fields };
+      }
 
-  throw new Error("Firecrawl returned empty/short markdown for Zillow");
+      throw new Error("empty/short markdown — likely block or timeout");
+    },
+    { attempts, baseDelayMs: 2000, label: `Zillow ${address}` },
+  );
 }

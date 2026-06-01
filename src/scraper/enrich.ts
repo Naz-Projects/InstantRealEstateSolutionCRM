@@ -25,11 +25,21 @@ export interface EnrichedListing extends SheriffListing {
   sqft: string;
 }
 
+// Optional live-progress hook so callers (the Convex action) can stream each
+// sub-step to the UI. No-op when omitted, so tests/scripts are unaffected.
+export type EnrichEvent = { message: string; level: "info" | "warn" | "error" };
+
 export async function enrichListing(
   listing: SheriffListing,
   saleMonth: string,
   apiKey: string,
+  onEvent?: (e: EnrichEvent) => Promise<void> | void,
 ): Promise<EnrichedListing> {
+  const tag = (listing.address || "listing").slice(0, 48);
+  const emit = async (message: string, level: EnrichEvent["level"] = "info") => {
+    if (onEvent) await onEvent({ message, level });
+  };
+
   // --- Parcel ---
   const cleanParcel =
     listing.parcel && listing.parcel !== "N/A"
@@ -41,11 +51,15 @@ export async function enrichListing(
 
   if (!cleanParcel) {
     parcelError = "NO PARCEL";
+    await emit(`${tag}: no parcel number on listing`, "warn");
   } else {
+    await emit(`${tag}: looking up county parcel ${cleanParcel}…`);
     try {
       parcelData = await lookupParcel(cleanParcel, apiKey);
+      await emit(`${tag}: parcel found${parcelData.ownerName ? ` — owner ${parcelData.ownerName}` : ""}`);
     } catch {
       parcelError = "SCRAPE FAILED";
+      await emit(`${tag}: parcel lookup failed (blocked or unavailable)`, "error");
     }
   }
 
@@ -84,16 +98,21 @@ export async function enrichListing(
     } else {
       zillowError = "BAD ADDRESS";
     }
+    await emit(`${tag}: skipping Zillow (${zillowError})`, "warn");
   } else {
+    await emit(`${tag}: checking Zillow…`);
     try {
       const zd = await scrapeZillow(zAddr, apiKey);
       if (zd.zillowUrl && !isDelawareUrl(zd.zillowUrl)) {
         zillowError = "WRONG STATE";
+        await emit(`${tag}: Zillow match was wrong state — discarded`, "warn");
       } else {
         zillow = zd;
+        await emit(`${tag}: Zillow found${zd.zestimate ? ` — ${zd.zestimate}` : ""}`);
       }
     } catch {
       zillowError = "SCRAPE FAILED";
+      await emit(`${tag}: Zillow lookup failed (blocked or unavailable)`, "error");
     }
   }
 

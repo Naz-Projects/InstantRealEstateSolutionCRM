@@ -5,6 +5,19 @@
   --color-ink-2: #13315c;
   --color-accent: #16a34a;
   --color-accent-dark: #15803d;
+
+  /* shadcn semantic tokens (IRES-aligned) — consumed by components/ui/* */
+  --color-primary: #16a34a;
+  --color-primary-foreground: #ffffff;
+  --color-foreground: #1e293b;
+  --color-background: #ffffff;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-accent-foreground: #0b2545;
+  --color-border: #e2e8f0;
+  --color-ring: #16a34a;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
 }
 
 html,
