@@ -37,7 +37,7 @@
 ```bash
 cd C:\Users\nazho\Desktop\ires-crm
 npm install          # if needed
-npm test             # 25 unit tests
+npm test             # 27 unit tests
 npm run integration  # hits live Firecrawl: parses the real PDF + enriches a few listings
 ```
 
@@ -48,13 +48,16 @@ Workers. Local dev + the app build need Docker Desktop.
 1. **Install Docker Desktop** (Windows: enables WSL2; may need a reboot + admin).
 2. Follow `twenty-app/README.md`:
    - `npx create-twenty-app@latest ires-sheriff` (start the local instance on :2020)
-   - copy in `twenty-app/application-config.ts`, `src/objects/*`, `src/logic-functions/*`, `src/scraper/*`
+   - copy in the whole `twenty-app/` tree: `application-config.ts`, `public/*`, and `src/*`
+     (`objects`, `logic-functions`, `front-components`, `command-menu-items`, `views`,
+     `navigation-menu-items`, `shared`, `scraper`)
    - set `FIRECRAWL_API_KEY` as an app/workspace secret
-   - `yarn twenty dev` (generates the typed client, syncs objects to the UI)
+   - `yarn twenty dev` (generates the typed client, syncs objects + UI to the workspace)
    - test: `yarn twenty dev:function:exec -n scrape-sheriff-sales -p '{"force": true}'`
-   - watch listings appear and enrich live
-3. Add a **Table** view + a **Kanban** view on `dealStatus`; wire the "Scrape Sheriff Sales This
-   Week" button to POST `/s/sheriff/scrape`.
+   - watch listings appear and enrich live; the **"Scrape Sheriff Sales This Week"** quick-action
+     button, the table view, and the sidebar entry are already coded and should appear in the UI
+3. Add a **Kanban** pipeline view grouped by `dealStatus` (1-click in the UI), and set the
+   workspace logo/name/theme in Settings (upload `public/wordmark.svg`). See `twenty-app/BRANDING.md`.
 
 ## Self-host for production (free, your subdomain)
 1. **Host:** a server you own, **Oracle Cloud Always-Free** ARM VM (free), or a ~$5/mo VPS.
@@ -68,7 +71,8 @@ Workers. Local dev + the app build need Docker Desktop.
 
 ## What I'd tackle next (after you've got Twenty up)
 - Validate/adjust the `CoreApiClient` mutation selection-sets against the generated client.
-- Branding: IRES logo/wordmark/colors where Twenty supports theming.
+- Throttle the fan-out enrichment (see concurrency caveat above).
+- Kanban pipeline view + workspace branding (logo/wordmark/colors are coded — apply theme in Settings).
 - Legal Notices pipeline (same machinery + an LLM extraction step; OpenRouter/Anthropic key).
 - Deal-pipeline reports (how many sales reviewed/contacted/offered per month).
 
