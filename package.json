@@ -9,7 +9,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "integration": "tsx scripts/integration.ts",
-    "integration:legal": "tsx scripts/legal-integration.ts"
+    "integration:legal": "tsx scripts/legal-integration.ts",
+    "smoke:crm": "tsx scripts/crm-smoke-test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
