@@ -5,8 +5,7 @@
 // front components never see secrets.
 
 import { defineFrontComponent } from "twenty-sdk/define";
-import { CommandModal } from "twenty-sdk/command";
-import { enqueueSnackbar } from "twenty-sdk/front-component";
+import { CommandModal, enqueueSnackbar } from "twenty-sdk/front-component";
 import { callAppRoute } from "../shared/call-app-route";
 
 export const SCRAPE_BUTTON_FC_UID = "e1f2a3b4-c5d6-4788-9a0b-1c2d3e4f5a60";

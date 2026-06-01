@@ -1,0 +1,20 @@
+{
+  "name": "ires-sheriff",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "IRES Sheriff Sales — Twenty app (objects, logic functions, UI). Drop into a create-twenty-app scaffold.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "twenty-client-sdk": "^2.8.0",
+    "twenty-sdk": "^2.8.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

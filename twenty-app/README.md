@@ -5,10 +5,11 @@ turn a self-hosted Twenty instance into the IRES Sheriff Sales CRM. It reuses th
 proven scraping core in `src/scraper/` (a copy of the repo-root `../src/scraper`,
 verified end-to-end against live Firecrawl).
 
-> **Status:** written to the Twenty SDK spec from the official docs, but **not yet
-> compiled** — that requires a running Twenty server (Docker) so the CLI can
-> generate the typed `CoreApiClient`. Treat the `client.mutation/query` selection-sets
-> as drafts to confirm at `yarn twenty dev`.
+> **Status:** **typechecks against the real Twenty SDK (v2.8.0)** — `tsc` and the SDK's own
+> `npx twenty dev:typecheck` both report **"✓ No type errors found"** (offline, no Docker).
+> The only remaining check is the *strict* `CoreApiClient` generated from the live workspace
+> schema at `yarn twenty dev:build`/`dev` (needs a server), which firms up the exact
+> `client.mutation/query` field names. Runtime behavior + the in-CRM test need Docker.
 
 ## What's here
 
