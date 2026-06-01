@@ -1,8 +1,10 @@
 # IRES CRM — Handoff (read me in the morning)
 
 ## ⚠️ Status & caveats (read first — honest framing)
-- **Scraping core = PROVEN.** Ported, unit-tested (27 tests), and verified end-to-end against
-  **live Firecrawl** (real PDF → 53 listings → real parcel + Zillow enrichment). This is solid.
+- **Both automations = PROVEN LIVE.** (1) **Sheriff Sales**: live Firecrawl → real PDF → 53 listings →
+  real parcel + Zillow enrichment. (2) **Legal Notices**: live Firecrawl + **OpenRouter LLM** →
+  21 estate listings extracted from the real weekly PDF (owner, "late of" address, personal rep).
+  31 unit/integration tests pass. This is the solid, proven foundation.
 - **`saleMonth` gate = FIXED + tested.** `saleMonth` is now derived from the PDF header
   (`Gross List 06/09/2026 …` → "June 2026"), NOT from today's date. This is what the scheduler +
   idempotency key on, so a scheduled run before the county publishes the new month won't mislabel
@@ -43,8 +45,9 @@
 ```bash
 cd C:\Users\nazho\Desktop\ires-crm
 npm install          # if needed
-npm test             # 28 tests (unit + the scraper->CRM seam integration test)
-npm run integration  # hits live Firecrawl: parses the real PDF + enriches a few listings
+npm test                  # 31 tests (unit + scraper->CRM seam integration test)
+npm run integration       # Sheriff Sales: live Firecrawl -> parse PDF -> parcel + Zillow
+npm run integration:legal # Legal Notices: live Firecrawl + OpenRouter LLM extraction
 ```
 
 ## Bring up the CRM (needs Docker)
