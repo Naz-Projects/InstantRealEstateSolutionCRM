@@ -7,15 +7,16 @@
   (`Gross List 06/09/2026 …` → "June 2026"), NOT from today's date. This is what the scheduler +
   idempotency key on, so a scheduled run before the county publishes the new month won't mislabel
   rows or falsely mark a month "done." (Earlier draft had this bug; fixed.)
-- **Twenty app = TYPECHECKS against the real SDK + passes Twenty's own `dev:typecheck` (offline).**
-  I installed `twenty-sdk`/`twenty-client-sdk` v2.8.0 and ran both `tsc` and `npx twenty dev:typecheck`
-  → **"✓ No type errors found."** This caught and fixed two real bugs (wrong `twenty-sdk/command`
-  import path → `twenty-sdk/front-component`; a field-manifest type-widening issue in the object).
-  Objects, both logic functions, the button (front component + command), table view, sidebar nav, and
-  app config all validate against the actual SDK types. **Still pending (Docker-gated):** the *strict*
-  `CoreApiClient` is generated from the live workspace schema at `yarn twenty dev:build`/`dev`, which
-  gives the exact mutation field names their final check; and the runtime + in-CRM end-to-end test
-  need the server running. It's validated code, not yet a running app.
+- **Twenty app = BUILDS OFFLINE via Twenty's own toolchain.** With `twenty-sdk`/`twenty-client-sdk`
+  v2.8.0 installed, `npx twenty dev:build` reports **"✓ Build succeeded (6 files)"** — that runs the
+  full manifest assembly + zod validation of every entity (objects, fields, logic functions, front
+  component, command menu, view, navigation, role, app config) + a typecheck. `tsc` and
+  `npx twenty dev:typecheck` also pass ("✓ No type errors found"). Getting here caught + fixed three
+  real issues: wrong `twenty-sdk/command` import path, a field-manifest type-widening bug, and a
+  missing default application role. **Only step left (Docker-gated):** `yarn twenty dev` syncs to a
+  *running* workspace — that generates the workspace-specific strict `CoreApiClient` (final check of
+  exact mutation field names), pushes the schema/UI, and lets you run the in-CRM end-to-end test.
+  It's a validated, offline-building app — just not yet synced to a live server.
 - **Fan-out concurrency = OPERATIONAL RISK, not yet validated.** `enrich-sheriff-listing` triggers on
   `sheriffSaleListing.created`, so ~53 enrichments fire near-simultaneously. Our own lessons note the
   NCC parcel site rate-limits after ~3 rapid requests; going through Firecrawl's cloud changes the IP
