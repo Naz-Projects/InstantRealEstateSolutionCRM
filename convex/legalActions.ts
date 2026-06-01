@@ -28,11 +28,12 @@ function orKey(): string {
 }
 
 export const runLegalScrape = internalAction({
-  args: { triggeredBy: v.string(), force: v.boolean() },
-  handler: async (ctx, { triggeredBy, force }): Promise<LegalResult> => {
+  args: { triggeredBy: v.string(), force: v.boolean(), limit: v.optional(v.number()) },
+  handler: async (ctx, { triggeredBy, force, limit }): Promise<LegalResult> => {
     const { pdfText, dateFound } = await fetchLatestLegalNoticesPdf(fcKey());
     const weekDate = dateFound ?? new Date().toISOString().split("T")[0];
-    const listings = await extractLegalListings(pdfText, orKey(), weekDate);
+    const all = await extractLegalListings(pdfText, orKey(), weekDate);
+    const listings = limit ? all.slice(0, limit) : all;
 
     if (!force) {
       const existing = await ctx.runQuery(internal.legalData.countByWeek, { weekDate });
@@ -101,12 +102,13 @@ export const enrichLegalOne = internalAction({
 });
 
 export const devScrapeLegal = action({
-  args: { force: v.optional(v.boolean()) },
-  handler: async (ctx, { force }): Promise<LegalResult> => {
+  args: { force: v.optional(v.boolean()), limit: v.optional(v.number()) },
+  handler: async (ctx, { force, limit }): Promise<LegalResult> => {
     if (process.env.IRES_DEV !== "1") throw new Error("devScrapeLegal is dev-only (set IRES_DEV=1)");
     return ctx.runAction(internal.legalActions.runLegalScrape, {
       triggeredBy: "dev",
       force: force ?? true,
+      limit: limit ?? 3,
     });
   },
 });
