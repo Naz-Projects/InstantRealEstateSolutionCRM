@@ -78,12 +78,19 @@ Workers. Local dev + the app build need Docker Desktop.
 4. Install the IRES Sheriff Sales app to the production workspace (`npx twenty app:publish`), set the
    `FIRECRAWL_API_KEY` secret there, and confirm the weekday cron is active.
 
+## Already built (offline-validated, awaiting the live server)
+- **Both pipelines** (Sheriff Sales + Legal Notices) — objects, scrape + enrich logic functions, two
+  "Scrape … This Week" buttons, table views, sidebar nav.
+- **Deal Pipeline Kanban** (grouped by Deal Status) — the board for "how many we looked at/contacted".
+- **AI Deal Analyst agent** (reachable via Twenty's MCP) for ranking opportunities.
+- **App secrets declared** (`FIRECRAWL_API_KEY`, `OPENROUTER_API_KEY`) so the workspace prompts for them.
+- **IRES branding** (logo/wordmark/palette).
+
 ## What I'd tackle next (after you've got Twenty up)
-- Validate/adjust the `CoreApiClient` mutation selection-sets against the generated client.
+- Validate/adjust the `CoreApiClient` mutation selection-sets against the *generated* client.
 - Throttle the fan-out enrichment (see concurrency caveat above).
-- Kanban pipeline view + workspace branding (logo/wordmark/colors are coded — apply theme in Settings).
-- Legal Notices pipeline (same machinery + an LLM extraction step; OpenRouter/Anthropic key).
-- Deal-pipeline reports (how many sales reviewed/contacted/offered per month).
+- Apply workspace theme/logo in Settings (upload `public/wordmark.svg`).
+- Reporting dashboard (counts per deal stage / per month) via a page layout + chart widgets.
 
 ## Key files
 - `src/scraper/*` — the proven scraping core (source of truth).
