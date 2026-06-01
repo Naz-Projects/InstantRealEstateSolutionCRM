@@ -58,18 +58,19 @@ time-easing animates within a step, enrich shows real n/total, errors show red. 
 sheriff → 10/10 enriched, events incl. real "blocked" errors). NOTE: source has ~53 June sheriff listings.
 
 ## Code map
-- `src/scraper/*` — **runtime-agnostic scraping core** (Firecrawl client, sheriff parse, address clean,
-  parcel, zillow, legalNotices, enrich — `enrichListing` takes an optional `onEvent` progress callback).
-  Proven against live Firecrawl. Reused by the Convex actions.
-- `convex/*` — `schema`, `sheriffData`/`sheriffActions`, `legalData`/`legalActions`, `runs` (run lifecycle +
-  events + `latestRun`/`listEvents` queries), `crons`, `auth.config`, `helpers`. (`*Actions` are `"use node"`;
-  `*Data` are V8 queries/mutations.)
+- `src/scraper/*` — **runtime-agnostic core** (Firecrawl client, sheriff parse, address clean, parcel,
+  zillow, legalNotices, enrich — `enrichListing` takes an optional `onEvent` callback; `deal.ts` cushion
+  math; `geocode.ts` address→`{lat,lng}` DE-validated). Pure + unit-tested; reused by the Convex actions.
+- `convex/*` — `schema`, `sheriffData`/`sheriffActions`, `legalData`/`legalActions`, `geocodeData`/`geocodeActions`,
+  `runs` (run lifecycle + events + `latestRun`/`listEvents`), `crons`, `auth.config`, `helpers`.
+  (`*Actions` are `"use node"`; `*Data` are V8 queries/mutations.)
 - `src/web/*` — React app: `main` (Convex provider), `app` (router + IRES shell), `pages` (Dashboard,
-  Sheriff Sales, Legal Notices), `ScrapeProgress` (live stepper).
+  Sheriff Sales, Legal Notices), `ScrapeProgress` (live stepper, collapsible log), `PropertyMap` +
+  `StreetViewModal` (Google map + Street View), `dealStages` (shared pipeline stages).
 - `src/components/ui/stepper.tsx` + `src/lib/utils.ts` (`cn`) — shadcn scaffolding (`@/` alias →
   `src`; shadcn semantic tokens added to `src/web/index.css` `@theme`).
 
-## Sheriff "cushion" deal screen (session 3)
+## Sheriff "cushion" deal screen
 `src/scraper/deal.ts` (`computeDeal`, unit-tested) turns a row into a deal: parse money, sale-type-aware
 cost-to-clear (TAX: cost=principal; MTG/JUDG: principal+balances), cushion = Zestimate − cost, tier
 (good/ok/thin/**verify**/bad/unknown), risk flags. Risk-flagged rows (tiny-principal junior-foreclosure traps)
@@ -79,12 +80,28 @@ Worth · Debt · Liens · Notes(dropdown) · Zillow · Deal; clickable column so
 (scrape / retry-failed / force). Retries (`withRetry`) harden the parcel + Zillow scrapes against Reblaze blocks.
 **UI uses lucide-react icons only — never emojis** (`~/.claude` memory `never-use-emojis`).
 
-## Status (2026-06-01, session 4)
-Both pipelines proven **live end-to-end on the real Convex dev deployment** `fearless-donkey-585`
-(project `instantrealestate`). **Sheriff Sales** has the full deal screen (cushion/tiers/sort/retry/icons,
-monthly tabs, live progress). **Legal Notices is now at parity** (session 4): weekly tabs (`legalWeeks`),
-value-sorted table (`weekNotices` — sorted by Zestimate, NO cushion since legal has no foreclosure debt),
-`retryFailed`, `enrichLegalOne` runId refactor, shared split scrape button (`ScrapeMenu`) + generalized
-`PeriodTabs`. Frontend builds (tsc+vite) + 39 tests pass; live `legalWeeks`/`weekNotices` verified.
-**Work not yet committed.** One open item: visual eyeball of both pages in `npm run dev` (shared Sheriff
-components were refactored — tsc-clean but pixels unseen). Clerk + Cloudflare + prod deploy still remain.
+## Maps & Street View
+Both pages have a **collapsible map panel** — an "Open map" button above the table (hidden by default; click
+to show the Google map on top of the table, not a separate tab). Each property is a **Zillow-style price pill**
+colored by deal quality (Sheriff = cushion tier; Legal = value bucket). Click a pin → InfoWindow with the
+address, the **Zestimate** (Sheriff; the pill already shows the cushion, so the popup shows the worth instead),
+size, a Street View thumbnail, a Zillow link, and an inline deal-status select. An **"Open Street View"** button
+opens an interactive panorama (`StreetViewModal`, coverage-checked w/ fallback). The table also has a **Map
+column**: clicking it opens the map focused on that exact row and auto-opens its Street View.
+- Geocoding (address → stored `lat`/`lng`/`geocodeStatus`): pure DE-validated `src/scraper/geocode.ts` →
+  `convex/geocodeActions.backfillGeocodes` (idempotent; auto-scheduled after each scrape + a manual
+  "Geocode N missing" button) via `convex/geocodeData.ts`. **Verified live: 74/74 rows geocoded, 0 failed.**
+- Library `@vis.gl/react-google-maps`. AdvancedMarkers need a Map ID (`VITE_GOOGLE_MAPS_MAP_ID`; falls back to
+  `DEMO_MAP_ID` in dev). **Two keys by design:** a referrer-restricted **browser** key (`VITE_GOOGLE_MAPS_API_KEY`,
+  Maps JS + Street View Static) and a Geocoding-only **server** key (`GOOGLE_GEOCODING_API_KEY`, Convex env).
+  Spec/plan: `docs/superpowers/{specs,plans}/2026-06-01-google-maps-street-view*`.
+
+## Status (current — 2026-06-01)
+- **Repo is on GitHub** (`origin` = Naz-Projects/InstantRealEstateSolutionCRM) and **Cloudflare builds the
+  frontend from it via CI** (`convex/_generated` is committed so CI can typecheck without the Convex CLI — see lessons).
+- Both pipelines + deal screens + maps run **live on the Convex dev deployment `fearless-donkey-585`**
+  (project `instantrealestate`). 44 tests pass; tsc+vite build clean.
+- **Pending:** (1) browser eyeball of the map/Street View; (2) **security** — split the single Google key into a
+  referrer-restricted browser key + a Geocoding-only server key, then rotate (it was shared in chat); (3) Clerk
+  auth (remove `IRES_DEV`) → Convex **prod** deploy → Cloudflare prod env vars (`VITE_CONVEX_URL`,
+  `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID`, `VITE_CLERK_PUBLISHABLE_KEY`). See `next-session-prompt.md`.

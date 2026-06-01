@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex/react";
+import { ChevronDown } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import {
@@ -61,11 +62,12 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
   const run = useQuery(api.runs.latestRun, { type });
   const events = useQuery(api.runs.listEvents, run ? { runId: run._id } : "skip");
   const logRef = useRef<HTMLDivElement>(null);
+  const [logsOpen, setLogsOpen] = useState(false);
 
-  // Auto-scroll the log to the newest event.
+  // Auto-scroll the log to the newest event (also when first opened).
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [events?.length]);
+  }, [events?.length, logsOpen]);
 
   const steps = STEPS[type];
   const running = run?.status === "running";
@@ -187,17 +189,28 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
         <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{run.error}</div>
       )}
 
-      {/* Live step-by-step event log. */}
+      {/* Live step-by-step event log — collapsed by default behind a toggle. */}
       {events && events.length > 0 && (
-        <div
-          ref={logRef}
-          className="mt-3 max-h-44 overflow-y-auto rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-relaxed"
-        >
-          {events.map((e) => (
-            <div key={e._id} className={cn("whitespace-pre-wrap", LEVEL_CLASS[e.level] ?? "text-slate-600")}>
-              {e.message}
+        <div className="mt-3">
+          <button
+            onClick={() => setLogsOpen((o) => !o)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+          >
+            <ChevronDown className={cn("h-3.5 w-3.5 transition", logsOpen && "rotate-180")} />
+            {logsOpen ? "Hide logs" : `Show logs (${events.length})`}
+          </button>
+          {logsOpen && (
+            <div
+              ref={logRef}
+              className="mt-2 max-h-44 overflow-y-auto rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-relaxed"
+            >
+              {events.map((e) => (
+                <div key={e._id} className={cn("whitespace-pre-wrap", LEVEL_CLASS[e.level] ?? "text-slate-600")}>
+                  {e.message}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

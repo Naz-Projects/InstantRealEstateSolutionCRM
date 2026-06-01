@@ -5,6 +5,8 @@ import {
   ChevronUp,
   ChevronsUpDown,
   Clock,
+  Map as MapIcon,
+  MapPin,
   RefreshCcw,
   RefreshCw,
   Star,
@@ -15,6 +17,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { DEAL_STAGES, STAGE_LABEL, type DealStage } from "./dealStages";
+import { PropertyMap, type MapPoint } from "./PropertyMap";
 import { ScrapeProgress } from "./ScrapeProgress";
 const ERROR_VALUES = new Set([
   "PENDING", "NOT FOUND", "SCRAPE FAILED", "NO ADDRESS", "WRONG STATE", "NO PARCEL", "NO STATE", "BAD ADDRESS",
@@ -351,6 +354,45 @@ function PeriodTabs({
   );
 }
 
+// Collapsible map panel button — shows the map above the table on click (hidden
+// by default), instead of a separate tab.
+function MapToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+    >
+      <MapIcon className="h-4 w-4 text-accent" />
+      {open ? "Hide map" : "Open map"}
+      <ChevronDown className={cn("h-4 w-4 transition", open && "rotate-180")} />
+    </button>
+  );
+}
+
+// Table "Map" column: jump to the map focused on this row + auto-open Street View.
+function MapLinkCell({ hasCoords, onClick }: { hasCoords: boolean; onClick: () => void }) {
+  if (!hasCoords) return <span className="text-slate-300">—</span>;
+  return (
+    <button
+      onClick={onClick}
+      title="Show on the map and open Street View"
+      className="inline-flex items-center gap-1 text-accent hover:underline"
+    >
+      <MapPin className="h-3.5 w-3.5" /> Map
+    </button>
+  );
+}
+
+const SHERIFF_PIN: Record<string, string> = {
+  good: "#16a34a", ok: "#10b981", thin: "#f59e0b", verify: "#f59e0b", bad: "#ef4444", unknown: "#94a3b8",
+};
+function legalPinColor(value: number | null): string {
+  if (value === null) return "#94a3b8";
+  if (value >= 500000) return "#16a34a";
+  if (value >= 250000) return "#f59e0b";
+  return "#64748b";
+}
+
 type SortKey = "cushion" | "zestimate" | "principal" | "liens";
 type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 
@@ -379,6 +421,14 @@ export function SheriffSales() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const startGeocode = useMutation(api.geocodeData.startGeocode);
+  const onShowOnMap = (id: string) => {
+    setFocusId(id);
+    setMapOpen(true);
+  };
 
   // Default to the newest month; re-point if the selection disappears.
   useEffect(() => {
@@ -391,6 +441,37 @@ export function SheriffSales() {
     api.sheriffData.monthListings,
     selectedMonth ? { saleMonth: selectedMonth } : "skip",
   );
+
+  const mapPoints: MapPoint[] = (listings ?? [])
+    .filter((l) => typeof l.lat === "number" && typeof l.lng === "number")
+    .map((l) => ({
+      id: l._id,
+      lat: l.lat as number,
+      lng: l.lng as number,
+      address: l.address,
+      subtitle: ERROR_VALUES.has(l.ownerName) ? undefined : l.ownerName,
+      metricValue: fmtMoney(l.deal.cushion),
+      popupMetric: { label: "Zestimate", value: fmtMoney(l.deal.zestimate) },
+      color: SHERIFF_PIN[l.deal.tier] ?? SHERIFF_PIN.unknown,
+      size: fmtSize(l.beds, l.baths, l.sqft),
+      zillowUrl: l.zillowUrl,
+      dealStatus: l.dealStatus as DealStage,
+    }));
+  const missingGeocode = (listings ?? []).filter(
+    (l) => l.lat === undefined && l.geocodeStatus !== "failed",
+  ).length;
+
+  const onGeocode = async () => {
+    setGeocoding(true);
+    try {
+      await startGeocode({ type: "sheriff" });
+      setMsg("Geocoding started — pins will appear as addresses resolve.");
+    } catch (e) {
+      setMsg("Error: " + (e as Error).message);
+    } finally {
+      setGeocoding(false);
+    }
+  };
 
   // Blocked rows the "Retry failed" button can re-enrich.
   const failedCount = listings?.filter((l) => l.ownerName === "SCRAPE FAILED" || l.zestimate === "SCRAPE FAILED").length ?? 0;
@@ -500,84 +581,109 @@ export function SheriffSales() {
               selected={selectedMonth}
               onSelect={setSelectedMonth}
             />
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span className="font-medium text-slate-600">Best deals first (cushion = est. resale − cost to clear).</span>
-              <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-800">Strong</span>
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Thin</span>
-              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-800 ring-1 ring-amber-400">Verify (hidden senior loan?)</span>
-              <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">Weak</span>
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-400">Needs re-scrape</span>
-              {sort && (
-                <button
-                  onClick={() => setSort(null)}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
-                >
-                  <Star className="h-3 w-3" /> Best-deal order
-                </button>
-              )}
-              <div className="w-full text-slate-400">
-                Click a column header to sort. Cushion assumes you win near the <strong>Principal</strong>; competitive bids and surviving senior loans reduce it. Open the Notes column for per-row caveats. Not legal advice — verify title per property.
-              </div>
+            <div className="mb-3">
+              <MapToggle open={mapOpen} onToggle={() => setMapOpen((o) => !o)} />
             </div>
-            {!listings ? (
-              <Loading />
-            ) : listings.length === 0 ? (
-              <div className="py-16 text-center text-slate-400">No listings for {selectedMonth}.</div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 text-right font-medium">#</th>
-                      <SortHeader label="Cushion" k="cushion" sort={sort} onSort={toggleSort} />
-                      <th className="px-3 py-2 font-medium">Property</th>
-                      <th className="px-3 py-2 font-medium">Type</th>
-                      <th className="px-3 py-2 font-medium">Size</th>
-                      <SortHeader label="Worth (Zest.)" k="zestimate" sort={sort} onSort={toggleSort} />
-                      <SortHeader label="Debt (Principal)" k="principal" sort={sort} onSort={toggleSort} />
-                      <SortHeader label="Liens (tax+sewer)" k="liens" sort={sort} onSort={toggleSort} />
-                      <th className="px-3 py-2 font-medium">Notes</th>
-                      <th className="px-3 py-2 font-medium">Zillow</th>
-                      <th className="px-3 py-2 font-medium">Deal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(sorted ?? listings).map((l, i) => (
-                      <tr key={l._id} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400">{i + 1}</td>
-                        <td className="px-3 py-2">
-                          <CushionCell cushion={l.deal.cushion} cushionPct={l.deal.cushionPct} tier={l.deal.tier} />
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="font-medium text-ink">{l.address}</div>
-                          {!ERROR_VALUES.has(l.ownerName) && (
-                            <div className="text-[11px] text-slate-400">{l.ownerName}</div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2"><TypeBadge type={l.saleType} /></td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{fmtSize(l.beds, l.baths, l.sqft)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-slate-800">{fmtMoney(l.deal.zestimate)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-slate-800">{fmtMoney(l.deal.principal)}</td>
-                        <td
-                          className="px-3 py-2 text-right tabular-nums text-slate-600"
-                          title={`County ${fmtMoney(l.deal.county)} · School ${fmtMoney(l.deal.school)} · Sewer ${fmtMoney(l.deal.sewer)}`}
-                        >
-                          {fmtMoney(l.deal.liensTotal)}
-                        </td>
-                        <td className="px-3 py-2"><DealNotes flags={l.deal.flags} /></td>
-                        <td className="px-3 py-2"><ZillowCell url={l.zillowUrl} /></td>
-                        <td className="px-3 py-2">
-                          <DealSelect
-                            value={l.dealStatus as DealStage}
-                            onChange={(s) => setDeal({ listingId: l._id as Id<"sheriffListings">, dealStatus: s })}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {mapOpen && (
+              <div className="mb-4">
+                <PropertyMap
+                  points={mapPoints}
+                  missingCount={missingGeocode}
+                  onGeocode={onGeocode}
+                  geocoding={geocoding}
+                  focusId={focusId}
+                  onFocusConsumed={() => setFocusId(null)}
+                  onDealChange={(id, s) =>
+                    setDeal({ listingId: id as Id<"sheriffListings">, dealStatus: s })
+                  }
+                />
               </div>
             )}
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                  <span className="font-medium text-slate-600">Best deals first (cushion = est. resale − cost to clear).</span>
+                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-800">Strong</span>
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Thin</span>
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-800 ring-1 ring-amber-400">Verify (hidden senior loan?)</span>
+                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">Weak</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-400">Needs re-scrape</span>
+                  {sort && (
+                    <button
+                      onClick={() => setSort(null)}
+                      className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                    >
+                      <Star className="h-3 w-3" /> Best-deal order
+                    </button>
+                  )}
+                  <div className="w-full text-slate-400">
+                    Click a column header to sort. Cushion assumes you win near the <strong>Principal</strong>; competitive bids and surviving senior loans reduce it. Open the Notes column for per-row caveats. Not legal advice — verify title per property.
+                  </div>
+                </div>
+                {!listings ? (
+                  <Loading />
+                ) : listings.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400">No listings for {selectedMonth}.</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 text-right font-medium">#</th>
+                          <SortHeader label="Cushion" k="cushion" sort={sort} onSort={toggleSort} />
+                          <th className="px-3 py-2 font-medium">Property</th>
+                          <th className="px-3 py-2 font-medium">Type</th>
+                          <th className="px-3 py-2 font-medium">Size</th>
+                          <SortHeader label="Worth (Zest.)" k="zestimate" sort={sort} onSort={toggleSort} />
+                          <SortHeader label="Debt (Principal)" k="principal" sort={sort} onSort={toggleSort} />
+                          <SortHeader label="Liens (tax+sewer)" k="liens" sort={sort} onSort={toggleSort} />
+                          <th className="px-3 py-2 font-medium">Notes</th>
+                          <th className="px-3 py-2 font-medium">Zillow</th>
+                          <th className="px-3 py-2 font-medium">Map</th>
+                          <th className="px-3 py-2 font-medium">Deal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(sorted ?? listings).map((l, i) => (
+                          <tr key={l._id} className="border-t border-slate-100 hover:bg-slate-50">
+                            <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400">{i + 1}</td>
+                            <td className="px-3 py-2">
+                              <CushionCell cushion={l.deal.cushion} cushionPct={l.deal.cushionPct} tier={l.deal.tier} />
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="font-medium text-ink">{l.address}</div>
+                              {!ERROR_VALUES.has(l.ownerName) && (
+                                <div className="text-[11px] text-slate-400">{l.ownerName}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2"><TypeBadge type={l.saleType} /></td>
+                            <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{fmtSize(l.beds, l.baths, l.sqft)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{fmtMoney(l.deal.zestimate)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{fmtMoney(l.deal.principal)}</td>
+                            <td
+                              className="px-3 py-2 text-right tabular-nums text-slate-600"
+                              title={`County ${fmtMoney(l.deal.county)} · School ${fmtMoney(l.deal.school)} · Sewer ${fmtMoney(l.deal.sewer)}`}
+                            >
+                              {fmtMoney(l.deal.liensTotal)}
+                            </td>
+                            <td className="px-3 py-2"><DealNotes flags={l.deal.flags} /></td>
+                            <td className="px-3 py-2"><ZillowCell url={l.zillowUrl} /></td>
+                            <td className="px-3 py-2">
+                              <MapLinkCell
+                                hasCoords={typeof l.lat === "number" && typeof l.lng === "number"}
+                                onClick={() => onShowOnMap(l._id)}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <DealSelect
+                                value={l.dealStatus as DealStage}
+                                onChange={(s) => setDeal({ listingId: l._id as Id<"sheriffListings">, dealStatus: s })}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
           </>
         )}
       </div>
@@ -594,6 +700,14 @@ export function LegalNotices() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const startGeocode = useMutation(api.geocodeData.startGeocode);
+  const onShowOnMap = (id: string) => {
+    setFocusId(id);
+    setMapOpen(true);
+  };
 
   // Default to the newest week; re-point if the selection disappears.
   useEffect(() => {
@@ -606,6 +720,36 @@ export function LegalNotices() {
     api.legalData.weekNotices,
     selectedWeek ? { weekDate: selectedWeek } : "skip",
   );
+
+  const mapPoints: MapPoint[] = (notices ?? [])
+    .filter((n) => typeof n.lat === "number" && typeof n.lng === "number")
+    .map((n) => ({
+      id: n._id,
+      lat: n.lat as number,
+      lng: n.lng as number,
+      address: n.address,
+      subtitle: ERROR_VALUES.has(n.ownerName) ? undefined : n.ownerName,
+      metricValue: fmtMoney(n.value),
+      color: legalPinColor(n.value),
+      size: fmtSize(n.beds, n.baths, n.sqft),
+      zillowUrl: n.zillowUrl,
+      dealStatus: n.dealStatus as DealStage,
+    }));
+  const missingGeocode = (notices ?? []).filter(
+    (n) => n.lat === undefined && n.geocodeStatus !== "failed",
+  ).length;
+
+  const onGeocode = async () => {
+    setGeocoding(true);
+    try {
+      await startGeocode({ type: "legal" });
+      setMsg("Geocoding started — pins will appear as addresses resolve.");
+    } catch (e) {
+      setMsg("Error: " + (e as Error).message);
+    } finally {
+      setGeocoding(false);
+    }
+  };
 
   // Blocked rows the "Retry failed" button can re-enrich.
   const failedCount = notices?.filter((n) => n.zestimate === "SCRAPE FAILED").length ?? 0;
@@ -712,70 +856,95 @@ export function LegalNotices() {
               selected={selectedWeek}
               onSelect={setSelectedWeek}
             />
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span className="font-medium text-slate-600">Highest estimated value (Zestimate) first.</span>
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-400">Needs re-scrape</span>
-              {sort && (
-                <button
-                  onClick={() => setSort(null)}
-                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
-                >
-                  <Star className="h-3 w-3" /> Highest value first
-                </button>
-              )}
-              <div className="w-full text-slate-400">
-                Estate / probate notices — the play is an off-market purchase from the estate. Contact the <strong>Personal Representative</strong>. Open the Notes column for per-row caveats.
-              </div>
+            <div className="mb-3">
+              <MapToggle open={mapOpen} onToggle={() => setMapOpen((o) => !o)} />
             </div>
-            {!notices ? (
-              <Loading />
-            ) : notices.length === 0 ? (
-              <div className="py-16 text-center text-slate-400">No notices for {selectedWeek}.</div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 text-right font-medium">#</th>
-                      <SortHeader label="Worth (Zest.)" k="zestimate" sort={sort} onSort={toggleSort} />
-                      <th className="px-3 py-2 font-medium">Deceased / Owner</th>
-                      <th className="px-3 py-2 font-medium">Personal Rep</th>
-                      <th className="px-3 py-2 font-medium">Address</th>
-                      <th className="px-3 py-2 font-medium">Size</th>
-                      <th className="px-3 py-2 font-medium">Notes</th>
-                      <th className="px-3 py-2 font-medium">Zillow</th>
-                      <th className="px-3 py-2 font-medium">Deal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(sorted ?? notices).map((n, i) => (
-                      <tr key={n._id} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400">{i + 1}</td>
-                        <td className="px-3 py-2 text-right">
-                          {n.value !== null ? (
-                            <span className="font-semibold tabular-nums text-ink">{fmtMoney(n.value)}</span>
-                          ) : (
-                            <span className="text-xs text-slate-400">{n.zestimate === "SCRAPE FAILED" ? "re-scrape" : "—"}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-medium text-ink">{n.ownerName}</td>
-                        <td className="px-3 py-2 text-slate-600">{n.personalRepresentative}</td>
-                        <td className="px-3 py-2 text-slate-600">{n.address}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{fmtSize(n.beds, n.baths, n.sqft)}</td>
-                        <td className="px-3 py-2"><DealNotes flags={n.flags} /></td>
-                        <td className="px-3 py-2"><ZillowCell url={n.zillowUrl} /></td>
-                        <td className="px-3 py-2">
-                          <DealSelect
-                            value={n.dealStatus as DealStage}
-                            onChange={(s) => setDeal({ noticeId: n._id as Id<"legalNotices">, dealStatus: s })}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {mapOpen && (
+              <div className="mb-4">
+                <PropertyMap
+                  points={mapPoints}
+                  missingCount={missingGeocode}
+                  onGeocode={onGeocode}
+                  geocoding={geocoding}
+                  focusId={focusId}
+                  onFocusConsumed={() => setFocusId(null)}
+                  onDealChange={(id, s) =>
+                    setDeal({ noticeId: id as Id<"legalNotices">, dealStatus: s })
+                  }
+                />
               </div>
             )}
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                  <span className="font-medium text-slate-600">Highest estimated value (Zestimate) first.</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-400">Needs re-scrape</span>
+                  {sort && (
+                    <button
+                      onClick={() => setSort(null)}
+                      className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                    >
+                      <Star className="h-3 w-3" /> Highest value first
+                    </button>
+                  )}
+                  <div className="w-full text-slate-400">
+                    Estate / probate notices — the play is an off-market purchase from the estate. Contact the <strong>Personal Representative</strong>. Open the Notes column for per-row caveats.
+                  </div>
+                </div>
+                {!notices ? (
+                  <Loading />
+                ) : notices.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400">No notices for {selectedWeek}.</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 text-right font-medium">#</th>
+                          <SortHeader label="Worth (Zest.)" k="zestimate" sort={sort} onSort={toggleSort} />
+                          <th className="px-3 py-2 font-medium">Deceased / Owner</th>
+                          <th className="px-3 py-2 font-medium">Personal Rep</th>
+                          <th className="px-3 py-2 font-medium">Address</th>
+                          <th className="px-3 py-2 font-medium">Size</th>
+                          <th className="px-3 py-2 font-medium">Notes</th>
+                          <th className="px-3 py-2 font-medium">Zillow</th>
+                          <th className="px-3 py-2 font-medium">Map</th>
+                          <th className="px-3 py-2 font-medium">Deal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(sorted ?? notices).map((n, i) => (
+                          <tr key={n._id} className="border-t border-slate-100 hover:bg-slate-50">
+                            <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400">{i + 1}</td>
+                            <td className="px-3 py-2 text-right">
+                              {n.value !== null ? (
+                                <span className="font-semibold tabular-nums text-ink">{fmtMoney(n.value)}</span>
+                              ) : (
+                                <span className="text-xs text-slate-400">{n.zestimate === "SCRAPE FAILED" ? "re-scrape" : "—"}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-ink">{n.ownerName}</td>
+                            <td className="px-3 py-2 text-slate-600">{n.personalRepresentative}</td>
+                            <td className="px-3 py-2 text-slate-600">{n.address}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{fmtSize(n.beds, n.baths, n.sqft)}</td>
+                            <td className="px-3 py-2"><DealNotes flags={n.flags} /></td>
+                            <td className="px-3 py-2"><ZillowCell url={n.zillowUrl} /></td>
+                            <td className="px-3 py-2">
+                              <MapLinkCell
+                                hasCoords={typeof n.lat === "number" && typeof n.lng === "number"}
+                                onClick={() => onShowOnMap(n._id)}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <DealSelect
+                                value={n.dealStatus as DealStage}
+                                onChange={(s) => setDeal({ noticeId: n._id as Id<"legalNotices">, dealStatus: s })}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
           </>
         )}
       </div>
