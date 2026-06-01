@@ -6,9 +6,14 @@ Twenty Cloud (paid) is NOT used. Twenty needs a Docker host (own server / Oracle
 
 ## Phase 1 — Scraping core (DONE ✓ — foundation-agnostic, proven vs live Firecrawl)
 - [x] Port firecrawl client, sheriff PDF parser, address cleaner, parcel parser, Zillow extractor, per-listing enricher to TS (`src/scraper/*`)
-- [x] 25 unit tests pass (address/sheriff/parcel/zillow edge cases)
+- [x] 27 unit tests pass (address/sheriff/parcel/zillow edge cases + PDF-derived saleMonth)
 - [x] typecheck clean
 - [x] Live integration test: 53 listings parsed, 3/3 enriched with real parcel + Zillow data, 0 errors
+- [x] FIX: saleMonth derived from PDF "Gross List MM/DD/YYYY" header, not today's date (gate correctness)
+
+## Phase 2 — Twenty SDK research (DONE ✓) · Phase 5 security review (DONE ✓ — clean)
+- [x] Documented logic-functions, objects, triggers, CoreApiClient, secrets from official docs
+- [x] Security agent review of new code: no high-confidence vulnerabilities
 
 ## Phase 2 — Twenty SDK research
 - [ ] Scrape Twenty docs: logic functions API (define, triggers cron/HTTP/db-event), how to read/write objects from a function, secrets/env, front components, skills/agents

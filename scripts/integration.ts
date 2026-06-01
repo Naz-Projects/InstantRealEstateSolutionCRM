@@ -32,8 +32,10 @@ async function main() {
   const markdown = await fetchSheriffMarkdown(apiKey);
   console.log(`✓ Firecrawl returned ${markdown.length} chars of markdown in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
-  const { listings, saleMonth } = parseSheriffMarkdown(markdown);
-  console.log(`✓ Parsed ${listings.length} listings (sale month label: ${saleMonth})`);
+  const { listings, saleMonth, saleDate, saleMonthSource } = parseSheriffMarkdown(markdown);
+  console.log(
+    `✓ Parsed ${listings.length} listings — saleMonth=${saleMonth} (from ${saleMonthSource}, saleDate=${saleDate})`,
+  );
   console.log("\nFirst few parsed listings:");
   listings.slice(0, 5).forEach((l, i) => {
     console.log(`  [${i + 1}] ${l.type.padEnd(5)} | ${l.address}  | parcel=${l.parcel}`);

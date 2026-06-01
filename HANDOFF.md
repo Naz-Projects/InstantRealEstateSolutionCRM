@@ -1,5 +1,23 @@
 # IRES CRM — Handoff (read me in the morning)
 
+## ⚠️ Status & caveats (read first — honest framing)
+- **Scraping core = PROVEN.** Ported, unit-tested (27 tests), and verified end-to-end against
+  **live Firecrawl** (real PDF → 53 listings → real parcel + Zillow enrichment). This is solid.
+- **`saleMonth` gate = FIXED + tested.** `saleMonth` is now derived from the PDF header
+  (`Gross List 06/09/2026 …` → "June 2026"), NOT from today's date. This is what the scheduler +
+  idempotency key on, so a scheduled run before the county publishes the new month won't mislabel
+  rows or falsely mark a month "done." (Earlier draft had this bug; fixed.)
+- **Twenty app = UNVALIDATED DRAFT.** The ~1,300 lines under `twenty-app/` have **never compiled** —
+  the typed `CoreApiClient` is generated only when a Twenty server runs (needs Docker). Mutation
+  selection-sets, arg shapes, and function timeout caps are unconfirmed. Treat it as a correct-to-docs
+  starting point, not working code. The security review validated the *core's* surface, not a running app.
+- **Fan-out concurrency = OPERATIONAL RISK, not yet validated.** `enrich-sheriff-listing` triggers on
+  `sheriffSaleListing.created`, so ~53 enrichments fire near-simultaneously. Our own lessons note the
+  NCC parcel site rate-limits after ~3 rapid requests; going through Firecrawl's cloud changes the IP
+  but leans on Firecrawl's concurrency limits with **no throttle**. At scale this could produce mass
+  `SCRAPE FAILED`. Add a queue/concurrency cap (Twenty worker config) or stagger enrichment before
+  relying on it in production.
+
 ## TL;DR of where things stand
 - ✅ **Automation works locally, proven against live Firecrawl.** The full Sheriff Sales
   pipeline (PDF → parse → address clean → parcel + Zillow enrichment) is ported to TypeScript,

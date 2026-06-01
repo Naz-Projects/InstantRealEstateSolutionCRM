@@ -12,10 +12,38 @@ export const SHERIFF_PDF_URL =
 export interface ParseResult {
   listings: SheriffListing[];
   saleMonth: string;
+  /** Sale date as it appears in the PDF (MM/DD/YYYY), or null if not found. */
+  saleDate: string | null;
+  /** "pdf" when saleMonth came from the PDF header; "fallback" when from `now`. */
+  saleMonthSource: "pdf" | "fallback";
 }
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 function monthLabel(now: Date): string {
   return now.toLocaleDateString("en-US", { year: "numeric", month: "long" });
+}
+
+/**
+ * Extract the actual sale date/month from the PDF header, e.g.
+ * "Gross List 06/09/2026 - 06/09/2026" -> { saleDate: "06/09/2026", saleMonth: "June 2026" }.
+ * This is what the scheduler/idempotency must key on — NOT today's date — so a
+ * scheduled run before the county publishes the new month doesn't mislabel and
+ * lock in stale data.
+ */
+export function extractSaleInfo(markdown: string): {
+  saleDate: string | null;
+  saleMonth: string | null;
+} {
+  const m = markdown.match(/Gross List\s+(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return { saleDate: null, saleMonth: null };
+  const [, mm, dd, yyyy] = m;
+  const monthName = MONTHS[parseInt(mm, 10) - 1];
+  if (!monthName) return { saleDate: `${mm}/${dd}/${yyyy}`, saleMonth: null };
+  return { saleDate: `${mm}/${dd}/${yyyy}`, saleMonth: `${monthName} ${yyyy}` };
 }
 
 /**
@@ -80,7 +108,13 @@ export function parseSheriffMarkdown(markdown: string, now: Date = new Date()): 
     throw new Error("No listings parsed from markdown — check Firecrawl output format.");
   }
 
-  return { listings, saleMonth: monthLabel(now) };
+  const info = extractSaleInfo(markdown);
+  return {
+    listings,
+    saleMonth: info.saleMonth ?? monthLabel(now),
+    saleDate: info.saleDate,
+    saleMonthSource: info.saleMonth ? "pdf" : "fallback",
+  };
 }
 
 /** Scrape the live NCC sheriff-sale PDF and return its markdown. */
