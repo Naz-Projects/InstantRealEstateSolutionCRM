@@ -11,5 +11,6 @@ export default defineApplication({
   displayName: "IRES Sheriff Sales",
   description:
     "Instant Real Estate Solution — automated New Castle County sheriff-sale ingestion, parcel + Zillow enrichment, and a wholesaling deal pipeline.",
+  logoUrl: "logo.svg", // public/logo.svg — shown in the marketplace/app listing
   // defaultRoleUniversalIdentifier: "<role-uid>", // see src/roles via `yarn twenty dev:add role`
 });

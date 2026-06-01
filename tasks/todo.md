@@ -19,19 +19,20 @@ Twenty Cloud (paid) is NOT used. Twenty needs a Docker host (own server / Oracle
 - [ ] Scrape Twenty docs: logic functions API (define, triggers cron/HTTP/db-event), how to read/write objects from a function, secrets/env, front components, skills/agents
 - [ ] Confirm self-host supports custom apps + logic functions (open-source parity)
 
-## Phase 3 — Twenty app (written to spec; full test needs Docker)
-- [ ] `create-twenty-app` scaffold (or hand-write app structure per docs)
-- [ ] `SheriffSaleListing` object: all scraped+enriched fields + dealStatus (new/reviewing/contacted/offer/dead) + notes
-- [ ] `ScrapeRun` object: type/saleMonth/status/counts/timestamps (run tracking)
-- [ ] Logic function: scrapeAndParse (cron weekday + manual HTTP trigger) → create listing rows → fan-out enrich
-- [ ] Logic function: enrichListing (per row) → patch row (reuses src/scraper/enrich)
-- [ ] Front component: "Scrape Sheriff Sales This Week" button (command menu / record action)
-- [ ] Views: Table + Kanban (pipeline by dealStatus)
-- [ ] Idempotency guard (refuse duplicate month / in-progress; force override)
+## Phase 3 — Twenty app (WRITTEN to SDK spec ✓ — compile/run needs Docker)
+- [~] `create-twenty-app` scaffold (USER: run tomorrow w/ Docker — drop these files in)
+- [x] `SheriffSaleListing` object (all fields + dealStatus pipeline + exported field UIDs)
+- [x] `ScrapeRun` object (run tracking)
+- [x] Logic function: scrape-sheriff-sales (cron + HTTP button + AI tool, idempotent)
+- [x] Logic function: enrich-sheriff-listing (DB-event fan-out, reuses src/scraper/enrich)
+- [x] Front component: "Scrape Sheriff Sales This Week" button (headless + CommandModal) + pinned command-menu item
+- [x] View: default table (wholesaler columns) + sidebar nav item  [Kanban-by-dealStatus = 1-click in UI / add via groups]
+- [x] Idempotency guard (skip already-scraped month unless force)
 - [ ] (Optional) AI skill/agent over the listings
 
 ## Phase 4 — Branding
-- [ ] IRES palette/logo/wordmark applied where Twenty allows theming
+- [x] IRES logo.svg + wordmark.svg + palette tokens (BRANDING.md); logoUrl wired in app manifest
+- [~] Workspace logo/name/theme = one-click admin action in Twenty Settings (after workspace is up)
 
 ## Phase 5 — Test, review, security
 - [ ] Local Twenty via Docker (USER: install Docker Desktop) → `yarn twenty dev` → trigger run → verify rows populate/enrich

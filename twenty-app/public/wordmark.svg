@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 72" width="360" height="72" role="img" aria-label="Instant Real Estate Solution">
+  <rect x="0" y="8" width="56" height="56" rx="14" fill="#0B2545"/>
+  <path d="M28 20 L44 34 H39 V50 H17 V34 H12 Z" fill="#FFFFFF"/>
+  <path d="M31 25 L23 37 H29 L26 47 L36 33 H30 Z" fill="#16A34A"/>
+  <text x="72" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#0B2545" letter-spacing="0.5">INSTANT REAL ESTATE</text>
+  <text x="72" y="56" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#16A34A" letter-spacing="3">SOLUTION</text>
+</svg>

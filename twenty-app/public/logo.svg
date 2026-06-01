@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Instant Real Estate Solution">
+  <defs>
+    <linearGradient id="ires-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B2545"/>
+      <stop offset="1" stop-color="#13315C"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="20" fill="url(#ires-bg)"/>
+  <!-- house -->
+  <path d="M48 22 L74 44 H66 V70 H30 V44 H22 Z" fill="#FFFFFF"/>
+  <rect x="42" y="52" width="12" height="18" fill="#0B2545"/>
+  <!-- 'instant' bolt accent -->
+  <path d="M52 30 L40 50 H49 L45 64 L60 42 H51 Z" fill="#16A34A"/>
+</svg>

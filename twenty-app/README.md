@@ -13,12 +13,19 @@ verified end-to-end against live Firecrawl).
 ## What's here
 
 ```
-application-config.ts                         app manifest (defineApplication)
-src/objects/sheriff-sale-listing.object.ts    the main record type (+ dealStatus pipeline)
-src/objects/scrape-run.object.ts              run history / tracking
-src/logic-functions/scrape-sheriff-sales…     cron + button (/s/sheriff/scrape) + AI tool
-src/logic-functions/enrich-sheriff-listing…   db-event fan-out: enrich each new listing
-src/scraper/*                                 proven Firecrawl pipeline (PDF, parcel, Zillow)
+application-config.ts                          app manifest (defineApplication, logoUrl)
+src/objects/sheriff-sale-listing.object.ts     main record type (+ dealStatus pipeline, exported field UIDs)
+src/objects/scrape-run.object.ts               run history / tracking
+src/logic-functions/scrape-sheriff-sales…      cron + button (/s/sheriff/scrape) + AI tool
+src/logic-functions/enrich-sheriff-listing…    db-event fan-out: enrich each new listing
+src/front-components/scrape-sheriff-sales.tsx   the "Scrape Sheriff Sales This Week" button (headless + CommandModal)
+src/command-menu-items/scrape-sheriff-sales…   pins the button as a global quick-action + Cmd+K
+src/views/sheriff-sale-listings.view.ts         default table view (wholesaler columns)
+src/navigation-menu-items/sheriff-sales…        sidebar entry → the view
+src/shared/call-app-route.ts                    front-component → logic-function HTTP helper
+src/scraper/*                                   proven Firecrawl pipeline (PDF, parcel, Zillow)
+public/logo.svg, public/wordmark.svg            IRES branding assets
+BRANDING.md                                     palette + where to apply workspace branding
 ```
 
 ## How to bring it up (tomorrow, once Docker is installed)
