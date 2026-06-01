@@ -4,8 +4,9 @@
 // unit-tested offline (the GraphQL transport itself is Twenty's code + needs a
 // running server; this is everything up to that wire).
 
-import type { SheriffListing } from "./types.js";
+import type { SheriffListing, ZillowData } from "./types.js";
 import type { EnrichedListing } from "./enrich.js";
+import type { LegalListing } from "./legalNotices.js";
 
 export interface ListingCreateData {
   name: string;
@@ -80,5 +81,56 @@ export function toListingUpdateData(e: EnrichedListing): ListingUpdateData {
     baths: e.baths,
     sqft: e.sqft,
     enrichmentStatus: "ENRICHED",
+  };
+}
+
+// ---- Legal Notices (estate/probate) -> CRM ----
+
+export interface LegalCreateData {
+  name: string;
+  weekDate: string;
+  title: string;
+  ownerName: string;
+  address: string;
+  personalRepresentative: string;
+  enrichmentStatus: "PENDING";
+  dealStatus: "NEW";
+}
+
+export function toLegalCreateData(l: LegalListing): LegalCreateData {
+  return {
+    name: l.ownerName,
+    weekDate: l.weekDate ?? "",
+    title: l.title,
+    ownerName: l.ownerName,
+    address: l.address,
+    personalRepresentative: l.personalRepresentative,
+    enrichmentStatus: "PENDING",
+    dealStatus: "NEW",
+  };
+}
+
+export interface LegalUpdateData {
+  zillowUrl: string;
+  zestimate: string;
+  beds: string;
+  baths: string;
+  sqft: string;
+  enrichmentStatus: "ENRICHED" | "FAILED";
+}
+
+/** Map a Zillow result (or an error code) to the legal-notice update payload. */
+export function toLegalUpdateData(
+  zillow: Partial<ZillowData>,
+  errorCode: string | null,
+): LegalUpdateData {
+  const v = (val?: string) => val || errorCode || "NOT FOUND";
+  return {
+    zillowUrl: v(zillow.zillowUrl),
+    zestimate: v(zillow.zestimate),
+    beds: v(zillow.beds),
+    baths: v(zillow.baths),
+    sqft: v(zillow.sqft),
+    enrichmentStatus: errorCode ? "FAILED" : "ENRICHED",
   };
 }
