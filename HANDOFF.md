@@ -43,7 +43,7 @@
 ```bash
 cd C:\Users\nazho\Desktop\ires-crm
 npm install          # if needed
-npm test             # 27 unit tests
+npm test             # 28 tests (unit + the scraper->CRM seam integration test)
 npm run integration  # hits live Firecrawl: parses the real PDF + enriches a few listings
 ```
 
