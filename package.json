@@ -1,0 +1,20 @@
+{
+  "name": "ires-crm-scraper-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "IRES Sheriff Sales scraping core — runtime-agnostic TS, ported from the Railway/n8n pipeline. Drops into a Twenty logic function unchanged.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "integration": "tsx scripts/integration.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  }
+}
