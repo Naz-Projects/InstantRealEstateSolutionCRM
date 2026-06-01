@@ -30,7 +30,7 @@ async function gql(query: string): Promise<any> {
     body: JSON.stringify({ query }),
   });
   if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const json = await res.json();
+  const json = (await res.json()) as { errors?: unknown; data?: any };
   if (json.errors) throw new Error(`GraphQL errors: ${JSON.stringify(json.errors).slice(0, 400)}`);
   return json.data;
 }
