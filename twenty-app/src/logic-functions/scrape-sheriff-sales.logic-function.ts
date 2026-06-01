@@ -19,6 +19,7 @@ import { defineLogicFunction } from "twenty-sdk/define";
 import type { RoutePayload } from "twenty-sdk/logic-function";
 import { CoreApiClient } from "twenty-client-sdk/core";
 import { fetchSheriffMarkdown, parseSheriffMarkdown } from "../scraper/sheriffParse.js";
+import { toListingCreateData } from "../scraper/crmMap.js";
 
 export const SCRAPE_SHERIFF_SALES_UID = "a1c3e5f7-0911-4233-8557-79a1b3c5d7e1";
 
@@ -70,24 +71,7 @@ const handler = async (params: RoutePayload) => {
   for (const l of listings) {
     await client.mutation({
       createSheriffSaleListing: {
-        __args: {
-          data: {
-            name: l.address,
-            runId,
-            saleMonth,
-            saleType: l.type,
-            defendant: l.defendant,
-            plaintiff: l.plaintiff,
-            attorney: l.attorney,
-            courtCaseNumber: l.courtCaseNumber,
-            address: l.address,
-            parcel: l.parcel,
-            saleStatus: l.status,
-            principal: l.principal,
-            enrichmentStatus: "PENDING",
-            dealStatus: "NEW",
-          },
-        },
+        __args: { data: toListingCreateData(l, saleMonth, runId) },
         id: true,
       },
     });

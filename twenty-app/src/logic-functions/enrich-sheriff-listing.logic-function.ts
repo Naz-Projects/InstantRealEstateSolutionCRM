@@ -22,6 +22,7 @@ import type {
 } from "twenty-sdk/logic-function";
 import { CoreApiClient } from "twenty-client-sdk/core";
 import { enrichListing } from "../scraper/enrich.js";
+import { toListingUpdateData } from "../scraper/crmMap.js";
 import type { SheriffListing } from "../scraper/types.js";
 
 export const ENRICH_SHERIFF_LISTING_UID = "b2d4f6a8-1022-4344-9668-8ab2c4d6e8f2";
@@ -61,15 +62,13 @@ const handler = async (
     principal: rec.principal ?? "N/A",
   };
 
-  let enrichmentStatus = "ENRICHED";
   let enriched;
   try {
     enriched = await enrichListing(listing, rec.saleMonth ?? "", apiKey);
   } catch {
-    enrichmentStatus = "FAILED";
     await client.mutation({
       updateSheriffSaleListing: {
-        __args: { id: rec.id, data: { enrichmentStatus } },
+        __args: { id: rec.id, data: { enrichmentStatus: "FAILED" } },
         id: true,
       },
     });
@@ -78,24 +77,7 @@ const handler = async (
 
   await client.mutation({
     updateSheriffSaleListing: {
-      __args: {
-        id: rec.id,
-        data: {
-          address: enriched.address,
-          ownerName: enriched.ownerName,
-          propertyAddress: enriched.propertyAddress,
-          assessmentTotal: enriched.assessmentTotal,
-          countyBalanceDue: enriched.countyBalanceDue,
-          schoolBalanceDue: enriched.schoolBalanceDue,
-          sewerBalanceDue: enriched.sewerBalanceDue,
-          zillowUrl: enriched.zillowUrl,
-          zestimate: enriched.zestimate,
-          beds: enriched.beds,
-          baths: enriched.baths,
-          sqft: enriched.sqft,
-          enrichmentStatus,
-        },
-      },
+      __args: { id: rec.id, data: toListingUpdateData(enriched) },
       id: true,
     },
   });
