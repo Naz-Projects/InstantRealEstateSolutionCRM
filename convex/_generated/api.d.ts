@@ -14,6 +14,7 @@ import type * as geocodeData from "../geocodeData.js";
 import type * as helpers from "../helpers.js";
 import type * as legalActions from "../legalActions.js";
 import type * as legalData from "../legalData.js";
+import type * as lib_getAuthUser from "../lib/getAuthUser.js";
 import type * as runs from "../runs.js";
 import type * as sheriffActions from "../sheriffActions.js";
 import type * as sheriffData from "../sheriffData.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   helpers: typeof helpers;
   legalActions: typeof legalActions;
   legalData: typeof legalData;
+  "lib/getAuthUser": typeof lib_getAuthUser;
   runs: typeof runs;
   sheriffActions: typeof sheriffActions;
   sheriffData: typeof sheriffData;
