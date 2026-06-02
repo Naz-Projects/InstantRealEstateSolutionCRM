@@ -1,4 +1,5 @@
 import { createRootRoute, createRoute, Outlet, Link } from "@tanstack/react-router";
+import { UserButton } from "@clerk/clerk-react";
 import { Dashboard, SheriffSales, LegalNotices } from "./pages";
 
 function NavItem({ to, label }: { to: string; label: string }) {
@@ -29,7 +30,10 @@ function AppShell() {
           <NavItem to="/sheriff" label="Sheriff Sales" />
           <NavItem to="/legal" label="Legal Notices" />
         </nav>
-        <div className="border-t border-white/10 p-4 text-[11px] text-white/40">IRES CRM · dev</div>
+        <div className="flex items-center justify-between border-t border-white/10 p-4 text-[11px] text-white/40">
+          <span>IRES CRM · dev</span>
+          <UserButton />
+        </div>
       </aside>
       <main className="flex-1 overflow-auto">
         <Outlet />
