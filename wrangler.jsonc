@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "instant-real-estate-solution-crm",
+  "compatibility_date": "2026-06-02",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "dist"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
