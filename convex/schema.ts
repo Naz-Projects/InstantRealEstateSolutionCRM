@@ -17,6 +17,20 @@ export const enrichmentStatus = v.union(
 );
 
 export default defineSchema({
+  users: defineTable({
+    tokenIdentifier: v.string(), // Clerk subject once linked; "pending:<invitationId>" before
+    name: v.string(),
+    email: v.string(), // normalized lowercase
+    role: v.union(v.literal("admin"), v.literal("member")),
+    isActive: v.boolean(),
+    clerkInvitationId: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_token", ["tokenIdentifier"])
+    .index("by_clerk_invitation", ["clerkInvitationId"]),
+
   // One row per scrape execution — run history + progress tracking.
   scrapeRuns: defineTable({
     type: v.union(v.literal("sheriff"), v.literal("legal")),
