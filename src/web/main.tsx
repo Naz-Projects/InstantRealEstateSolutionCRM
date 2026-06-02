@@ -1,15 +1,19 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import {
   ConvexReactClient,
   Authenticated,
   Unauthenticated,
   AuthLoading,
+  useMutation,
 } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { ClerkProvider, SignInButton, useAuth } from "@clerk/clerk-react";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
+import { api } from "../../convex/_generated/api";
 import { routeTree } from "./app";
+import { AcceptInvite } from "./admin/AcceptInvite";
+import { errMsg } from "./admin/errMsg";
 import "./index.css";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
@@ -41,20 +45,47 @@ function SignInGate() {
   );
 }
 
+function AuthedApp() {
+  const link = useMutation(api.users.linkOrRejectUser);
+  const [state, setState] = useState<"linking" | "ok" | { error: string }>("linking");
+  useEffect(() => {
+    let cancelled = false;
+    link({})
+      .then(() => { if (!cancelled) setState("ok"); })
+      .catch((e: unknown) => { if (!cancelled) setState({ error: errMsg(e, "Sign-in failed") }); });
+    return () => { cancelled = true; };
+  }, [link]);
+
+  if (state === "linking") {
+    return <div className="grid min-h-screen place-items-center bg-ink text-white/60">Signing in…</div>;
+  }
+  if (typeof state === "object") {
+    return (
+      <div className="grid min-h-screen place-items-center bg-ink text-white">
+        <div className="max-w-sm rounded-2xl bg-white/5 px-8 py-10 text-center ring-1 ring-white/10">
+          <div className="text-base font-semibold">Access unavailable</div>
+          <p className="mt-2 text-sm text-white/70">{state.error}</p>
+        </div>
+      </div>
+    );
+  }
+  return <RouterProvider router={router} />;
+}
+
+const onAcceptInvite = window.location.pathname.startsWith("/accept-invite");
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <AuthLoading>
-          <div className="grid min-h-screen place-items-center bg-ink text-white/60">
-            Loading…
-          </div>
+          <div className="grid min-h-screen place-items-center bg-ink text-white/60">Loading…</div>
         </AuthLoading>
         <Authenticated>
-          <RouterProvider router={router} />
+          <AuthedApp />
         </Authenticated>
         <Unauthenticated>
-          <SignInGate />
+          {onAcceptInvite ? <AcceptInvite /> : <SignInGate />}
         </Unauthenticated>
       </ConvexProviderWithClerk>
     </ClerkProvider>
