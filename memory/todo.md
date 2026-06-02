@@ -27,18 +27,30 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [x] **Repo on GitHub + Cloudflare CI** builds the frontend from it (`convex/_generated` committed for CI typecheck).
 - [x] 44 tests pass; tsc+vite build clean.
 
-## ~ Blocked on the user (the go-live setup — see next-session-prompt.md)
-- [~] **Security: split the Google key** into a referrer-restricted browser key + a Geocoding-only server key, then rotate (it was shared in chat). Currently one unrestricted key serves both.
-- [~] **Clerk auth** — publishable key, `ConvexProviderWithClerk`, real `CLERK_JWT_ISSUER_DOMAIN`, sign-in gate, **remove `IRES_DEV`**.
-- [~] **Convex prod** deploy + prod env vars (Firecrawl, OpenRouter, Clerk, `GOOGLE_GEOCODING_API_KEY`).
-- [~] **Cloudflare prod env** — `VITE_CONVEX_URL`, `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID`, `VITE_CLERK_PUBLISHABLE_KEY`; point `crm.instantrealestatesolution.com`. Confirm crons active on prod.
-- [~] Rotate the other keys shared in chat (Firecrawl, OpenRouter, Anthropic, Convex deploy keys).
+## ✅ Shipped this session (2026-06-02) — auth, admin, production
+- [x] **Clerk auth (dev + prod)** — `<ClerkProvider>` + `ConvexProviderWithClerk` + sign-in gate + `/accept-invite`;
+  `getAuthUser`/`requireAdmin`; `requireUser` upgraded to reject non-provisioned/deactivated users; `IRES_DEV` removed (dev secured).
+- [x] **Admin user-management** — `users` table (admin/member, invite-only); Admin page (invite via Clerk email,
+  role dropdown, activate/deactivate, remove) + Clerk Backend-API sync (create/lock/delete) with rollback.
+  Built via spec → plan → subagent impl + 2-stage review; merged to `main`.
+- [x] **Production cutover** — Convex prod `pastel-crocodile-994` (env + functions + seeded admin); Clerk prod
+  instance (restricted/invite-only, `convex` JWT template w/ email claim); Cloudflare Workers + `wrangler.jsonc`
+  → `crm.instantrealestatesolution.com`; sign-in verified live; 53 sheriff rows geocoded on prod.
+- [x] **Cloudflare CI fix** — committed `convex/_generated`; added `wrangler.jsonc` (serves `./dist` SPA).
 
-## [ ] Verify / near-term
-- [ ] **Eyeball the map + Street View** in `npm run dev` (needs the browser key, which is set): pins appear + colored by deal; Map column → focuses the property + opens Street View; deal-status edit from a pin doesn't re-center the map.
-- [ ] **Create a real Map ID** (`VITE_GOOGLE_MAPS_MAP_ID`) for production instead of the `DEMO_MAP_ID` fallback.
+## [ ] Post-launch punch list (see next-session-prompt.md)
+- [ ] **Finish the Google Maps key rotation** (in progress) — new key → Cloudflare `VITE_GOOGLE_MAPS_API_KEY`
+  + Convex `GOOGLE_GEOCODING_API_KEY` (prod **and** dev) + redeploy Cloudflare. One domain-restricted key serves both.
+- [ ] **Rotate the other chat-shared keys** — Firecrawl, OpenRouter, Anthropic, Convex dev/prod deploy keys, Clerk dev/prod secret.
+- [ ] **Create a real `VITE_GOOGLE_MAPS_MAP_ID`** (vector Map ID) → Cloudflare → removes the `DEMO_MAP_ID` watermark.
+- [ ] **Fix `backfillGeocodes` silent `catch{}`** — log/surface hard errors (REQUEST_DENIED / expired key) instead of no-op.
+- [ ] **E2E-test the invite flow on prod** — invite a teammate → accept on `/accept-invite` → links as member.
+- [ ] (Optional) **Backend-deploy-on-push** via `convex deploy --cmd 'npm run build'` + `NODE_VERSION=22` (BlueRock model). Today backend deploys are manual.
+
+## [ ] Verify / near-term (carried over)
 - [ ] **Prove the parcel/Zillow retries live** at full scale — cheapest proof is the in-app "Retry N blocked" on a month (non-destructive). Firecrawl "stealth" proxy mode is the next lever if retries leave failures.
 - [ ] **Marker clustering** if a period ever exceeds ~100 pins.
+- [ ] Confirm the **crons** (weekday sheriff / weekly legal) are active on prod.
 
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).

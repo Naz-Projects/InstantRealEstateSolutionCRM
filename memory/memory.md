@@ -92,16 +92,36 @@ column**: clicking it opens the map focused on that exact row and auto-opens its
   `convex/geocodeActions.backfillGeocodes` (idempotent; auto-scheduled after each scrape + a manual
   "Geocode N missing" button) via `convex/geocodeData.ts`. **Verified live: 74/74 rows geocoded, 0 failed.**
 - Library `@vis.gl/react-google-maps`. AdvancedMarkers need a Map ID (`VITE_GOOGLE_MAPS_MAP_ID`; falls back to
-  `DEMO_MAP_ID` in dev). **Two keys by design:** a referrer-restricted **browser** key (`VITE_GOOGLE_MAPS_API_KEY`,
-  Maps JS + Street View Static) and a Geocoding-only **server** key (`GOOGLE_GEOCODING_API_KEY`, Convex env).
+  `DEMO_MAP_ID` with a "development only" watermark). **ONE domain-restricted key serves both** the browser map
+  (`VITE_GOOGLE_MAPS_API_KEY`) and server-side geocoding (`GOOGLE_GEOCODING_API_KEY` = same value) — a
+  Website/referrer restriction is NOT enforced on the Geocoding web service (2026-06-02 lesson; supersedes the
+  earlier "two keys" note). Enable on the key: Maps JS + Geocoding + Street View Static.
   Spec/plan: `docs/superpowers/{specs,plans}/2026-06-01-google-maps-street-view*`.
 
-## Status (current — 2026-06-01)
-- **Repo is on GitHub** (`origin` = Naz-Projects/InstantRealEstateSolutionCRM) and **Cloudflare builds the
-  frontend from it via CI** (`convex/_generated` is committed so CI can typecheck without the Convex CLI — see lessons).
-- Both pipelines + deal screens + maps run **live on the Convex dev deployment `fearless-donkey-585`**
-  (project `instantrealestate`). 44 tests pass; tsc+vite build clean.
-- **Pending:** (1) browser eyeball of the map/Street View; (2) **security** — split the single Google key into a
-  referrer-restricted browser key + a Geocoding-only server key, then rotate (it was shared in chat); (3) Clerk
-  auth (remove `IRES_DEV`) → Convex **prod** deploy → Cloudflare prod env vars (`VITE_CONVEX_URL`,
-  `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID`, `VITE_CLERK_PUBLISHABLE_KEY`). See `next-session-prompt.md`.
+## Status (current — 2026-06-02) — LIVE IN PRODUCTION
+- **Prod is live:** **https://crm.instantrealestatesolution.com** (Cloudflare Workers project
+  `instant-real-estate-solution-crm`) on Convex **prod** `pastel-crocodile-994`. Clerk **production** instance
+  wired; sign-in verified; owner admin `nazhossain16@gmail.com`; **invite-only** (restricted sign-up).
+- **Shipped this session:** Clerk auth (dev+prod) + a full **admin user-management** feature (`users` table,
+  invite/role/deactivate/delete, `getAuthUser`/`requireAdmin`, `requireUser` upgraded to reject
+  non-provisioned/inactive callers). Merged to `main` + pushed; dev **secured** (`IRES_DEV` removed); 44 tests pass.
+- **Cloudflare build fix:** `convex/_generated` is committed + a root **`wrangler.jsonc`** (serves `./dist` as an
+  SPA), so `npx wrangler deploy` serves fresh builds. Backend deploys are **manual** `npx convex deploy`.
+- **Post-launch punch list (see next-session-prompt.md):** finish the Maps-key rotation (new key → Cloudflare
+  `VITE_GOOGLE_MAPS_API_KEY` + Convex `GOOGLE_GEOCODING_API_KEY` on prod+dev), create a real
+  `VITE_GOOGLE_MAPS_MAP_ID` (kills the DEMO watermark), make `backfillGeocodes` surface hard errors, rotate the
+  other chat-shared keys, e2e-test the invite flow on prod.
+
+## Deployments & keys (reference — secrets live in dashboards/.env.local, NOT the repo)
+- **Convex:** dev `fearless-donkey-585` · prod `pastel-crocodile-994` (project `instantrealestate`). CLI→prod:
+  `CONVEX_DEPLOY_KEY='prod:pastel-crocodile-994|…' npx convex deploy|env set|run …` (key value in `.env.local`).
+  `npx convex run` can invoke **internal** functions with the deploy key (e.g. `users:seedAdmin`, `geocodeActions:backfillGeocodes`).
+- **Cloudflare:** Workers project `instant-real-estate-solution-crm` → `crm.instantrealestatesolution.com`. Build
+  `npm run build`, deploy `npx wrangler deploy`, `wrangler.jsonc` (`name` MUST match the project). CF env:
+  `CONVEX_DEPLOY_KEY`(prod), `VITE_CONVEX_URL=https://pastel-crocodile-994.convex.cloud`, `VITE_CLERK_PUBLISHABLE_KEY`(pk_live), `VITE_GOOGLE_MAPS_API_KEY`.
+- **Clerk:** dev `optimal-frog-32.clerk.accounts.dev` · prod issuer `https://clerk.instantrealestatesolution.com`.
+  JWT template `convex` (claims `{aud:convex, email, name}`) on BOTH. Convex env (both): `CLERK_JWT_ISSUER_DOMAIN`,
+  `CLERK_SECRET_KEY` (sk_live on prod), `CLERK_INVITE_REDIRECT_URL`. Prod = restricted sign-up + email sign-up ON.
+- **Google:** ONE domain-restricted Maps key serves BOTH the browser map AND server geocoding
+  (`GOOGLE_GEOCODING_API_KEY` = same value as `VITE_GOOGLE_MAPS_API_KEY`). Enable: Maps JS + Geocoding + Street
+  View Static (not Places/Directions). Website restrictions: prod domain + `http://localhost:5173/*`.

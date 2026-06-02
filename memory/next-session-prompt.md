@@ -2,52 +2,58 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## Where we are
-The IRES CRM (serverless: Convex + TanStack/React + Tailwind, hosted on Cloudflare) is feature-complete for
-the core workflow and **running live on the Convex dev deployment `fearless-donkey-585`**. The repo is on
-**GitHub** (`origin` = Naz-Projects/InstantRealEstateSolutionCRM) and **Cloudflare builds the frontend from it
-via CI**. 44 tests pass; tsc+vite build clean; everything is committed.
+## Where we are — production is live
+The IRES CRM is **live in production** at **https://crm.instantrealestatesolution.com** — Convex prod
+`pastel-crocodile-994`, Cloudflare Workers project `instant-real-estate-solution-crm`, Clerk **production**
+instance (invite-only). Sign in as `nazhossain16@gmail.com` (the seeded owner/admin). Dev runs on
+`fearless-donkey-585` (Clerk dev `optimal-frog-32`); `IRES_DEV` is removed (dev secured). All work is merged to
+`main` and pushed; 44 tests pass; build clean.
 
-**Shipped:** Sheriff Sales + Legal Notices scrape → enrich (parcel/Zillow) → live tables with the deal screen
-(cushion for Sheriff, Zestimate for Legal), monthly/weekly tabs, retry-failed, split scrape buttons, live
-progress stepper (collapsible log), and a **Google Maps + Street View** view (collapsible map panel above the
-table, price-pill markers colored by deal, click→InfoWindow + Street View, table **Map column** that jumps to a
-property and auto-opens Street View). Geocoding is stored per row and verified live (74/74). See
-`memory/memory.md` for the full map; `docs/superpowers/` for the maps spec + plan.
+This session shipped: the Cloudflare build fix (committed `convex/_generated` + a root `wrangler.jsonc`),
+**Clerk auth** (dev + prod), a full **admin user-management** feature (invite-only `users` table; Admin page with
+invite / role / deactivate / delete synced to Clerk via its Backend API), and the **production cutover**.
+Geocoding on prod works (53 sheriff pins). Full deployment + key reference is in `memory/memory.md` →
+"Deployments & keys".
 
-## ⭐ Next (do these — go-live)
-1. **Security: split the Google key.** Right now one **unrestricted** key (in `.env.local` as
-   `VITE_GOOGLE_MAPS_API_KEY` AND set on Convex as `GOOGLE_GEOCODING_API_KEY`) serves both browser + server,
-   and it was shared in chat. Create two keys: a browser key restricted to HTTP referrers (Maps JS + Street
-   View Static) and a server key restricted to the Geocoding API. Update both, then **rotate** the old one.
-2. **Eyeball the app** (`npm run dev`): on Sheriff + Legal, click "Open map" → pins colored by deal; click the
-   table **Map** column → it focuses that property and opens Street View; editing a deal status from a pin must
-   NOT re-center the map. Also confirm the stepper/tabs/split-buttons look right.
-3. **Clerk auth** — create the app; `VITE_CLERK_PUBLISHABLE_KEY` in `.env.local`; set real
-   `CLERK_JWT_ISSUER_DOMAIN` (`npx convex env set`); in `src/web/main.tsx` swap `ConvexProvider` →
-   `ConvexProviderWithClerk` + a sign-in gate; **`npx convex env remove IRES_DEV`** (it bypasses auth).
-4. **Convex prod** — `npx convex deploy` with the prod key; set `FIRECRAWL_API_KEY`, `OPENROUTER_API_KEY`,
-   `CLERK_JWT_ISSUER_DOMAIN`, `GOOGLE_GEOCODING_API_KEY` on prod. Confirm crons (weekday sheriff / weekly legal).
-5. **Cloudflare prod env** — set `VITE_CONVEX_URL` (prod), `VITE_GOOGLE_MAPS_API_KEY`, `VITE_GOOGLE_MAPS_MAP_ID`
-   (create a real Map ID), `VITE_CLERK_PUBLISHABLE_KEY`; restrict the browser key to the prod domain; point
-   `crm.instantrealestatesolution.com`. (Build passing ≠ app working — these runtime vars must be set.)
+## Next — post-launch punch list
+1. **Finish the Google Maps key rotation** (the user started it). ONE domain-restricted key serves both jobs:
+   new key → Cloudflare `VITE_GOOGLE_MAPS_API_KEY` (redeploy) **and** Convex `GOOGLE_GEOCODING_API_KEY` on
+   **prod + dev**. The key needs Maps JS + Geocoding + Street View Static APIs; website restrictions =
+   `https://crm.instantrealestatesolution.com/*` + `http://localhost:5173/*`.
+   Set Convex: `CONVEX_DEPLOY_KEY='prod:…' npx convex env set GOOGLE_GEOCODING_API_KEY <key>`.
+2. **Rotate the other chat-shared keys** — Firecrawl, OpenRouter, Anthropic, Convex dev/prod deploy keys,
+   Clerk dev/prod secret. Update `.env.local` + Convex env (both deployments) + Cloudflare as needed.
+3. **Create a real `VITE_GOOGLE_MAPS_MAP_ID`** (Google Cloud → Map Management → vector Map ID) → Cloudflare env
+   → redeploy. Removes the `DEMO_MAP_ID` "for development only" watermark on the map.
+4. **Fix `backfillGeocodes` silent `catch{}`** (`convex/geocodeActions.ts`) — log + surface hard errors
+   (REQUEST_DENIED / expired key) so a dead key shows an error instead of the button silently no-opping.
+5. **E2E-test the invite flow on prod** — Admin → Invite a teammate → they accept on `/accept-invite` → land as
+   a `member`. (Needs `CLERK_SECRET_KEY=sk_live` on Convex prod [set] + email sign-up ON + restricted mode [done].)
+6. (Optional) **Backend-deploy-on-push** — switch the Cloudflare build cmd to `npx convex deploy --cmd 'npm run build'`
+   + add `NODE_VERSION=22` (BlueRock's working Workers setup). Today the backend deploys manually via `npx convex deploy`.
 
 Then pick from `memory/todo.md` (Kanban board, dashboard charts, AI deal analyst).
 
-## Run it
+## Run / deploy
 ```bash
 cd C:\Users\nazho\Desktop\ires-crm
 npm install
-npx convex dev        # terminal 1 — syncs functions to the dev deployment
-npm run dev           # terminal 2 — http://localhost:5173
+npx convex dev        # terminal 1 — syncs functions to dev (fearless-donkey-585)
+npm run dev           # terminal 2 — http://localhost:5173 (sign in via Clerk dev)
 ```
-The dev deployment already has enriched + geocoded sheriff + legal rows. Handy checks:
-- `npm test` (44) · `npm run integration` / `npm run integration:legal` (core vs live Firecrawl/OpenRouter)
-- `npx convex run sheriffActions:devScrapeSheriff '{"limit":3}'` — cheap cloud e2e (IRES_DEV=1)
-- `npx convex run geocodeActions:backfillGeocodes '{"type":"sheriff"}'` — geocode any rows missing coords
+- **Frontend deploy:** `git push origin main` → Cloudflare Workers builds (`npm run build`) + `wrangler deploy` serves `./dist`.
+- **Backend deploy (manual):** `CONVEX_DEPLOY_KEY='prod:pastel-crocodile-994|…' npx convex deploy` (key value in `.env.local`).
+- **Geocode missing rows:** the "Geocode N missing" button on the map, or
+  `CONVEX_DEPLOY_KEY='prod:…' npx convex run geocodeActions:backfillGeocodes '{"type":"sheriff"}'`.
+- `npm test` (44). The Windows `UV_HANDLE_CLOSING` Convex-CLI assertion is cosmetic — trust the output.
 
 ## Gotchas (also in lessons.md)
-- After changing `convex/`, run `npx convex dev --once` FIRST (validates + regenerates `_generated`), THEN `npm run build`.
-- Convex `"use node"` files = actions only; V8 queries/mutations live in `*Data.ts`. Annotate action return types (`: Promise<...>`) to avoid TS7023.
-- The Convex CLI's `UV_HANDLE_CLOSING` assertion on Windows is cosmetic — trust the output, ignore the exit code.
-- `convex/_generated` is committed on purpose (Cloudflare CI typechecks without the Convex CLI). Don't gitignore it.
+- **`convex/_generated` + `wrangler.jsonc` are committed on purpose** (Cloudflare CI). `wrangler.jsonc` `name`
+  MUST match the Workers project. Don't gitignore `_generated`.
+- **One domain-restricted Google key** serves browser map + server geocoding (a Website restriction isn't
+  enforced on the Geocoding web service). Geocoding broke this session only because the key value was *expired*.
+- **Clerk:** restricted/invite-only sign-up, but "Sign-up with email" must stay ON (or invitations fail). First
+  admin = dashboard Create-user. The `convex` JWT template (with the **email** claim) must exist on each instance.
+- **`convex deploy --cmd` errors on Cloudflare Workers** ("non-production build environment") — we deploy the backend manually.
+- After changing `convex/`, run `npx convex dev --once` (validates + regenerates `_generated`) THEN `npm run build`.
+- Convex `"use node"` files = actions only; V8 queries/mutations in `*Data.ts`. Annotate action return types to avoid TS7023.
