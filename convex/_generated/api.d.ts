@@ -12,6 +12,7 @@ import type * as crons from "../crons.js";
 import type * as geocodeActions from "../geocodeActions.js";
 import type * as geocodeData from "../geocodeData.js";
 import type * as helpers from "../helpers.js";
+import type * as invitations from "../invitations.js";
 import type * as legalActions from "../legalActions.js";
 import type * as legalData from "../legalData.js";
 import type * as lib_getAuthUser from "../lib/getAuthUser.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   geocodeActions: typeof geocodeActions;
   geocodeData: typeof geocodeData;
   helpers: typeof helpers;
+  invitations: typeof invitations;
   legalActions: typeof legalActions;
   legalData: typeof legalData;
   "lib/getAuthUser": typeof lib_getAuthUser;
