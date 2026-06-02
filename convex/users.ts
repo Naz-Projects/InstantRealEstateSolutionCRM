@@ -71,7 +71,7 @@ export const setUserRole = mutation({
   args: { userId: v.id("users"), role: ROLE },
   handler: async (ctx, args) => {
     const me = await getAuthUser(ctx);
-    if (!me || me.role !== "admin") throw new Error("Only admin can change roles");
+    if (!me || !me.isActive || me.role !== "admin") throw new Error("Only admin can change roles");
     if (me._id === args.userId) throw new Error("Cannot change your own role");
     const target = await ctx.db.get(args.userId);
     if (!target) throw new Error("User not found");
@@ -83,7 +83,7 @@ export const setActive = action({
   args: { userId: v.id("users"), isActive: v.boolean() },
   handler: async (ctx, args): Promise<{ ok: boolean }> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me || me.role !== "admin") throw new Error("Only admin can change user status");
+    if (!me || !me.isActive || me.role !== "admin") throw new Error("Only admin can change user status");
     if (me._id === args.userId) throw new Error("Cannot change your own active status");
 
     const target = await ctx.runQuery(internal.users.getUserInternal, { userId: args.userId });
@@ -113,7 +113,7 @@ export const deleteUser = action({
   args: { userId: v.id("users") },
   handler: async (ctx, args): Promise<{ ok: boolean }> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me || me.role !== "admin") throw new Error("Only admin can delete users");
+    if (!me || !me.isActive || me.role !== "admin") throw new Error("Only admin can delete users");
     if (me._id === args.userId) throw new Error("Cannot delete your own account");
 
     const target = await ctx.runQuery(internal.users.getUserInternal, { userId: args.userId });
