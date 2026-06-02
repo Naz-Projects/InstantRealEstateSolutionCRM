@@ -1,6 +1,10 @@
 import { createRootRoute, createRoute, Outlet, Link } from "@tanstack/react-router";
 import { UserButton } from "@clerk/clerk-react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { Dashboard, SheriffSales, LegalNotices } from "./pages";
+import { AdminPage } from "./admin/AdminPage";
+import { ShieldCheck } from "lucide-react";
 
 function NavItem({ to, label }: { to: string; label: string }) {
   return (
@@ -10,6 +14,19 @@ function NavItem({ to, label }: { to: string; label: string }) {
       className="block rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white [&.active]:bg-accent [&.active]:text-white [&.active]:font-semibold"
     >
       {label}
+    </Link>
+  );
+}
+
+function AdminNavItem() {
+  const me = useQuery(api.users.currentUser);
+  if (!me || me.role !== "admin") return null;
+  return (
+    <Link
+      to="/admin"
+      className="flex items-center gap-2 rounded-lg px-3 py-2 text-white/80 hover:bg-white/10 hover:text-white [&.active]:bg-accent [&.active]:text-white [&.active]:font-semibold"
+    >
+      <ShieldCheck className="h-4 w-4" /> Admin
     </Link>
   );
 }
@@ -29,6 +46,7 @@ function AppShell() {
           <NavItem to="/" label="Dashboard" />
           <NavItem to="/sheriff" label="Sheriff Sales" />
           <NavItem to="/legal" label="Legal Notices" />
+          <AdminNavItem />
         </nav>
         <div className="flex items-center justify-between border-t border-white/10 p-4 text-[11px] text-white/40">
           <span>IRES CRM · dev</span>
@@ -46,5 +64,6 @@ const rootRoute = createRootRoute({ component: AppShell });
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Dashboard });
 const sheriffRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sheriff", component: SheriffSales });
 const legalRoute = createRoute({ getParentRoute: () => rootRoute, path: "/legal", component: LegalNotices });
+const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin", component: AdminPage });
 
-export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute]);
+export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, adminRoute]);
