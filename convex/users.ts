@@ -133,6 +133,17 @@ export const deleteUser = action({
         });
         if (!res.ok && res.status !== 404) console.error("Clerk delete failed:", await res.text().catch(() => ""));
       }
+    } else if (target.tokenIdentifier.startsWith("pending:") && target.clerkInvitationId) {
+      // Pending invite: revoke the live Clerk invitation so it can't later be
+      // accepted into a row we just deleted (which would orphan the new Clerk user).
+      const clerkSecret = process.env.CLERK_SECRET_KEY;
+      if (clerkSecret) {
+        const res = await fetch(`https://api.clerk.com/v1/invitations/${target.clerkInvitationId}/revoke`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        if (!res.ok && res.status !== 404) console.error("Clerk invitation revoke failed:", await res.text().catch(() => ""));
+      }
     }
 
     await ctx.runMutation(internal.users.deleteUserInternal, { userId: args.userId });
