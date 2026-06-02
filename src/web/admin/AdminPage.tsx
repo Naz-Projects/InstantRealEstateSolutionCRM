@@ -12,6 +12,7 @@ const FILTERS: Filter[] = ["active", "all", "admin", "member"];
 function RoleSelect({ userId, role, isSelf }: { userId: Id<"users">; role: string; isSelf: boolean }) {
   const setUserRole = useMutation(api.users.setUserRole);
   const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
   return (
     <span className="inline-flex items-center gap-1.5">
       <select
@@ -21,8 +22,8 @@ function RoleSelect({ userId, role, isSelf }: { userId: Id<"users">; role: strin
         onChange={async (e) => {
           const next = e.target.value as "admin" | "member";
           if (next === role) return;
-          setSaving(true);
-          try { await setUserRole({ userId, role: next }); } catch (err) { console.error(err); } finally { setSaving(false); }
+          setSaving(true); setSaveErr("");
+          try { await setUserRole({ userId, role: next }); } catch (err) { setSaveErr(errMsg(err, "Failed to change role")); } finally { setSaving(false); }
         }}
         className="rounded-md border border-slate-300 px-2 py-0.5 text-xs font-semibold capitalize disabled:opacity-60"
       >
@@ -30,6 +31,7 @@ function RoleSelect({ userId, role, isSelf }: { userId: Id<"users">; role: strin
         <option value="admin">Admin</option>
       </select>
       {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+      {saveErr && <span className="text-xs text-red-600">{saveErr}</span>}
     </span>
   );
 }
@@ -37,17 +39,22 @@ function RoleSelect({ userId, role, isSelf }: { userId: Id<"users">; role: strin
 function ActiveToggle({ userId, isActive, isSelf }: { userId: Id<"users">; isActive: boolean; isSelf: boolean }) {
   const setActive = useAction(api.users.setActive);
   const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
   return (
     <span className="inline-flex items-center gap-1.5">
       <button
+        role="switch"
+        aria-checked={isActive}
+        aria-label={isActive ? "Deactivate user" : "Activate user"}
         disabled={saving || isSelf}
         title={isSelf ? "Cannot change your own status" : isActive ? "Deactivate" : "Activate"}
-        onClick={async () => { setSaving(true); try { await setActive({ userId, isActive: !isActive }); } catch (err) { console.error(err); } finally { setSaving(false); } }}
+        onClick={async () => { setSaving(true); setSaveErr(""); try { await setActive({ userId, isActive: !isActive }); } catch (err) { setSaveErr(errMsg(err, "Failed to update status")); } finally { setSaving(false); } }}
         className={`relative h-5 w-9 rounded-full transition-colors disabled:opacity-50 ${isActive ? "bg-accent" : "bg-slate-300"}`}
       >
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${isActive ? "left-4" : "left-0.5"}`} />
       </button>
       {saving && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+      {saveErr && <span className="text-xs text-red-600">{saveErr}</span>}
     </span>
   );
 }

@@ -6,7 +6,7 @@ import { SignUp } from "@clerk/clerk-react";
 export function AcceptInvite() {
   return (
     <div className="grid min-h-screen place-items-center bg-ink">
-      <SignUp routing="virtual" />
+      <SignUp routing="virtual" forceRedirectUrl="/" />
     </div>
   );
 }

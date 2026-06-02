@@ -65,6 +65,12 @@ function AuthedApp() {
         <div className="max-w-sm rounded-2xl bg-white/5 px-8 py-10 text-center ring-1 ring-white/10">
           <div className="text-base font-semibold">Access unavailable</div>
           <p className="mt-2 text-sm text-white/70">{state.error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+          >
+            Try again
+          </button>
         </div>
       </div>
     );
