@@ -1,4 +1,4 @@
-import { action, query } from "./_generated/server";
+import { action, query, internalMutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { getAuthUser } from "./lib/getAuthUser";
@@ -9,7 +9,7 @@ export const invite = action({
   args: { name: v.string(), email: v.string(), role: ROLE },
   handler: async (ctx, args): Promise<{ ok: boolean; invitationId: string }> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me || me.role !== "admin") throw new ConvexError({ code: "FORBIDDEN", message: "Admin only" });
+    if (!me || !me.isActive || me.role !== "admin") throw new ConvexError({ code: "FORBIDDEN", message: "Admin only" });
 
     const email = args.email.trim().toLowerCase();
     const name = args.name.trim();
@@ -57,7 +57,7 @@ export const revoke = action({
   args: { invitationId: v.string() },
   handler: async (ctx, { invitationId }): Promise<{ ok: boolean }> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me || me.role !== "admin") throw new ConvexError({ code: "FORBIDDEN", message: "Admin only" });
+    if (!me || !me.isActive || me.role !== "admin") throw new ConvexError({ code: "FORBIDDEN", message: "Admin only" });
 
     const clerkSecret = process.env.CLERK_SECRET_KEY;
     if (!clerkSecret) throw new ConvexError({ code: "NO_CLERK_SECRET", message: "CLERK_SECRET_KEY not configured" });
@@ -74,7 +74,6 @@ export const revoke = action({
   },
 });
 
-import { internalMutation } from "./_generated/server";
 export const deletePendingByInvitationId = internalMutation({
   args: { invitationId: v.string() },
   handler: async (ctx, { invitationId }) => {
@@ -90,7 +89,7 @@ export const listPending = query({
   args: {},
   handler: async (ctx) => {
     const me = await getAuthUser(ctx);
-    if (!me || me.role !== "admin") return [];
+    if (!me || !me.isActive || me.role !== "admin") return [];
     const all = await ctx.db.query("users").collect();
     return all
       .filter((u) => u.tokenIdentifier.startsWith("pending:"))
