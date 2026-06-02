@@ -10,3 +10,9 @@ dist
 coverage
 .firecrawl
 .twenty
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
