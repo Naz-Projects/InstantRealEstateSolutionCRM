@@ -9,6 +9,7 @@
  */
 
 import type * as crons from "../crons.js";
+import type * as flipData from "../flipData.js";
 import type * as geocodeActions from "../geocodeActions.js";
 import type * as geocodeData from "../geocodeData.js";
 import type * as helpers from "../helpers.js";
@@ -29,6 +30,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
+  flipData: typeof flipData;
   geocodeActions: typeof geocodeActions;
   geocodeData: typeof geocodeData;
   helpers: typeof helpers;
