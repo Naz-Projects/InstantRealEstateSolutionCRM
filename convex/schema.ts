@@ -162,6 +162,23 @@ export default defineSchema({
       sellTransferPct: v.number(),
       sellClosingPct: v.number(),
     }),
+    // comps (pulled on demand by the pullComps action)
+    comps: v.optional(
+      v.array(
+        v.object({
+          address: v.string(),
+          soldDate: v.string(),
+          soldPrice: v.number(),
+          beds: v.optional(v.number()),
+          baths: v.optional(v.number()),
+          sqft: v.optional(v.number()),
+          pricePerSqft: v.optional(v.number()),
+        }),
+      ),
+    ),
+    suggestedArv: v.optional(v.number()),
+    compsPulledAt: v.optional(v.number()),
+    compsError: v.optional(v.string()),
     // workflow (its OWN copy — never writes to the source listing)
     dealStatus,
     notes: v.optional(v.string()),
