@@ -18,7 +18,7 @@ export function AppHeader() {
 				<img
 					src="/ires-logo-onnavy.png"
 					alt="Instant Real Estate Solution"
-					className="h-7 w-auto object-contain"
+					className="h-8 w-auto object-contain"
 				/>
 			</div>
 			<div className="flex items-center gap-3">

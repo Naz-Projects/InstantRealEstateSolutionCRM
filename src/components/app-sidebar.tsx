@@ -29,7 +29,7 @@ export function AppSidebar() {
 					<Link to="/">
 						<img
 							alt="Instant Real Estate Solution"
-							className="size-8 shrink-0 object-contain"
+							className="h-6 w-auto shrink-0 object-contain"
 							src="/ires-icon.png"
 						/>
 					</Link>
