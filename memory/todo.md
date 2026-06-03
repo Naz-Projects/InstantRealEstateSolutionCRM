@@ -80,11 +80,10 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   independently code-reviewed (APPROVED; verified additive). **MERGED to `main`.** Backend **deployed + verified
   on prod** (`npx convex deploy` to `pastel-crocodile-994`: added `flipAnalyses` table, existing data validated;
   valid prod key now in `.env.local` as `CONVEX_DEPLOY_KEY_PROD`).
-  - [ ] **BLOCKER: frontend NOT deployed yet.** `git push origin main` triggered the Cloudflare Workers Build,
-    but it FAILED — CF build cmd `npx convex deploy --cmd 'npm run build'` got `401 Invalid Convex deploy key`
-    (the `CONVEX_DEPLOY_KEY` in **Cloudflare's** build env is stale/rotated). Prod still serves the OLD bundle (no
-    `/flip`). **Fix:** set CF env `CONVEX_DEPLOY_KEY` to the valid prod key (= `CONVEX_DEPLOY_KEY_PROD` in
-    `.env.local`) in Cloudflare → project → Settings, then Retry the deployment. (See lessons.md 2026-06-03.)
+  - [x] **CF deploy-key fixed.** The first push's Workers Build failed with `401 Invalid Convex deploy key` — the
+    `CONVEX_DEPLOY_KEY` in **Cloudflare's** build env was the OLD key (the prod key had been rotated and not yet
+    copied into CF). User updated it in Cloudflare on 2026-06-03 and manually retried the deployment (CF build cmd
+    `npx convex deploy --cmd 'npm run build'` deploys backend+frontend). (See lessons.md 2026-06-03.)
   - [ ] **Then manually smoke-test `/flip` on prod** (create from a Sheriff + a Legal listing + a manual address;
     edit ARV/rehab/assumptions → live MAO/profit/ROI/grade; save/reopen/delete) — unit-tested + reviewed but
     never clicked through in a running app.
