@@ -169,25 +169,39 @@ Rules:
 The current-month / monthly view is **not** in the summary — the ledger rows are date-stamped, so the detail
 page shows income/expenses over time directly; a "this month" figure is filtered in the query/UI if needed.
 
-## `extractImageUrl(text)` — pure, appended to `zillow.ts`
-We scrape the Zillow **search** URL (our lessons: homedetails URLs return 403, so we cannot fall back to the
-listing page for a clean `og:image`). The reliable target is an actual listing photo on the Zillow CDN.
+## Image source — verified by a real-scrape spike (2026-06-03)
+We scrape the Zillow **search** URL (our lessons: homedetails URLs return 403). A real Firecrawl spike against
+two DE addresses showed:
+- **Active listing:** `photos.zillowstatic.com/fp/...` photo URLs are present (the first is the hero, repeated
+  as `.jpg` + `.webp`); the `og:image` is junk (`/apple-touch-icon.png`).
+- **Off-market / distressed property (the common case for this CRM):** NO `photos.zillowstatic.com` photos at
+  all — Zillow renders only a Google **Street View** image, exposed as the `og:image` (HTML-encoded, signed
+  with *Zillow's* own Google key — fragile to hotlink).
+
+So: `extractImageUrl` is pure + simple (Zillow CDN photo or null — the `og:image` is dropped as unreliable),
+and the **Street View fallback is built in the action**, not the pure function.
+
+### `extractImageUrl(text)` — pure, appended to `zillow.ts`
 ```ts
 export function extractImageUrl(text: string): string | null {
-  // 1) a real listing photo on the Zillow CDN (preferred)
-  const photo = text.match(/https?:\/\/photos\.zillowstatic\.com\/[^\s"')<>]+?\.(?:jpg|jpeg|png|webp)/i);
-  if (photo) return photo[0];
-  // 2) fallback: the og:image meta tag (may be a generic map/logo on a search page)
-  const og = text.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
-  if (og) return og[1];
-  return null;
+  const matches = text.match(
+    /https?:\/\/photos\.zillowstatic\.com\/[^\s"')<>]+?\.(?:jpg|jpeg|png|webp)/gi,
+  );
+  if (!matches || matches.length === 0) return null;
+  return matches.find((u) => /\.jpe?g$/i.test(u)) ?? matches[0]; // prefer a universal .jpg hero
 }
 ```
-**Implementation step 1 (blocking, before building the action/UI on top): run one real Firecrawl scrape
-against a known DE address and inspect the `rawHtml`/`markdown`** to confirm `photos.zillowstatic.com` photo
-URLs are present and which one is the hero. Adjust the regex/source to what Firecrawl actually returns. If no
-reliable photo is found, the feature degrades to the placeholder + manual paste-URL control (below) — it does
-not block the rest of the feature.
+
+### Off-market fallback — Google Street View Static (built in the action)
+When `extractImageUrl` returns null (off-market: no Zillow photo), the action builds a **Street View Static**
+URL from the property address using the CRM's existing domain-restricted Google Maps key
+(`GOOGLE_GEOCODING_API_KEY` on Convex env — the same single key that serves the browser map + geocoding; it
+has the Street View Static API enabled, which `StreetViewModal` already relies on). Street View Static accepts
+`location=<address>` directly, so **no geocoding and no schema change** are needed. The URL is stored in
+`imageUrl` and loaded by the browser as `<img src>` (the referrer-restricted key works from our domain). If the
+Google key is absent, the action marks `imageStatus:"failed"` and the UI shows the placeholder. Manual
+paste-photo-URL remains the final, user-controlled fallback (and the long-term primary, since these are houses
+the team owns and will photograph during the rehab).
 
 ## Convex `propertyData.ts` (V8 queries/mutations, all gated by `requireUser`)
 - `listProperties()` — all properties with `summarizeProperty()` attached; sorted newest-first (`order("desc")`).
@@ -214,20 +228,18 @@ not block the rest of the feature.
   (action patches the result).
 
 ## Convex `propertyActions.ts` (`"use node"`)
-```ts
-export const scrapePropertyImage = internalAction({ args: { id: v.id("properties") }, handler: async (ctx, {id}) => {
-  const key = process.env.FIRECRAWL_API_KEY (via fcKey() guard, like sheriffActions)
-  const p = await ctx.runQuery(internal.propertyData.getForImage, { id });
-  const url = p.zillowUrl ?? buildZillowSearchUrl(p.address);
-  try {
-    const { markdown, rawHtml } = await firecrawlScrape({ url, apiKey: key, formats: ["markdown","rawHtml"],
-      onlyMainContent: true, waitFor: 3000, timeoutMs: 60000, maxRetries: 1 });  // wrap in withRetry like scrapeZillow
-    const imageUrl = extractImageUrl(rawHtml) ?? extractImageUrl(markdown);
-    await ctx.runMutation(internal.propertyData.setImage, imageUrl
-      ? { id, imageUrl, status: "ok" } : { id, status: "failed" });
-  } catch { await ctx.runMutation(internal.propertyData.setImage, { id, status: "failed" }); }
-}});
-```
+`scrapePropertyImage(internalAction, { id })`:
+1. Read the property (`internal.propertyData.getForImage`). No address → `setImage failed`, return.
+2. **Always** scrape the SEARCH URL built from the address (`buildZillowSearchUrl(p.address)`) — never the
+   stored `zillowUrl`, which is a homedetails URL that 403s on a direct scrape. Wrap in `withRetry` like
+   `scrapeZillow`. `fcKey()` reads `FIRECRAWL_API_KEY` (guarded, like `sheriffActions`).
+3. `zillowPhoto = extractImageUrl(rawHtml) ?? extractImageUrl(markdown)`. A thrown scrape (block/timeout/no
+   Firecrawl key) is caught and treated as `zillowPhoto = null`.
+4. If `zillowPhoto` → `setImage { imageUrl: zillowPhoto, status: "ok" }`.
+5. Else (off-market, no Zillow photo) → build a **Street View Static** URL from the address with the Google key
+   (`GOOGLE_GEOCODING_API_KEY`); if the key exists → `setImage { imageUrl: <streetview>, status: "ok" }`, else
+   → `setImage { status: "failed" }` (UI shows placeholder).
+
 Auth: this is an `internalAction` scheduled by an already-authed mutation (same trust model as
 `runSheriffScrape`), so it does not re-check the user.
 
@@ -279,8 +291,9 @@ Auth: this is an `internalAction` scheduled by an already-authed mutation (same 
 1. A new **Properties** nav item + `/properties` list and `/properties/$id` detail exist; Sheriff/Legal/Flip
    pages and pipelines are behaviorally unchanged.
 2. I can add a property manually and by seeding from a Sheriff/Legal listing and a Flip Analysis.
-3. A property's house **photo is pulled from Zillow** and rendered (verified against a real scrape); failures
-   degrade to a placeholder + working paste/refresh.
+3. A property's house **photo is pulled from Zillow** (active listings) or falls back to a **Street View**
+   thumbnail (off-market, no Zillow photo) and is rendered; if neither is available it degrades to a
+   placeholder + working paste/refresh.
 4. I can record expenses and (for rentals) income on the unified ledger; the financial summary updates.
 5. A flip can be marked **sold** and shows realized profit + ROI matching the unit-tested golden cases.
 6. `npm run build` + `npm test` green; no changes to `deal.ts`, `flip.ts`, `sheriffData.ts`, `legalData.ts`,
