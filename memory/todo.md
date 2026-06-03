@@ -77,12 +77,17 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   **Plan:** `docs/superpowers/plans/2026-06-03-flip-analyzer.md`. Research menu: `memory/flip-decision-features.md`.
   Built subagent-driven + TDD: `src/scraper/flip.ts` (+10 tests), `flipAnalyses` table, `convex/flipData.ts`
   (read-only on sheriff/legal), `/flip` page with live P&L + editable sqft. 54 tests pass, build clean,
-  independently code-reviewed (APPROVED; verified additive). **MERGED to `main` + DEPLOYED to prod** — backend
-  `npx convex deploy` to `pastel-crocodile-994` (added `flipAnalyses` table; existing data validated), frontend
-  `git push origin main` → Cloudflare. Prod prod-key stored in `.env.local` as `CONVEX_DEPLOY_KEY_PROD`.
-  - [ ] **Still TODO: manually smoke-test `/flip` on prod** (create from a Sheriff + a Legal listing + a manual
-    address; edit ARV/rehab/assumptions → live MAO/profit/ROI/grade; save/reopen/delete) — it was unit-tested +
-    reviewed but never clicked through in a running app.
+  independently code-reviewed (APPROVED; verified additive). **MERGED to `main`.** Backend **deployed + verified
+  on prod** (`npx convex deploy` to `pastel-crocodile-994`: added `flipAnalyses` table, existing data validated;
+  valid prod key now in `.env.local` as `CONVEX_DEPLOY_KEY_PROD`).
+  - [ ] **BLOCKER: frontend NOT deployed yet.** `git push origin main` triggered the Cloudflare Workers Build,
+    but it FAILED — CF build cmd `npx convex deploy --cmd 'npm run build'` got `401 Invalid Convex deploy key`
+    (the `CONVEX_DEPLOY_KEY` in **Cloudflare's** build env is stale/rotated). Prod still serves the OLD bundle (no
+    `/flip`). **Fix:** set CF env `CONVEX_DEPLOY_KEY` to the valid prod key (= `CONVEX_DEPLOY_KEY_PROD` in
+    `.env.local`) in Cloudflare → project → Settings, then Retry the deployment. (See lessons.md 2026-06-03.)
+  - [ ] **Then manually smoke-test `/flip` on prod** (create from a Sheriff + a Legal listing + a manual address;
+    edit ARV/rehab/assumptions → live MAO/profit/ROI/grade; save/reopen/delete) — unit-tested + reviewed but
+    never clicked through in a running app.
 
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).
