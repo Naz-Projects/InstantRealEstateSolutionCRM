@@ -4,6 +4,7 @@ import {
   extractFields,
   extractHomedetailsUrl,
   isDelawareUrl,
+  extractImageUrl,
 } from "../src/scraper/zillow.js";
 
 describe("buildZillowSearchUrl", () => {
@@ -53,5 +54,26 @@ describe("isDelawareUrl", () => {
     expect(
       isDelawareUrl("https://www.zillow.com/homedetails/100-Main-St-Philadelphia-PA-19103/1_zpid/"),
     ).toBe(false);
+  });
+});
+
+describe("extractImageUrl", () => {
+  it("returns the first zillowstatic photo, preferring a .jpg over the .webp of the same hero", () => {
+    const text =
+      'srcset ![](https://photos.zillowstatic.com/fp/abc123-p_e.webp) and ' +
+      '<img src="https://photos.zillowstatic.com/fp/abc123-p_e.jpg"/> more';
+    expect(extractImageUrl(text)).toBe("https://photos.zillowstatic.com/fp/abc123-p_e.jpg");
+  });
+  it("returns the first match when no .jpg is present", () => {
+    const text = "![](https://photos.zillowstatic.com/fp/xyz-p_e.webp) noise";
+    expect(extractImageUrl(text)).toBe("https://photos.zillowstatic.com/fp/xyz-p_e.webp");
+  });
+  it("returns null for an off-market page (only an og:image street view, no zillowstatic photo)", () => {
+    const text =
+      '<meta property="og:image" content="https://maps.googleapis.com/maps/api/streetview?location=x"/>';
+    expect(extractImageUrl(text)).toBeNull();
+  });
+  it("returns null when there is no image at all", () => {
+    expect(extractImageUrl("just some text, no images")).toBeNull();
   });
 });

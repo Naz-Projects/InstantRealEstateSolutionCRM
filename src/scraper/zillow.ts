@@ -91,3 +91,17 @@ export async function scrapeZillow(address: string, apiKey: string, attempts = 2
     { attempts, baseDelayMs: 2000, label: `Zillow ${address}` },
   );
 }
+
+/**
+ * Pull a Zillow listing photo URL out of page content (markdown or rawHtml).
+ * Returns the first photos.zillowstatic.com photo, preferring a universal .jpg
+ * over the .webp of the same hero. Off-market pages have no such photo (Zillow
+ * shows only a Street View og:image, handled by the caller) -> null. Pure + tested.
+ */
+export function extractImageUrl(text: string): string | null {
+  const matches = text.match(
+    /https?:\/\/photos\.zillowstatic\.com\/[^\s"')<>]+?\.(?:jpg|jpeg|png|webp)/gi,
+  );
+  if (!matches || matches.length === 0) return null;
+  return matches.find((u) => /\.jpe?g$/i.test(u)) ?? matches[0];
+}
