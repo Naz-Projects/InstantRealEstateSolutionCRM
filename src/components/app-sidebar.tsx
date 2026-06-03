@@ -24,17 +24,12 @@ export function AppSidebar() {
 			<SidebarHeader className="h-14 justify-center">
 				<SidebarMenuButton
 					asChild
-					className="h-auto hover:bg-transparent active:bg-transparent"
+					className="h-auto justify-center hover:bg-transparent active:bg-transparent"
 				>
 					<Link to="/">
 						<img
 							alt="Instant Real Estate Solution"
-							className="h-9 w-auto object-contain group-data-[collapsible=icon]:hidden"
-							src="/ires-logo-onnavy.png"
-						/>
-						<img
-							alt="IRES"
-							className="hidden size-7 shrink-0 object-contain group-data-[collapsible=icon]:block"
+							className="size-8 shrink-0 object-contain"
 							src="/ires-icon.png"
 						/>
 					</Link>
