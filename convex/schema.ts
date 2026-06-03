@@ -125,4 +125,48 @@ export default defineSchema({
     .index("by_run", ["runId"])
     .index("by_weekDate", ["weekDate"])
     .index("by_dealStatus", ["dealStatus"]),
+
+  // Flip analyses — additive, self-contained. Reads sheriff/legal rows only at
+  // creation (snapshot); never writes back to them.
+  flipAnalyses: defineTable({
+    source: v.object({
+      kind: v.union(v.literal("sheriff"), v.literal("legal"), v.literal("manual")),
+      listingId: v.optional(v.string()), // source row _id (string) — reference only
+    }),
+    // snapshot of property facts at creation
+    address: v.string(),
+    sqft: v.optional(v.number()),
+    beds: v.optional(v.string()),
+    baths: v.optional(v.string()),
+    asIsValue: v.optional(v.number()), // parsed Zestimate snapshot
+    // editable inputs
+    arv: v.optional(v.number()),
+    purchasePrice: v.optional(v.number()),
+    rehabTier: v.union(
+      v.literal("cosmetic"),
+      v.literal("moderate"),
+      v.literal("gut"),
+      v.literal("custom"),
+    ),
+    rehabPerSqft: v.number(),
+    rehabOverride: v.optional(v.number()),
+    contingencyPct: v.number(),
+    assumptions: v.object({
+      closingPct: v.number(),
+      downPct: v.number(),
+      loanPoints: v.number(),
+      annualRate: v.number(),
+      holdingMonths: v.number(),
+      monthlyHolding: v.number(),
+      sellAgentPct: v.number(),
+      sellTransferPct: v.number(),
+      sellClosingPct: v.number(),
+    }),
+    // workflow (its OWN copy — never writes to the source listing)
+    dealStatus,
+    notes: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_dealStatus", ["dealStatus"]),
 });
