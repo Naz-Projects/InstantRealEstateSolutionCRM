@@ -68,7 +68,7 @@ we don't rebuild it.
 - **`leads` table** — unified across all sources: signal type(s), property facts, owner(s), equity, `dealStatus`, score, lastContact. *Dedup by parcel → one lead can carry multiple stacked signals (= higher score).*
 - **`contacts` table** (owners / defendants / personal reps) + a **skip-trace** action (BatchSkipTracing / REISkip API) → phones/emails **with DNC/TCPA flags**.
 - **Lead scoring** — rules first (stacked signals × equity × recency), an OpenRouter/ML propensity model later.
-- **Deal analyzer** — generalize `src/scraper/deal.ts`: ARV (comps via Zillow/ATTOM) − repair estimate → **70% MAO** + reuse the existing cushion-tier logic.
+- **Deal analyzer** — generalize `src/scraper/deal.ts`: ARV (comps via Zillow/ATTOM) − repair estimate → **70% MAO** + reuse the existing cushion-tier logic. **→ Full feature menu + research: [`flip-decision-features.md`](flip-decision-features.md)** (the "decide the deal" half — ARV/rehab/MAO/profit features ranked by leverage × effort).
 - **Alerts/notifications** — new high-score lead → email/SMS to the team (already on the todo).
 - **Outreach automation (compliance-gated)** — generate skip-traced, **DNC-scrubbed** call/SMS/mail lists; optional dialer/SMS/mail-vendor integration; log every touch + response.
 - **Cron** — schedule each source (the cron pattern already exists).

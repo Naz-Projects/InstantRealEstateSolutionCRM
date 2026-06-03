@@ -12,6 +12,10 @@ earlier** — that's the window to own.
   layers a deal needs · signal taxonomy ranked by conversion · how the big firms do it: ATTOM/CoreLogic/PropStream/
   BatchData + propensity-to-sell ML + TCPA-gated outreach · CRM architecture: new `leads`/`contacts` tables,
   skip-trace, scoring, deal analyzer, alerts · decisions: build-vs-buy data, skip-trace/TCPA compliance).
+- **Flip-DECISION half (the "decide the deal" research): [`memory/flip-decision-features.md`](flip-decision-features.md)**
+  — researched 2026-06-03. Core gap: today `deal.ts` is an *auction cushion* (`Zestimate as-is − cost-to-clear`); a
+  flip needs **ARV (renovated comps) − rehab − cost stack → profit/MAO**. Feature menu ranked by leverage × effort
+  (Tier 1 = cheap extensions of `deal.ts`/Zillow/parcel; Tier 2 = ARV/comps + rent comps = the build-vs-buy call).
 - **Concrete first step:** build the **pre-foreclosure (lis-pendens / foreclosure-complaint) scraper for New Castle
   County** (DE courts docket + NCC Recorder of Deeds) → a new unified **`leads`** pipeline + **`contacts`/skip-trace**
   + basic lead scoring. Same houses as our sheriff-sale scraper, **months earlier**, while the owner can still sell off-market.

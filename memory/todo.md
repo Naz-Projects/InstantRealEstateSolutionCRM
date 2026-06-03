@@ -69,6 +69,14 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [ ] **Marker clustering** if a period ever exceeds ~100 pins.
 - [ ] Confirm the **crons** (weekday sheriff / weekly legal) are active on prod.
 
+## [ ] In progress — Flip Analyzer (additive deal-decision feature)
+- [~] **Flip Analyzer** — new `/flip` page that turns a property (Sheriff/Legal listing OR manual address) into a
+  flip P&L: ARV (manual, pre-filled from Zestimate) − tiered rehab (cosmetic/moderate/gut $/sqft + contingency) −
+  full cost stack → **MAO / profit / ROI / grade**. Saved in a NEW `flipAnalyses` table; reads sheriff/legal data
+  read-only; does NOT modify those pages/pipelines or `deal.ts`. **Spec:** `docs/superpowers/specs/2026-06-03-flip-analyzer-design.md`;
+  **Plan:** `docs/superpowers/plans/2026-06-03-flip-analyzer.md`. Research menu: `memory/flip-decision-features.md`.
+  Status: spec + plan approved; implementation not started (branch `feat/flip-analyzer`).
+
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).
 - [ ] **Dashboard charts** — deals per stage per month, equity in pipeline, run-history trend.
