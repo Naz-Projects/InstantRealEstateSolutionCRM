@@ -169,4 +169,57 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_dealStatus", ["dealStatus"]),
+
+  // Owned properties (acquired/"won") — flip or rental. Actuals, distinct from
+  // flipAnalyses (pre-purchase projection). Photo scraped from Zillow.
+  properties: defineTable({
+    dealType: v.union(v.literal("flip"), v.literal("rental")),
+    status: v.union(
+      v.literal("in_progress"), // flip
+      v.literal("sold"),        // flip
+      v.literal("active"),      // rental
+      v.literal("vacant"),      // rental
+    ),
+    source: v.object({
+      kind: v.union(
+        v.literal("manual"),
+        v.literal("sheriff"),
+        v.literal("legal"),
+        v.literal("flip"),
+      ),
+      refId: v.optional(v.string()), // source row _id (string) — reference only
+    }),
+    address: v.string(),
+    beds: v.optional(v.string()),
+    baths: v.optional(v.string()),
+    sqft: v.optional(v.number()),
+    purchasePrice: v.optional(v.number()),
+    acquiredDate: v.optional(v.number()),
+    salePrice: v.optional(v.number()), // flip, set when sold
+    soldDate: v.optional(v.number()),
+    zillowUrl: v.optional(v.string()), // reference link + (search built from address is the scrape target)
+    imageUrl: v.optional(v.string()),
+    imageStatus: v.optional(
+      v.union(v.literal("pending"), v.literal("ok"), v.literal("failed")),
+    ),
+    notes: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_dealType", ["dealType"])
+    .index("by_status", ["status"]),
+
+  // Unified per-property ledger: expenses AND income, date-stamped. One shape for
+  // flip costs and rental income; sums are computed by direction in portfolio.ts.
+  propertyLedger: defineTable({
+    propertyId: v.id("properties"),
+    direction: v.union(v.literal("expense"), v.literal("income")),
+    category: v.string(),
+    amount: v.number(), // positive; direction gives the sign
+    date: v.number(), // entry date (ms epoch)
+    description: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+  }).index("by_property", ["propertyId"]),
 });
