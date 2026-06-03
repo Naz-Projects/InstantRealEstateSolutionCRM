@@ -8,6 +8,12 @@ navy/green theming: a navy sidebar shell (logo + role-gated router nav + Clerk u
 **Dashboard** wired to real Convex data (stat cards + pipeline-by-stage bar + source donut + recent-runs table).
 Sheriff/Legal/Admin features are untouched and render inside the new shell. Build/tsc/44-tests all green;
 verified visually via headless screenshots. Details in `memory.md` → "UI foundation — shadcn/ui".
+**Then (same branch) the whole app was re-themed to a dark "Industrial Precision" look** — deep black + teal
+frames/active/links + metallic-yellow CTAs + Inter + 3% noise grain; `class="dark"` on `<html>`, palette in the
+`.dark` block of `src/web/index.css`; legacy Sheriff/Legal/Admin/map/dialog pages migrated to dark tokens; the
+INSTANT wordmark is centered in the top bar (sidebar shows the compact mark). Verified via headless screenshots
+(dashboard, Admin, Sheriff). See `memory.md` → "UI foundation" + lessons.md 2026-06-03 for the dark-theme gotchas.
+
 **First next step: review + merge `ui/shadcn-foundation` into `main` and deploy** (prod still serves the OLD UI:
 `npm run build` then `npx wrangler deploy`). Also decide what to do with the untracked shadcn-skill artifacts
 (`.agents/`, `.claude/`, `skills-lock.json`) — gitignore or commit. Then optionally verify Legal/Admin pages live

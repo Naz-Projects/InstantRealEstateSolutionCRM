@@ -71,6 +71,16 @@ sheriff → 10/10 enriched, events incl. real "blocked" errors). NOTE: source ha
   `src`; shadcn semantic tokens added to `src/web/index.css` `@theme`).
 
 ## UI foundation — shadcn/ui (2026-06-03)
+> **THEME UPDATE (same day):** the app was then converted from the light navy/green look to a dark
+> **"Industrial Precision"** theme — deep black (`--background #0a0a0a`, `--card #161616`, `--muted #1c1c1c`),
+> **teal** accents (`--color-teal #2D9C84` / `--color-teal-glow #3AB89E`: card frames, active nav/tab, links,
+> focus, charts) and **metallic-yellow** primary CTAs (`--primary #FACC15` via the `.btn-metal-yellow` class).
+> Font is **Inter**; a 3% `feTurbulence` noise grain (`body::after`) + `fadeInUp` card entry + teal hover-glow.
+> Driven by `class="dark"` on `<html>` + the palette in the `.dark` block of `src/web/index.css`. The legacy
+> Sheriff/Legal/Admin/map/dialog pages were migrated from hardcoded light classes to the dark tokens. The
+> sidebar is now near-black with spaced nav and a teal (not yellow) active highlight. (Details/gotchas in
+> lessons.md 2026-06-03.) The navy/green description below is the superseded first pass.
+
 The app now has a **real shadcn/ui foundation** (was a partial hand-rolled setup). `components.json`
 (style `radix-nova`, base **radix**, Tailwind v4, css `src/web/index.css`, alias `@`, iconLibrary lucide,
 registry `@efferd → https://efferd.com/r/new-york/{name}.json`). Installed the **`@efferd/dashboard-3`** block
