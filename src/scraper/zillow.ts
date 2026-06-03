@@ -102,6 +102,6 @@ export function extractImageUrl(text: string): string | null {
   const matches = text.match(
     /https?:\/\/photos\.zillowstatic\.com\/[^\s"')<>]+?\.(?:jpg|jpeg|png|webp)/gi,
   );
-  if (!matches || matches.length === 0) return null;
+  if (!matches) return null; // .match() with /g returns null (never []) when nothing matches
   return matches.find((u) => /\.jpe?g$/i.test(u)) ?? matches[0];
 }

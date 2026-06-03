@@ -58,7 +58,7 @@ describe("isDelawareUrl", () => {
 });
 
 describe("extractImageUrl", () => {
-  it("returns the first zillowstatic photo, preferring a .jpg over the .webp of the same hero", () => {
+  it("prefers a .jpg over a .webp of the same hero even when the .webp appears first", () => {
     const text =
       'srcset ![](https://photos.zillowstatic.com/fp/abc123-p_e.webp) and ' +
       '<img src="https://photos.zillowstatic.com/fp/abc123-p_e.jpg"/> more';
