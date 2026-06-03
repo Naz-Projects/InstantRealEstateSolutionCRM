@@ -69,17 +69,20 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [ ] **Marker clustering** if a period ever exceeds ~100 pins.
 - [ ] Confirm the **crons** (weekday sheriff / weekly legal) are active on prod.
 
-## [ ] In progress — Flip Analyzer (additive deal-decision feature)
-- [~] **Flip Analyzer** — new `/flip` page that turns a property (Sheriff/Legal listing OR manual address) into a
+## ✅ Shipped — Flip Analyzer (additive deal-decision feature, 2026-06-03)
+- [x] **Flip Analyzer** — new `/flip` page that turns a property (Sheriff/Legal listing OR manual address) into a
   flip P&L: ARV (manual, pre-filled from Zestimate) − tiered rehab (cosmetic/moderate/gut $/sqft + contingency) −
   full cost stack → **MAO / profit / ROI / grade**. Saved in a NEW `flipAnalyses` table; reads sheriff/legal data
   read-only; does NOT modify those pages/pipelines or `deal.ts`. **Spec:** `docs/superpowers/specs/2026-06-03-flip-analyzer-design.md`;
   **Plan:** `docs/superpowers/plans/2026-06-03-flip-analyzer.md`. Research menu: `memory/flip-decision-features.md`.
-  Status: **BUILT on branch `feat/flip-analyzer`** (subagent-driven, TDD) — `src/scraper/flip.ts` (+10 tests),
-  `flipAnalyses` table, `convex/flipData.ts` (read-only on sheriff/legal), `/flip` page with live P&L + editable
-  sqft. 54 tests pass, build clean, independently code-reviewed (APPROVED; verified additive — no changes to
-  Sheriff/Legal pages, `deal.ts`, or their pipelines). **NOT merged** (prod/main untouched) and not yet
-  manually smoke-tested in the running app.
+  Built subagent-driven + TDD: `src/scraper/flip.ts` (+10 tests), `flipAnalyses` table, `convex/flipData.ts`
+  (read-only on sheriff/legal), `/flip` page with live P&L + editable sqft. 54 tests pass, build clean,
+  independently code-reviewed (APPROVED; verified additive). **MERGED to `main` + DEPLOYED to prod** — backend
+  `npx convex deploy` to `pastel-crocodile-994` (added `flipAnalyses` table; existing data validated), frontend
+  `git push origin main` → Cloudflare. Prod prod-key stored in `.env.local` as `CONVEX_DEPLOY_KEY_PROD`.
+  - [ ] **Still TODO: manually smoke-test `/flip` on prod** (create from a Sheriff + a Legal listing + a manual
+    address; edit ARV/rehab/assumptions → live MAO/profit/ROI/grade; save/reopen/delete) — it was unit-tested +
+    reviewed but never clicked through in a running app.
 
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).
