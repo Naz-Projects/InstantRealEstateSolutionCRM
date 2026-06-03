@@ -75,7 +75,11 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   full cost stack → **MAO / profit / ROI / grade**. Saved in a NEW `flipAnalyses` table; reads sheriff/legal data
   read-only; does NOT modify those pages/pipelines or `deal.ts`. **Spec:** `docs/superpowers/specs/2026-06-03-flip-analyzer-design.md`;
   **Plan:** `docs/superpowers/plans/2026-06-03-flip-analyzer.md`. Research menu: `memory/flip-decision-features.md`.
-  Status: spec + plan approved; implementation not started (branch `feat/flip-analyzer`).
+  Status: **BUILT on branch `feat/flip-analyzer`** (subagent-driven, TDD) — `src/scraper/flip.ts` (+10 tests),
+  `flipAnalyses` table, `convex/flipData.ts` (read-only on sheriff/legal), `/flip` page with live P&L + editable
+  sqft. 54 tests pass, build clean, independently code-reviewed (APPROVED; verified additive — no changes to
+  Sheriff/Legal pages, `deal.ts`, or their pipelines). **NOT merged** (prod/main untouched) and not yet
+  manually smoke-tested in the running app.
 
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).
