@@ -1,8 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Calculator, Plus, Trash2 } from "lucide-react";
+import { Calculator, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { DEAL_STAGES, STAGE_LABEL, type DealStage } from "./dealStages";
 import {
   estimateRehab,
@@ -50,6 +60,87 @@ const ASSUMPTION_FIELDS: { key: keyof FlipAssumptions; label: string; kind: "pct
   { key: "sellClosingPct", label: "Sale closing %", kind: "pct" },
 ];
 
+type Candidate = { id: string; address: string };
+
+// Searchable "select a property" combobox (shadcn Popover + Command), grouped by
+// source, type-to-filter autocomplete. Controlled: value = "sheriff:<id>" | "legal:<id>".
+function PropertyCombobox({
+  candidates,
+  value,
+  onChange,
+}: {
+  candidates: { sheriff: Candidate[]; legal: Candidate[] } | undefined;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = useMemo(() => {
+    if (!value || !candidates) return "";
+    const [kind, id] = value.split(":");
+    const list = kind === "sheriff" ? candidates.sheriff : candidates.legal;
+    return list.find((c) => c.id === id)?.address ?? "";
+  }, [value, candidates]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "flex w-80 items-center justify-between gap-2 rounded-md border border-border bg-card px-2 py-1 text-left text-sm focus:border-primary focus:outline-none",
+            !label && "text-muted-foreground",
+          )}
+        >
+          <span className="truncate">{label || "Select a property…"}</span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search address…" />
+          <CommandList>
+            <CommandEmpty>No property found.</CommandEmpty>
+            {candidates && candidates.sheriff.length > 0 && (
+              <CommandGroup heading="Sheriff Sales">
+                {candidates.sheriff.map((c) => (
+                  <CommandItem
+                    key={c.id}
+                    value={`sheriff ${c.address}`}
+                    onSelect={() => {
+                      onChange(`sheriff:${c.id}`);
+                      setOpen(false);
+                    }}
+                  >
+                    {c.address}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {candidates && candidates.legal.length > 0 && (
+              <CommandGroup heading="Legal Notices">
+                {candidates.legal.map((c) => (
+                  <CommandItem
+                    key={c.id}
+                    value={`legal ${c.address}`}
+                    onSelect={() => {
+                      onChange(`legal:${c.id}`);
+                      setOpen(false);
+                    }}
+                  >
+                    {c.address}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 type Analysis = NonNullable<ReturnType<typeof useFlipList>>[number];
 function useFlipList() {
   return useQuery(api.flipData.listAnalyses);
@@ -89,7 +180,7 @@ export function FlipAnalyzer() {
 
   return (
     <div>
-      <div className="flex items-center justify-between border-b border-border bg-card px-6 py-4">
+      <div className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-foreground">
             <Calculator className="h-5 w-5 text-teal-glow" /> Flip Analyzer
@@ -106,23 +197,7 @@ export function FlipAnalyzer() {
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">From a scraped listing</label>
             <div className="flex gap-2">
-              <select className={inputCls} value={pick} onChange={(e) => setPick(e.target.value)}>
-                <option value="">Select a property…</option>
-                {candidates && (
-                  <>
-                    <optgroup label="Sheriff Sales">
-                      {candidates.sheriff.map((c) => (
-                        <option key={c.id} value={`sheriff:${c.id}`}>{c.address}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Legal Notices">
-                      {candidates.legal.map((c) => (
-                        <option key={c.id} value={`legal:${c.id}`}>{c.address}</option>
-                      ))}
-                    </optgroup>
-                  </>
-                )}
-              </select>
+              <PropertyCombobox candidates={candidates} value={pick} onChange={setPick} />
               <button
                 onClick={addFromListing}
                 className="btn-metal-yellow flex items-center gap-1 rounded-md px-3 py-1 text-sm font-semibold"

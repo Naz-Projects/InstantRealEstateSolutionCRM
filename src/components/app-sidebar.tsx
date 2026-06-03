@@ -21,19 +21,17 @@ export function AppSidebar() {
 
 	return (
 		<Sidebar collapsible="icon" variant="inset">
-			<SidebarHeader className="h-14 justify-center">
-				<SidebarMenuButton
-					asChild
-					className="h-auto justify-center hover:bg-transparent active:bg-transparent"
+			<SidebarHeader className="h-14 justify-center px-2">
+				<Link
+					to="/"
+					className="flex items-center justify-center group-data-[collapsible=icon]:hidden"
 				>
-					<Link to="/">
-						<img
-							alt="Instant Real Estate Solution"
-							className="h-6 w-auto shrink-0 object-contain"
-							src="/ires-icon.png"
-						/>
-					</Link>
-				</SidebarMenuButton>
+					<img
+						alt="Instant Real Estate Solution"
+						className="h-10 w-auto object-contain"
+						src="/ires-logo-onnavy.png"
+					/>
+				</Link>
 			</SidebarHeader>
 			<SidebarContent>
 				<SidebarGroup className="px-3 py-4">

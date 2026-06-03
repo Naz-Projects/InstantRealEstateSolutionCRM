@@ -13,14 +13,6 @@ export function AppHeader() {
 
 	return (
 		<header className="sticky top-0 z-50 flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background px-4 md:px-6">
-			{/* IRES wordmark, centered in the bar (non-interactive branding). */}
-			<div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-				<img
-					src="/ires-logo-onnavy.png"
-					alt="Instant Real Estate Solution"
-					className="h-8 w-auto object-contain"
-				/>
-			</div>
 			<div className="flex items-center gap-3">
 				<CustomSidebarTrigger />
 				<Separator
