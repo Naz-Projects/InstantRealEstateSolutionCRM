@@ -62,3 +62,82 @@ export function estimateRehab(
   const contingency = base * contingencyPct;
   return { base, contingency, total: base + contingency };
 }
+
+export type FlipGrade = "good" | "ok" | "thin" | "bad" | "unknown";
+
+export interface FlipInput {
+  arv: number | null;
+  purchasePrice: number | null;
+  rehabTotal: number | null;
+  assumptions: FlipAssumptions;
+}
+
+export interface FlipMetrics {
+  mao: number | null;
+  closingCost: number | null;
+  financingCost: number | null;
+  holdingCost: number | null;
+  sellingCost: number | null;
+  totalCost: number | null;
+  profit: number | null;
+  cashInvested: number | null;
+  roi: number | null;
+  annualizedRoi: number | null;
+  margin: number | null;
+  grade: FlipGrade;
+  dataComplete: boolean;
+  flags: string[];
+}
+
+export function computeFlip(input: FlipInput): FlipMetrics {
+  const { arv, purchasePrice, rehabTotal, assumptions: a } = input;
+  const flags: string[] = [];
+  if (arv === null) flags.push("missing-arv");
+  if (purchasePrice === null) flags.push("missing-purchase");
+  if (rehabTotal === null) flags.push("missing-rehab");
+
+  // MAO needs ARV + rehab only (the quick offer ceiling).
+  const mao = arv !== null && rehabTotal !== null ? arv * 0.7 - rehabTotal : null;
+
+  const dataComplete = arv !== null && purchasePrice !== null && rehabTotal !== null;
+  if (!dataComplete) {
+    return {
+      mao, closingCost: null, financingCost: null, holdingCost: null, sellingCost: null,
+      totalCost: null, profit: null, cashInvested: null, roi: null, annualizedRoi: null,
+      margin: null, grade: "unknown", dataComplete: false, flags,
+    };
+  }
+
+  const closingCost = purchasePrice * a.closingPct;
+  const downPayment = purchasePrice * a.downPct;
+  const loanAmount = purchasePrice - downPayment + rehabTotal; // hard money funds rest of purchase + 100% rehab
+  const points = loanAmount * a.loanPoints;
+  const interest = loanAmount * a.annualRate * (a.holdingMonths / 12);
+  const financingCost = points + interest;
+  const holdingCost = a.monthlyHolding * a.holdingMonths;
+  const sellingCost = arv * (a.sellAgentPct + a.sellTransferPct + a.sellClosingPct);
+
+  const totalCost = purchasePrice + closingCost + rehabTotal + financingCost + holdingCost + sellingCost;
+  const profit = arv - totalCost;
+  const cashInvested = downPayment + closingCost + points + interest + holdingCost;
+  const roi = cashInvested > 0 ? profit / cashInvested : null;
+  const annualizedRoi = roi !== null && a.holdingMonths > 0 ? roi * (12 / a.holdingMonths) : null;
+  const margin = arv > 0 ? profit / arv : null;
+
+  if (mao !== null && purchasePrice > mao) flags.push("over-70%-rule");
+  if (profit <= 0) flags.push("negative-profit");
+  if (margin !== null && margin > 0 && margin < 0.1) flags.push("thin-margin");
+
+  let grade: FlipGrade = "unknown";
+  if (margin !== null) {
+    if (margin <= 0) grade = "bad";
+    else if (margin < 0.1) grade = "thin";
+    else if (margin < 0.2) grade = "ok";
+    else grade = "good";
+  }
+
+  return {
+    mao, closingCost, financingCost, holdingCost, sellingCost, totalCost,
+    profit, cashInvested, roi, annualizedRoi, margin, grade, dataComplete, flags,
+  };
+}
