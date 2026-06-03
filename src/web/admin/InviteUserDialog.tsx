@@ -34,58 +34,58 @@ export function InviteUserDialog() {
     }
   }
 
-  const input = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary";
+  const input = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary";
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
+        className="inline-flex items-center gap-1.5 rounded-lg btn-metal-yellow px-3 py-2 text-sm font-semibold"
       >
         <UserPlus className="h-4 w-4" /> Invite user
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={close}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900">Invite user</h2>
-              <button onClick={close} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+              <h2 className="text-base font-semibold text-foreground">Invite user</h2>
+              <button onClick={close} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
             </div>
 
             {sentTo ? (
               <div className="space-y-4">
-                <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                  <Mail className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
-                  <div className="text-sm text-emerald-900">
+                <div className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/15 p-3">
+                  <Mail className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                  <div className="text-sm text-emerald-200">
                     <span className="inline-flex items-center gap-1 font-medium"><Check className="h-4 w-4" /> Invitation sent</span>
                     <div>We emailed an invite link to <span className="font-medium">{sentTo}</span>. They'll set a password and land in the CRM.</div>
                   </div>
                 </div>
-                <button onClick={close} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90">Done</button>
+                <button onClick={close} className="w-full rounded-lg btn-metal-yellow px-4 py-2 text-sm font-semibold">Done</button>
               </div>
             ) : (
               <form onSubmit={submit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Name</label>
+                  <label className="text-sm font-medium text-foreground">Name</label>
                   <input required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className={input} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Email</label>
+                  <label className="text-sm font-medium text-foreground">Email</label>
                   <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" className={input} />
-                  <p className="text-xs text-slate-500">Clerk emails the invite to this address.</p>
+                  <p className="text-xs text-muted-foreground">Clerk emails the invite to this address.</p>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Role</label>
+                  <label className="text-sm font-medium text-foreground">Role</label>
                   <select value={role} onChange={(e) => setRole(e.target.value as "admin" | "member")} className={input}>
                     <option value="member">Member</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
-                {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+                {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</div>}
                 <div className="flex justify-end gap-2">
-                  <button type="button" onClick={close} disabled={submitting} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
-                  <button type="submit" disabled={submitting} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  <button type="button" onClick={close} disabled={submitting} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-accent">Cancel</button>
+                  <button type="submit" disabled={submitting} className="inline-flex items-center gap-1.5 rounded-lg btn-metal-yellow px-4 py-2 text-sm font-semibold disabled:opacity-60">
                     {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Send invite
                   </button>
                 </div>

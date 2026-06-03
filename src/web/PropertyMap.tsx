@@ -151,7 +151,7 @@ function PointMarker({
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => onStreetView(point)}
-                className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs font-semibold text-white hover:bg-primary/90"
+                className="inline-flex items-center gap-1 rounded btn-metal-yellow px-2 py-1 text-xs font-semibold"
               >
                 <MapPin className="h-3 w-3" /> Street View
               </button>
@@ -160,7 +160,7 @@ function PointMarker({
                   href={point.zillowUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-teal-glow hover:underline"
                 >
                   Zillow <ExternalLink className="h-3 w-3" />
                 </a>
@@ -169,7 +169,7 @@ function PointMarker({
             <select
               value={point.dealStatus}
               onChange={(e) => onDealChange(point.id, e.target.value as DealStage)}
-              className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs"
+              className="mt-1 w-full rounded border border-border px-2 py-1 text-xs"
             >
               {DEAL_STAGES.map((s) => (
                 <option key={s} value={s}>{STAGE_LABEL[s]}</option>
@@ -204,16 +204,16 @@ export function PropertyMap({
 
   if (!MAPS_KEY) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-        Add <code className="rounded bg-slate-100 px-1">VITE_GOOGLE_MAPS_API_KEY</code> to{" "}
-        <code className="rounded bg-slate-100 px-1">.env.local</code> to enable the map.
+      <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        Add <code className="rounded bg-muted px-1">VITE_GOOGLE_MAPS_API_KEY</code> to{" "}
+        <code className="rounded bg-muted px-1">.env.local</code> to enable the map.
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+      <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
         <span>
           {points.length} pinned{missingCount > 0 ? ` · ${missingCount} not geocoded` : ""}
         </span>
@@ -221,13 +221,13 @@ export function PropertyMap({
           <button
             onClick={onGeocode}
             disabled={geocoding}
-            className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 hover:bg-accent disabled:opacity-60"
           >
             <MapPin className="h-3 w-3" /> {geocoding ? "Geocoding…" : `Geocode ${missingCount} missing`}
           </button>
         )}
       </div>
-      <div className="h-[70vh] overflow-hidden rounded-xl border border-slate-200">
+      <div className="h-[70vh] overflow-hidden rounded-xl border border-border">
         <APIProvider apiKey={MAPS_KEY}>
           <Map mapId={MAP_ID} defaultCenter={NCC_CENTER} defaultZoom={10} gestureHandling="greedy">
             <FitBounds points={points} />

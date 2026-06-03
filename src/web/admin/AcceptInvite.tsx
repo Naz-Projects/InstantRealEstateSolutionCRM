@@ -5,7 +5,7 @@ import { SignUp } from "@clerk/clerk-react";
 // <Authenticated> takes over. routing="virtual" keeps it self-contained.
 export function AcceptInvite() {
   return (
-    <div className="grid min-h-screen place-items-center bg-ink">
+    <div className="grid min-h-screen place-items-center bg-background">
       <SignUp routing="virtual" forceRedirectUrl="/" />
     </div>
   );

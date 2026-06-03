@@ -28,7 +28,7 @@ declare module "@tanstack/react-router" {
 
 function SignInGate() {
   return (
-    <div className="grid min-h-screen place-items-center bg-ink text-white">
+    <div className="grid min-h-screen place-items-center bg-background text-white">
       <div className="flex flex-col items-center gap-6 rounded-2xl bg-white/5 px-10 py-12 ring-1 ring-white/10">
         <img
           src="/ires-logo-onnavy.png"
@@ -37,7 +37,7 @@ function SignInGate() {
         />
         <div className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">CRM</div>
         <SignInButton mode="modal">
-          <button className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90">
+          <button className="rounded-lg btn-metal-yellow px-6 py-2.5 text-sm font-semibold">
             Sign in
           </button>
         </SignInButton>
@@ -58,17 +58,17 @@ function AuthedApp() {
   }, [link]);
 
   if (state === "linking") {
-    return <div className="grid min-h-screen place-items-center bg-ink text-white/60">Signing in…</div>;
+    return <div className="grid min-h-screen place-items-center bg-background text-white/60">Signing in…</div>;
   }
   if (typeof state === "object") {
     return (
-      <div className="grid min-h-screen place-items-center bg-ink text-white">
+      <div className="grid min-h-screen place-items-center bg-background text-white">
         <div className="max-w-sm rounded-2xl bg-white/5 px-8 py-10 text-center ring-1 ring-white/10">
           <div className="text-base font-semibold">Access unavailable</div>
           <p className="mt-2 text-sm text-white/70">{state.error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+            className="mt-4 rounded-lg btn-metal-yellow px-4 py-2 text-sm font-semibold"
           >
             Try again
           </button>
@@ -86,7 +86,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <AuthLoading>
-          <div className="grid min-h-screen place-items-center bg-ink text-white/60">Loading…</div>
+          <div className="grid min-h-screen place-items-center bg-background text-white/60">Loading…</div>
         </AuthLoading>
         <Authenticated>
           <AuthedApp />

@@ -39,19 +39,19 @@ export function StreetViewModal({ point, onClose }: { point: MapPoint; onClose: 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="relative h-[80vh] w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="relative h-[80vh] w-full max-w-4xl overflow-hidden rounded-xl bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2">
-          <div className="text-sm font-semibold text-ink">{point.address}</div>
-          <button onClick={onClose} className="rounded p-1 text-slate-500 hover:bg-slate-100" aria-label="Close">
+        <div className="flex items-center justify-between border-b border-border px-4 py-2">
+          <div className="text-sm font-semibold text-foreground">{point.address}</div>
+          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-accent" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="relative h-[calc(80vh-41px)]">
           <div ref={ref} className="h-full w-full" />
           {status !== "ok" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-sm text-slate-500">
+            <div className="absolute inset-0 flex items-center justify-center bg-muted text-sm text-muted-foreground">
               {status === "loading" ? "Loading Street View…" : "No Street View available at this location."}
             </div>
           )}

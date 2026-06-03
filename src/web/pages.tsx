@@ -25,10 +25,10 @@ const ERROR_VALUES = new Set([
 
 function PageHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+    <div className="flex items-center justify-between border-b border-border bg-card px-6 py-4">
       <div>
-        <h1 className="text-xl font-bold text-ink">{title}</h1>
-        <p className="text-sm text-slate-500">{subtitle}</p>
+        <h1 className="text-xl font-bold text-foreground">{title}</h1>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
       {action}
     </div>
@@ -36,7 +36,7 @@ function PageHeader({ title, subtitle, action }: { title: string; subtitle: stri
 }
 
 function Loading() {
-  return <div className="py-16 text-center text-slate-400">Loading…</div>;
+  return <div className="py-16 text-center text-muted-foreground">Loading…</div>;
 }
 
 // Split scrape button: main "Scrape this period" action + a caret dropdown with
@@ -79,7 +79,7 @@ function ScrapeMenu({
       <button
         onClick={onScrape}
         disabled={busy}
-        className="rounded-l-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
+        className="rounded-l-lg btn-metal-yellow px-4 py-2 text-sm font-semibold shadow-sm transition disabled:opacity-60"
       >
         {busy ? "Working…" : label}
       </button>
@@ -87,25 +87,25 @@ function ScrapeMenu({
         onClick={() => setOpen((o) => !o)}
         disabled={busy}
         aria-label="More scrape options"
-        className="rounded-r-lg border-l border-white/25 bg-primary px-2 text-white shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
+        className="rounded-r-lg border-l border-white/25 btn-metal-yellow px-2 shadow-sm transition disabled:opacity-60"
       >
         <ChevronDown className={cn("h-4 w-4 transition", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1 w-60 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+        <div className="absolute right-0 top-full z-30 mt-1 w-60 overflow-hidden rounded-lg border border-border bg-card py-1 text-sm shadow-lg">
           <button
             onClick={() => run(onRetry)}
             disabled={failedCount === 0}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <RefreshCw className="h-4 w-4 text-slate-500" />
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
             Retry failed / blocked{failedCount > 0 ? ` (${failedCount})` : ""}
           </button>
           <button
             onClick={() => run(onForce)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-slate-700 hover:bg-slate-50"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-accent"
           >
-            <RefreshCcw className="h-4 w-4 text-slate-500" />
+            <RefreshCcw className="h-4 w-4 text-muted-foreground" />
             Force re-scrape (replace all)
           </button>
         </div>
@@ -116,13 +116,13 @@ function ScrapeMenu({
 
 function Val({ value }: { value: string }) {
   const muted = ERROR_VALUES.has(value);
-  return <span className={muted ? "text-slate-400" : "text-slate-800"}>{value}</span>;
+  return <span className={muted ? "text-muted-foreground" : "text-foreground"}>{value}</span>;
 }
 
 function ZillowCell({ url }: { url: string }) {
   if (url.startsWith("http")) {
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+      <a href={url} target="_blank" rel="noreferrer" className="text-teal-glow hover:underline">
         View
       </a>
     );
@@ -135,7 +135,7 @@ function DealSelect({ value, onChange }: { value: DealStage; onChange: (s: DealS
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as DealStage)}
-      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs focus:border-primary focus:outline-none"
+      className="rounded-md border border-border bg-card px-2 py-1 text-xs focus:border-primary focus:outline-none"
     >
       {DEAL_STAGES.map((s) => (
         <option key={s} value={s}>
@@ -163,34 +163,34 @@ function fmtWeek(iso: string): string {
 }
 
 const TIER_STYLE: Record<string, string> = {
-  good: "bg-green-100 text-green-800",
-  ok: "bg-emerald-50 text-emerald-700",
-  thin: "bg-amber-100 text-amber-800",
-  verify: "bg-amber-50 text-amber-800 ring-1 ring-amber-400",
-  bad: "bg-red-100 text-red-700",
-  unknown: "bg-slate-100 text-slate-400",
+  good: "bg-green-500/15 text-green-400",
+  ok: "bg-emerald-500/15 text-emerald-300",
+  thin: "bg-amber-500/15 text-amber-300",
+  verify: "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/40",
+  bad: "bg-red-500/15 text-red-400",
+  unknown: "bg-muted text-muted-foreground",
 };
 
 const TYPE_STYLE: Record<string, string> = {
-  TAX: "bg-amber-100 text-amber-800",
-  MTG: "bg-blue-100 text-blue-800",
-  JUDG: "bg-purple-100 text-purple-800",
+  TAX: "bg-amber-500/15 text-amber-300",
+  MTG: "bg-blue-500/15 text-blue-300",
+  JUDG: "bg-purple-500/15 text-purple-300",
 };
 
 function TypeBadge({ type }: { type: string }) {
   const t = (type || "").toUpperCase();
   return (
-    <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-semibold", TYPE_STYLE[t] ?? "bg-slate-100 text-slate-600")}>
+    <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-semibold", TYPE_STYLE[t] ?? "bg-muted text-muted-foreground")}>
       {t || "—"}
     </span>
   );
 }
 
 const FLAG_INFO: Record<string, { Icon: LucideIcon; className: string; title: string }> = {
-  "tax-redemption": { Icon: Clock, className: "text-amber-600", title: "Tax sale — owner has 60 days to redeem (buy back at +15%)" },
-  "senior-lien-risk": { Icon: TriangleAlert, className: "text-amber-600", title: "Principal looks small for a mortgage — a larger senior loan may survive (not shown on the county page)" },
-  "judg-risk": { Icon: TriangleAlert, className: "text-amber-600", title: "Judgment sale — senior mortgages/liens may survive; research title" },
-  "needs-rescrape": { Icon: RefreshCw, className: "text-slate-500", title: "Incomplete data (a lookup was blocked) — re-scrape to complete" },
+  "tax-redemption": { Icon: Clock, className: "text-amber-400", title: "Tax sale — owner has 60 days to redeem (buy back at +15%)" },
+  "senior-lien-risk": { Icon: TriangleAlert, className: "text-amber-400", title: "Principal looks small for a mortgage — a larger senior loan may survive (not shown on the county page)" },
+  "judg-risk": { Icon: TriangleAlert, className: "text-amber-400", title: "Judgment sale — senior mortgages/liens may survive; research title" },
+  "needs-rescrape": { Icon: RefreshCw, className: "text-muted-foreground", title: "Incomplete data (a lookup was blocked) — re-scrape to complete" },
 };
 
 function fmtSize(beds: string, baths: string, sqft: string): string {
@@ -205,16 +205,16 @@ function fmtSize(beds: string, baths: string, sqft: string): string {
 // icon+tooltip). Uses native <details> so there's no open/close state to manage.
 function DealNotes({ flags }: { flags: string[] }) {
   const notes = flags.map((f) => FLAG_INFO[f]).filter(Boolean) as { Icon: LucideIcon; className: string; title: string }[];
-  if (notes.length === 0) return <span className="text-slate-300">—</span>;
+  if (notes.length === 0) return <span className="text-muted-foreground">—</span>;
   return (
     <details className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-1 rounded px-1.5 py-0.5 text-xs hover:bg-slate-100 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-1 rounded px-1.5 py-0.5 text-xs hover:bg-accent [&::-webkit-details-marker]:hidden">
         {notes.map((n, i) => (
           <n.Icon key={i} className={cn("h-3.5 w-3.5", n.className)} />
         ))}
-        <ChevronDown className="h-3 w-3 text-slate-400 transition group-open:rotate-180" />
+        <ChevronDown className="h-3 w-3 text-muted-foreground transition group-open:rotate-180" />
       </summary>
-      <div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-2 text-left text-[11px] leading-snug text-slate-600 shadow-lg">
+      <div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-border bg-card p-2 text-left text-[11px] leading-snug text-muted-foreground shadow-lg">
         <ul className="space-y-1.5">
           {notes.map((n, i) => (
             <li key={i} className="flex gap-1.5">
@@ -253,7 +253,7 @@ function PeriodTabs({
   onSelect: (v: string) => void;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
+    <div className="mb-4 flex flex-wrap gap-1 border-b border-border">
       {periods.map((p) => (
         <button
           key={p.value}
@@ -262,10 +262,10 @@ function PeriodTabs({
             "-mb-px rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition",
             selected === p.value
               ? "border-primary text-primary"
-              : "border-transparent text-slate-500 hover:text-slate-700",
+              : "border-transparent text-muted-foreground hover:text-foreground",
           )}
         >
-          {p.label} <span className="text-xs text-slate-400">({p.count})</span>
+          {p.label} <span className="text-xs text-muted-foreground">({p.count})</span>
         </button>
       ))}
     </div>
@@ -278,7 +278,7 @@ function MapToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) 
   return (
     <button
       onClick={onToggle}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-accent"
     >
       <MapIcon className="h-4 w-4 text-primary" />
       {open ? "Hide map" : "Open map"}
@@ -289,7 +289,7 @@ function MapToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) 
 
 // Table "Map" column: jump to the map focused on this row + auto-open Street View.
 function MapLinkCell({ hasCoords, onClick }: { hasCoords: boolean; onClick: () => void }) {
-  if (!hasCoords) return <span className="text-slate-300">—</span>;
+  if (!hasCoords) return <span className="text-muted-foreground">—</span>;
   return (
     <button
       onClick={onClick}
@@ -318,7 +318,7 @@ function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sor
   const active = sort?.key === k;
   return (
     <th className="px-3 py-2 text-right font-medium">
-      <button onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-slate-700", active && "text-primary")}>
+      <button onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-foreground", active && "text-primary")}>
         {label}
         {active ? (
           sort!.dir === "desc" ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />
@@ -486,12 +486,12 @@ export function SheriffSales() {
         }
       />
       <div className="p-6">
-        {msg && <div className="mb-4 rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-800">{msg}</div>}
+        {msg && <div className="mb-4 rounded-lg bg-blue-500/10 px-4 py-2 text-sm text-blue-300">{msg}</div>}
         <ScrapeProgress type="sheriff" />
         {months === undefined ? (
           <Loading />
         ) : months.length === 0 ? (
-          <div className="py-16 text-center text-slate-400">No listings yet. Click “Scrape This Month's Sheriff Sales”.</div>
+          <div className="py-16 text-center text-muted-foreground">No listings yet. Click “Scrape This Month's Sheriff Sales”.</div>
         ) : (
           <>
             <PeriodTabs
@@ -517,33 +517,33 @@ export function SheriffSales() {
                 />
               </div>
             )}
-                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                  <span className="font-medium text-slate-600">Best deals first (cushion = est. resale − cost to clear).</span>
-                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-800">Strong</span>
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Thin</span>
-                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-800 ring-1 ring-amber-400">Verify (hidden senior loan?)</span>
-                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">Weak</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-400">Needs re-scrape</span>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                  <span className="font-medium text-muted-foreground">Best deals first (cushion = est. resale − cost to clear).</span>
+                  <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-green-400">Strong</span>
+                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-300">Thin</span>
+                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-300 ring-1 ring-amber-500/40">Verify (hidden senior loan?)</span>
+                  <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-400">Weak</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">Needs re-scrape</span>
                   {sort && (
                     <button
                       onClick={() => setSort(null)}
-                      className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                      className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-accent"
                     >
                       <Star className="h-3 w-3" /> Best-deal order
                     </button>
                   )}
-                  <div className="w-full text-slate-400">
+                  <div className="w-full text-muted-foreground">
                     Click a column header to sort. Cushion assumes you win near the <strong>Principal</strong>; competitive bids and surviving senior loans reduce it. Open the Notes column for per-row caveats. Not legal advice — verify title per property.
                   </div>
                 </div>
                 {!listings ? (
                   <Loading />
                 ) : listings.length === 0 ? (
-                  <div className="py-16 text-center text-slate-400">No listings for {selectedMonth}.</div>
+                  <div className="py-16 text-center text-muted-foreground">No listings for {selectedMonth}.</div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                      <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-right font-medium">#</th>
                           <SortHeader label="Cushion" k="cushion" sort={sort} onSort={toggleSort} />
@@ -561,23 +561,23 @@ export function SheriffSales() {
                       </thead>
                       <tbody>
                         {(sorted ?? listings).map((l, i) => (
-                          <tr key={l._id} className="border-t border-slate-100 hover:bg-slate-50">
-                            <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400">{i + 1}</td>
+                          <tr key={l._id} className="border-t border-border hover:bg-accent">
+                            <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</td>
                             <td className="px-3 py-2">
                               <CushionCell cushion={l.deal.cushion} cushionPct={l.deal.cushionPct} tier={l.deal.tier} />
                             </td>
                             <td className="px-3 py-2">
-                              <div className="font-medium text-ink">{l.address}</div>
+                              <div className="font-medium text-foreground">{l.address}</div>
                               {!ERROR_VALUES.has(l.ownerName) && (
-                                <div className="text-[11px] text-slate-400">{l.ownerName}</div>
+                                <div className="text-[11px] text-muted-foreground">{l.ownerName}</div>
                               )}
                             </td>
                             <td className="px-3 py-2"><TypeBadge type={l.saleType} /></td>
-                            <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{fmtSize(l.beds, l.baths, l.sqft)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{fmtMoney(l.deal.zestimate)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{fmtMoney(l.deal.principal)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-xs text-muted-foreground">{fmtSize(l.beds, l.baths, l.sqft)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-foreground">{fmtMoney(l.deal.zestimate)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-foreground">{fmtMoney(l.deal.principal)}</td>
                             <td
-                              className="px-3 py-2 text-right tabular-nums text-slate-600"
+                              className="px-3 py-2 text-right tabular-nums text-muted-foreground"
                               title={`County ${fmtMoney(l.deal.county)} · School ${fmtMoney(l.deal.school)} · Sewer ${fmtMoney(l.deal.sewer)}`}
                             >
                               {fmtMoney(l.deal.liensTotal)}
@@ -761,12 +761,12 @@ export function LegalNotices() {
         }
       />
       <div className="p-6">
-        {msg && <div className="mb-4 rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-800">{msg}</div>}
+        {msg && <div className="mb-4 rounded-lg bg-blue-500/10 px-4 py-2 text-sm text-blue-300">{msg}</div>}
         <ScrapeProgress type="legal" />
         {weeks === undefined ? (
           <Loading />
         ) : weeks.length === 0 ? (
-          <div className="py-16 text-center text-slate-400">No notices yet. Click “Scrape This Week's Legal Notices”.</div>
+          <div className="py-16 text-center text-muted-foreground">No notices yet. Click “Scrape This Week's Legal Notices”.</div>
         ) : (
           <>
             <PeriodTabs
@@ -792,29 +792,29 @@ export function LegalNotices() {
                 />
               </div>
             )}
-                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                  <span className="font-medium text-slate-600">Highest estimated value (Zestimate) first.</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-400">Needs re-scrape</span>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                  <span className="font-medium text-muted-foreground">Highest estimated value (Zestimate) first.</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">Needs re-scrape</span>
                   {sort && (
                     <button
                       onClick={() => setSort(null)}
-                      className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                      className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-accent"
                     >
                       <Star className="h-3 w-3" /> Highest value first
                     </button>
                   )}
-                  <div className="w-full text-slate-400">
+                  <div className="w-full text-muted-foreground">
                     Estate / probate notices — the play is an off-market purchase from the estate. Contact the <strong>Personal Representative</strong>. Open the Notes column for per-row caveats.
                   </div>
                 </div>
                 {!notices ? (
                   <Loading />
                 ) : notices.length === 0 ? (
-                  <div className="py-16 text-center text-slate-400">No notices for {selectedWeek}.</div>
+                  <div className="py-16 text-center text-muted-foreground">No notices for {selectedWeek}.</div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                      <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-right font-medium">#</th>
                           <SortHeader label="Worth (Zest.)" k="zestimate" sort={sort} onSort={toggleSort} />
@@ -830,19 +830,19 @@ export function LegalNotices() {
                       </thead>
                       <tbody>
                         {(sorted ?? notices).map((n, i) => (
-                          <tr key={n._id} className="border-t border-slate-100 hover:bg-slate-50">
-                            <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400">{i + 1}</td>
+                          <tr key={n._id} className="border-t border-border hover:bg-accent">
+                            <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</td>
                             <td className="px-3 py-2 text-right">
                               {n.value !== null ? (
-                                <span className="font-semibold tabular-nums text-ink">{fmtMoney(n.value)}</span>
+                                <span className="font-semibold tabular-nums text-foreground">{fmtMoney(n.value)}</span>
                               ) : (
-                                <span className="text-xs text-slate-400">{n.zestimate === "SCRAPE FAILED" ? "re-scrape" : "—"}</span>
+                                <span className="text-xs text-muted-foreground">{n.zestimate === "SCRAPE FAILED" ? "re-scrape" : "—"}</span>
                               )}
                             </td>
-                            <td className="px-3 py-2 font-medium text-ink">{n.ownerName}</td>
-                            <td className="px-3 py-2 text-slate-600">{n.personalRepresentative}</td>
-                            <td className="px-3 py-2 text-slate-600">{n.address}</td>
-                            <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{fmtSize(n.beds, n.baths, n.sqft)}</td>
+                            <td className="px-3 py-2 font-medium text-foreground">{n.ownerName}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{n.personalRepresentative}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{n.address}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-xs text-muted-foreground">{fmtSize(n.beds, n.baths, n.sqft)}</td>
                             <td className="px-3 py-2"><DealNotes flags={n.flags} /></td>
                             <td className="px-3 py-2"><ZillowCell url={n.zillowUrl} /></td>
                             <td className="px-3 py-2">

@@ -35,9 +35,9 @@ const STEPS: Record<ScrapeType, StepDef[]> = {
 };
 
 const LEVEL_CLASS: Record<string, string> = {
-  info: "text-slate-600",
-  warn: "text-amber-600",
-  error: "text-red-600",
+  info: "text-muted-foreground",
+  warn: "text-amber-400",
+  error: "text-red-400",
 };
 
 // Smooth, self-animating fill for the active step. Time-based steps ease toward
@@ -95,27 +95,27 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
   if (run === undefined) return null; // loading
   if (run === null) {
     return (
-      <div className="mb-4 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-400">
+      <div className="mb-4 rounded-xl border border-dashed border-border bg-card px-4 py-3 text-sm text-muted-foreground">
         No scrape has run yet. Click the scrape button above to start — you'll see live progress here.
       </div>
     );
   }
 
   return (
-    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="mb-4 rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-semibold text-ink">
+        <div className="text-sm font-semibold text-foreground">
           {running ? "Scraping in progress" : complete ? "Last scrape complete" : "Last scrape failed"}
-          {run.label ? <span className="ml-2 font-normal text-slate-400">· {run.label}</span> : null}
+          {run.label ? <span className="ml-2 font-normal text-muted-foreground">· {run.label}</span> : null}
         </div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-muted-foreground">
           {total > 0 && (
             <>
-              <span className="font-medium text-slate-700">{run.enrichedCount}</span> enriched
+              <span className="font-medium text-foreground">{run.enrichedCount}</span> enriched
               {(run.failedCount ?? 0) > 0 && (
                 <>
                   {" · "}
-                  <span className="font-medium text-red-600">{run.failedCount}</span> failed
+                  <span className="font-medium text-red-400">{run.failedCount}</span> failed
                 </>
               )}
               {" / "}
@@ -147,7 +147,7 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
                   />
                   <StepperTitle
                     className={cn(
-                      "text-xs font-medium text-ink",
+                      "text-xs font-medium text-foreground",
                       stepNum > activeStep && "text-muted-foreground",
                       isErrorStep && "text-destructive",
                     )}
@@ -155,10 +155,10 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
                     {s.title}
                   </StepperTitle>
                   {s.etaSec > 0 && (
-                    <span className="text-[10px] text-slate-400">~{s.etaSec}s</span>
+                    <span className="text-[10px] text-muted-foreground">~{s.etaSec}s</span>
                   )}
                   {s.countBased && total > 0 && (
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-muted-foreground">
                       {processed}/{total}
                     </span>
                   )}
@@ -172,13 +172,13 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
       {/* Active-step detail: smooth determinate sub-bar + current activity. */}
       {running && (
         <div className="mt-4">
-          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all duration-200"
               style={{ width: `${Math.round(fill * 100)}%` }}
             />
           </div>
-          <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-block size-3 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <span className="truncate">{latestMsg ?? "Working…"}</span>
           </div>
@@ -186,7 +186,7 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
       )}
 
       {errored && run.error && (
-        <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{run.error}</div>
+        <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{run.error}</div>
       )}
 
       {/* Live step-by-step event log — collapsed by default behind a toggle. */}
@@ -194,7 +194,7 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
         <div className="mt-3">
           <button
             onClick={() => setLogsOpen((o) => !o)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
             <ChevronDown className={cn("h-3.5 w-3.5 transition", logsOpen && "rotate-180")} />
             {logsOpen ? "Hide logs" : `Show logs (${events.length})`}
@@ -202,10 +202,10 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
           {logsOpen && (
             <div
               ref={logRef}
-              className="mt-2 max-h-44 overflow-y-auto rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-relaxed"
+              className="mt-2 max-h-44 overflow-y-auto rounded-lg bg-muted p-3 font-mono text-[11px] leading-relaxed"
             >
               {events.map((e) => (
-                <div key={e._id} className={cn("whitespace-pre-wrap", LEVEL_CLASS[e.level] ?? "text-slate-600")}>
+                <div key={e._id} className={cn("whitespace-pre-wrap", LEVEL_CLASS[e.level] ?? "text-muted-foreground")}>
                   {e.message}
                 </div>
               ))}
