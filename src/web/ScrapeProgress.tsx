@@ -174,12 +174,12 @@ export function ScrapeProgress({ type }: { type: ScrapeType }) {
         <div className="mt-4">
           <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-accent transition-all duration-200"
+              className="h-full rounded-full bg-primary transition-all duration-200"
               style={{ width: `${Math.round(fill * 100)}%` }}
             />
           </div>
           <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
-            <span className="inline-block size-3 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            <span className="inline-block size-3 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <span className="truncate">{latestMsg ?? "Working…"}</span>
           </div>
         </div>

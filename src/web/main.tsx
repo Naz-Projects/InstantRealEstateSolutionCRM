@@ -30,13 +30,14 @@ function SignInGate() {
   return (
     <div className="grid min-h-screen place-items-center bg-ink text-white">
       <div className="flex flex-col items-center gap-6 rounded-2xl bg-white/5 px-10 py-12 ring-1 ring-white/10">
-        <img src="/logo.svg" alt="IRES" className="h-12 w-12 rounded-xl" />
-        <div className="text-center leading-tight">
-          <div className="text-lg font-bold">Instant Real Estate Solution</div>
-          <div className="text-xs font-semibold tracking-[0.2em] text-accent">CRM</div>
-        </div>
+        <img
+          src="/ires-logo-onnavy.png"
+          alt="Instant Real Estate Solution"
+          className="h-16 w-auto object-contain"
+        />
+        <div className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">CRM</div>
         <SignInButton mode="modal">
-          <button className="rounded-lg bg-accent px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90">
+          <button className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90">
             Sign in
           </button>
         </SignInButton>
@@ -67,7 +68,7 @@ function AuthedApp() {
           <p className="mt-2 text-sm text-white/70">{state.error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
           >
             Try again
           </button>

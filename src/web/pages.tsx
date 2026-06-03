@@ -79,7 +79,7 @@ function ScrapeMenu({
       <button
         onClick={onScrape}
         disabled={busy}
-        className="rounded-l-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-60"
+        className="rounded-l-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
       >
         {busy ? "Working…" : label}
       </button>
@@ -87,7 +87,7 @@ function ScrapeMenu({
         onClick={() => setOpen((o) => !o)}
         disabled={busy}
         aria-label="More scrape options"
-        className="rounded-r-lg border-l border-white/25 bg-accent px-2 text-white shadow-sm transition hover:bg-accent-dark disabled:opacity-60"
+        className="rounded-r-lg border-l border-white/25 bg-primary px-2 text-white shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
       >
         <ChevronDown className={cn("h-4 w-4 transition", open && "rotate-180")} />
       </button>
@@ -135,7 +135,7 @@ function DealSelect({ value, onChange }: { value: DealStage; onChange: (s: DealS
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as DealStage)}
-      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs focus:border-accent focus:outline-none"
+      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs focus:border-primary focus:outline-none"
     >
       {DEAL_STAGES.map((s) => (
         <option key={s} value={s}>
@@ -143,88 +143,6 @@ function DealSelect({ value, onChange }: { value: DealStage; onChange: (s: DealS
         </option>
       ))}
     </select>
-  );
-}
-
-function StatCard({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-1 text-3xl font-bold ${accent ? "text-accent" : "text-ink"}`}>{value}</div>
-    </div>
-  );
-}
-
-function Funnel({ title, data }: { title: string; data: Record<string, number> }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 text-sm font-semibold text-ink">{title}</div>
-      <div className="flex flex-wrap gap-2">
-        {DEAL_STAGES.map((s) => (
-          <div key={s} className="rounded-lg bg-slate-50 px-3 py-2 text-center">
-            <div className="text-lg font-bold text-ink">{data[s] ?? 0}</div>
-            <div className="text-[11px] text-slate-500">{STAGE_LABEL[s]}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function Dashboard() {
-  const stats = useQuery(api.runs.dashboardStats);
-  const runs = useQuery(api.runs.listRuns);
-  return (
-    <div>
-      <PageHeader title="Dashboard" subtitle="Your wholesaling pipeline at a glance" />
-      <div className="space-y-6 p-6">
-        {!stats ? (
-          <Loading />
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <StatCard label="Sheriff Listings" value={stats.sheriffTotal} />
-              <StatCard label="Legal Notices" value={stats.legalTotal} />
-              <StatCard label="Contacted" value={stats.sheriffByStage.contacted + stats.legalByStage.contacted} accent />
-              <StatCard label="Offers Made" value={stats.sheriffByStage.offer + stats.legalByStage.offer} accent />
-            </div>
-            <Funnel title="Sheriff Sales pipeline" data={stats.sheriffByStage} />
-            <Funnel title="Legal Notices pipeline" data={stats.legalByStage} />
-          </>
-        )}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 text-sm font-semibold text-ink">Recent scrape runs</div>
-          {!runs ? (
-            <Loading />
-          ) : runs.length === 0 ? (
-            <div className="text-sm text-slate-400">No runs yet — trigger one from Sheriff Sales or Legal Notices.</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-slate-400">
-                <tr>
-                  <th className="py-1">Type</th>
-                  <th>Period</th>
-                  <th>Status</th>
-                  <th>Listings</th>
-                  <th>Enriched</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((r) => (
-                  <tr key={r._id} className="border-t border-slate-100">
-                    <td className="py-1.5 capitalize">{r.type}</td>
-                    <td>{r.label}</td>
-                    <td className="capitalize">{r.status}</td>
-                    <td>{r.listingCount}</td>
-                    <td>{r.enrichedCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -343,7 +261,7 @@ function PeriodTabs({
           className={cn(
             "-mb-px rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition",
             selected === p.value
-              ? "border-accent text-accent"
+              ? "border-primary text-primary"
               : "border-transparent text-slate-500 hover:text-slate-700",
           )}
         >
@@ -362,7 +280,7 @@ function MapToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) 
       onClick={onToggle}
       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
     >
-      <MapIcon className="h-4 w-4 text-accent" />
+      <MapIcon className="h-4 w-4 text-primary" />
       {open ? "Hide map" : "Open map"}
       <ChevronDown className={cn("h-4 w-4 transition", open && "rotate-180")} />
     </button>
@@ -376,7 +294,7 @@ function MapLinkCell({ hasCoords, onClick }: { hasCoords: boolean; onClick: () =
     <button
       onClick={onClick}
       title="Show on the map and open Street View"
-      className="inline-flex items-center gap-1 text-accent hover:underline"
+      className="inline-flex items-center gap-1 text-primary hover:underline"
     >
       <MapPin className="h-3.5 w-3.5" /> Map
     </button>
@@ -400,7 +318,7 @@ function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sor
   const active = sort?.key === k;
   return (
     <th className="px-3 py-2 text-right font-medium">
-      <button onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-slate-700", active && "text-accent")}>
+      <button onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-slate-700", active && "text-primary")}>
         {label}
         {active ? (
           sort!.dir === "desc" ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />

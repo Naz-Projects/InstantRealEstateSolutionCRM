@@ -151,7 +151,7 @@ function PointMarker({
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => onStreetView(point)}
-                className="inline-flex items-center gap-1 rounded bg-accent px-2 py-1 text-xs font-semibold text-white hover:bg-accent-dark"
+                className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs font-semibold text-white hover:bg-primary/90"
               >
                 <MapPin className="h-3 w-3" /> Street View
               </button>

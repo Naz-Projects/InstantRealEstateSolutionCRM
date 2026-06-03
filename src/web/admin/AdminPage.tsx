@@ -49,7 +49,7 @@ function ActiveToggle({ userId, isActive, isSelf }: { userId: Id<"users">; isAct
         disabled={saving || isSelf}
         title={isSelf ? "Cannot change your own status" : isActive ? "Deactivate" : "Activate"}
         onClick={async () => { setSaving(true); setSaveErr(""); try { await setActive({ userId, isActive: !isActive }); } catch (err) { setSaveErr(errMsg(err, "Failed to update status")); } finally { setSaving(false); } }}
-        className={`relative h-5 w-9 rounded-full transition-colors disabled:opacity-50 ${isActive ? "bg-accent" : "bg-slate-300"}`}
+        className={`relative h-5 w-9 rounded-full transition-colors disabled:opacity-50 ${isActive ? "bg-primary" : "bg-slate-300"}`}
       >
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${isActive ? "left-4" : "left-0.5"}`} />
       </button>
