@@ -434,7 +434,11 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
           {analysis.suggestedArv != null && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
               <span className="text-teal-glow">
-                Comp value ~{fmtMoney(analysis.suggestedArv)} · {analysis.comps?.length ?? 0} comps · adjust up for reno
+                Comp value ~{fmtMoney(analysis.suggestedArv)}
+                {analysis.suggestedPricePerSqft != null &&
+                  ` · median $${Math.round(analysis.suggestedPricePerSqft)}/sqft`}
+                {" · "}
+                {analysis.comps?.length ?? 0} comps · adjust up for reno
               </span>
               <button
                 onClick={() => setArv(String(analysis.suggestedArv))}
@@ -445,7 +449,7 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
             </div>
           )}
           {analysis.compsError && (
-            <p className="mt-2 text-xs text-amber-400">Couldn't pull comps: {analysis.compsError}</p>
+            <p className="mt-2 text-xs text-amber-400">{analysis.compsError}</p>
           )}
           {analysis.comps && analysis.comps.length > 0 && (
             <>

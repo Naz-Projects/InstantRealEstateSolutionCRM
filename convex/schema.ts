@@ -177,6 +177,7 @@ export default defineSchema({
       ),
     ),
     suggestedArv: v.optional(v.number()),
+    suggestedPricePerSqft: v.optional(v.number()),
     compsPulledAt: v.optional(v.number()),
     compsError: v.optional(v.string()),
     // workflow (its OWN copy — never writes to the source listing)

@@ -74,6 +74,8 @@ export const pullComps = action({
         id,
         comps: selected.map(toStored),
         suggestedArv: sug.arv ?? undefined,
+        suggestedPricePerSqft: sug.pricePerSqft ?? undefined,
+        error: selected.length === 0 ? "No comparable sold homes found near this ZIP." : undefined,
       });
       return {
         status: selected.length > 0 ? "ok" : "no-comps",

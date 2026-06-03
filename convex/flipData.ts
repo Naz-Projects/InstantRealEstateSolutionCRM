@@ -241,12 +241,14 @@ export const storeComps = internalMutation({
       }),
     ),
     suggestedArv: v.optional(v.number()),
+    suggestedPricePerSqft: v.optional(v.number()),
     error: v.optional(v.string()),
   },
   handler: async (ctx, a) => {
     await ctx.db.patch(a.id, {
       comps: a.comps,
       suggestedArv: a.suggestedArv,
+      suggestedPricePerSqft: a.suggestedPricePerSqft,
       compsError: a.error,
       compsPulledAt: Date.now(),
       updatedAt: Date.now(),
