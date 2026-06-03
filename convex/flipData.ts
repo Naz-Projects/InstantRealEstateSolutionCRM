@@ -171,6 +171,7 @@ export const updateAnalysis = mutation({
   args: {
     id: v.id("flipAnalyses"),
     patch: v.object({
+      sqft: v.optional(v.union(v.number(), v.null())),
       arv: v.optional(v.union(v.number(), v.null())),
       purchasePrice: v.optional(v.union(v.number(), v.null())),
       rehabTier: v.optional(
@@ -188,6 +189,7 @@ export const updateAnalysis = mutation({
     const a = await ctx.db.get(id);
     if (!a) throw new Error("Analysis not found");
     await ctx.db.patch(id, {
+      sqft: "sqft" in patch ? patch.sqft ?? undefined : a.sqft,
       arv: "arv" in patch ? patch.arv ?? undefined : a.arv,
       purchasePrice: "purchasePrice" in patch ? patch.purchasePrice ?? undefined : a.purchasePrice,
       rehabTier: patch.rehabTier ?? a.rehabTier,

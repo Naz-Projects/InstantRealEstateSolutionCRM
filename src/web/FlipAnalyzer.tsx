@@ -234,6 +234,7 @@ export function FlipAnalyzer() {
 
 function AnalysisEditor({ analysis }: { analysis: Analysis }) {
   const update = useMutation(api.flipData.updateAnalysis);
+  const [sqft, setSqft] = useState(analysis.sqft?.toString() ?? "");
   const [arv, setArv] = useState(analysis.arv?.toString() ?? "");
   const [purchase, setPurchase] = useState(analysis.purchasePrice?.toString() ?? "");
   const [tier, setTier] = useState<RehabTier>(analysis.rehabTier);
@@ -255,7 +256,7 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
   };
 
   const contFrac = (num(cont) ?? 0) / 100;
-  const rehab = estimateRehab(num(perSqft) ?? 0, analysis.sqft ?? null, contFrac, num(override));
+  const rehab = estimateRehab(num(perSqft) ?? 0, num(sqft), contFrac, num(override));
   const metrics = computeFlip({
     arv: num(arv),
     purchasePrice: num(purchase),
@@ -267,6 +268,7 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
     await update({
       id: analysis._id,
       patch: {
+        sqft: num(sqft),
         arv: num(arv),
         purchasePrice: num(purchase),
         rehabTier: tier,
@@ -292,10 +294,7 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
     <div className="grid gap-6 rounded-xl border border-border bg-card p-5 lg:grid-cols-2">
       {/* Inputs */}
       <div className="space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">
-          {analysis.address}
-          {analysis.sqft ? <span className="ml-2 text-xs text-muted-foreground">{analysis.sqft} sqft</span> : null}
-        </h2>
+        <h2 className="text-sm font-semibold text-foreground">{analysis.address}</h2>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-xs text-muted-foreground">
             ARV ($)
@@ -304,6 +303,10 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
           <label className="block text-xs text-muted-foreground">
             Purchase price ($)
             <input className={inputCls} value={purchase} onChange={(e) => setPurchase(e.target.value)} />
+          </label>
+          <label className="block text-xs text-muted-foreground">
+            Sqft
+            <input className={inputCls} placeholder="for tiered rehab" value={sqft} onChange={(e) => setSqft(e.target.value)} />
           </label>
           <label className="block text-xs text-muted-foreground">
             Rehab tier
