@@ -135,6 +135,28 @@ column**: clicking it opens the map focused on that exact row and auto-opens its
   earlier "two keys" note). Enable on the key: Maps JS + Geocoding + Street View Static.
   Spec/plan: `docs/superpowers/{specs,plans}/2026-06-01-google-maps-street-view*`.
 
+## Flip Analyzer (deal-decision screen) — 2026-06-03
+A new **additive** `/flip` page that turns a property into a **flip P&L** — the "should I flip this, and at what
+max offer?" lens (distinct from the Sheriff *auction cushion* in `deal.ts`, which is `Zestimate(as-is) − cost-to-clear`).
+Inputs: **ARV** (manual, pre-filled from the as-is Zestimate), **tiered rehab** (Cosmetic/Moderate/Gut $/sqft +
+editable sqft + 10% contingency + manual override), purchase price, and an editable cost-stack (closing/financing/
+holding/selling). Live outputs: **MAO (70% rule)**, profit, ROI, annualized ROI, margin, a good/ok/thin/bad **grade**
++ flags (over-70%-rule, thin-margin, negative-profit). Saved per analysis; runs on a Sheriff/Legal listing
+(auto-filled read-only snapshot) **or** a manual address.
+- **Code:** pure math `src/scraper/flip.ts` (`REHAB_TIERS`, `FLIP_DEFAULTS`, `estimateRehab`, `computeFlip`;
+  unit-tested in `tests/flip.test.ts`, imported by BOTH the Convex query and the React page so the live preview ==
+  saved metrics). New `flipAnalyses` table + `convex/flipData.ts` (queries/mutations, **read-only** on sheriff/legal).
+  Page `src/web/FlipAnalyzer.tsx` (+ `/flip` route in `app.tsx`, nav item in `app-shared.tsx`). Property picker =
+  shadcn **Popover+Command** combobox w/ autocomplete (added `popover`/`command`/`dialog` ui components).
+- **Constraint honored:** purely additive — the Sheriff/Legal pages, their actions, and `deal.ts` are untouched
+  (verified by `git diff`). Built subagent-driven + TDD; independently code-reviewed (APPROVED).
+- **Docs:** `docs/superpowers/{specs,plans}/2026-06-03-flip-analyzer*`; research menu `memory/flip-decision-features.md`.
+- **Shipped:** merged to `main`; **deployed to prod** (backend `npx convex deploy` to `pastel-crocodile-994`;
+  frontend via Cloudflare on push). The **prod** Convex deploy key is in `.env.local` as `CONVEX_DEPLOY_KEY_PROD`
+  (`CONVEX_DEPLOY_KEY` there is the **dev** key). UI polish (2026-06-03): removed the centered top-bar logo, full
+  sidebar logo (replaced the cut `ires-icon.png` with `ires-logo-onnavy.png`, hidden when collapsed), Flip header
+  blended to `bg-background`, searchable combobox. **[TODO: live smoke-test `/flip` on prod.]**
+
 ## Status (current — 2026-06-02) — LIVE IN PRODUCTION
 - **Prod is live:** **https://crm.instantrealestatesolution.com** (Cloudflare Workers project
   `instant-real-estate-solution-crm`) on Convex **prod** `pastel-crocodile-994`. Clerk **production** instance

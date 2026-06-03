@@ -84,9 +84,14 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     `CONVEX_DEPLOY_KEY` in **Cloudflare's** build env was the OLD key (the prod key had been rotated and not yet
     copied into CF). User updated it in Cloudflare on 2026-06-03 and manually retried the deployment (CF build cmd
     `npx convex deploy --cmd 'npm run build'` deploys backend+frontend). (See lessons.md 2026-06-03.)
+  - [x] **UI polish (2026-06-03)** — removed the centered top-bar logo (`app-header.tsx`); full sidebar logo
+    `ires-logo-onnavy.png` (was the cut `ires-icon.png`), hidden when collapsed (`app-sidebar.tsx`); Flip page
+    header blended `bg-card`→`bg-background`; native property `<select>` → shadcn **Popover+Command** combobox
+    with type-to-filter autocomplete, height matched to the manual-address input (added `popover`/`command`/`dialog`
+    ui components + `cmdk` dep). Build clean, 54 tests pass; pushed → Cloudflare deploy.
   - [ ] **Then manually smoke-test `/flip` on prod** (create from a Sheriff + a Legal listing + a manual address;
-    edit ARV/rehab/assumptions → live MAO/profit/ROI/grade; save/reopen/delete) — unit-tested + reviewed but
-    never clicked through in a running app.
+    edit ARV/rehab/sqft/assumptions → live MAO/profit/ROI/grade; save/reopen/delete; check sidebar logo + combobox
+    render) — unit-tested + reviewed but never clicked through in a running app.
 
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).
