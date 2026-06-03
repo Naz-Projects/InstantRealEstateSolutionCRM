@@ -2,7 +2,23 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## Most recent work — shadcn UI foundation (branch `ui/shadcn-foundation`, NOT merged)
+## ★ NEXT BIG INITIATIVE — Off-Market & Pre-Foreclosure Acquisition Engine (research → build)
+The strategic upgrade: find distressed / motivated-seller houses (esp. **pre-foreclosure**) **before they hit the
+MLS**, reach the owner first, run the flip/wholesale math, and automate it in the CRM. Today our pipelines are
+*late/public* — Sheriff Sales is the **auction** (max competition) and Legal Notices is one probate source. The win
+is moving **upstream**: a house we catch at the sheriff sale had a **foreclosure complaint filed in court months
+earlier** — that's the window to own.
+- **Full research + build plan: [`memory/next-initiative-offmarket.md`](next-initiative-offmarket.md)** (5 data
+  layers a deal needs · signal taxonomy ranked by conversion · how the big firms do it: ATTOM/CoreLogic/PropStream/
+  BatchData + propensity-to-sell ML + TCPA-gated outreach · CRM architecture: new `leads`/`contacts` tables,
+  skip-trace, scoring, deal analyzer, alerts · decisions: build-vs-buy data, skip-trace/TCPA compliance).
+- **Concrete first step:** build the **pre-foreclosure (lis-pendens / foreclosure-complaint) scraper for New Castle
+  County** (DE courts docket + NCC Recorder of Deeds) → a new unified **`leads`** pipeline + **`contacts`/skip-trace**
+  + basic lead scoring. Same houses as our sheriff-sale scraper, **months earlier**, while the owner can still sell off-market.
+- **Mindset:** this is research-first — verify each DE/NCC source is scrapable within ToS, choose scrape-vs-API per
+  layer, and design **DNC/TCPA compliance before any automated outreach** (fines ~$500–$1,500/message).
+
+## Most recent work — shadcn UI foundation + dark theme (merged to `main` + deployed)
 This session rebuilt the UI on a real **shadcn/ui** foundation (the `@efferd/dashboard-3` block) with IRES
 navy/green theming: a navy sidebar shell (logo + role-gated router nav + Clerk user menu) and a brand-new
 **Dashboard** wired to real Convex data (stat cards + pipeline-by-stage bar + source donut + recent-runs table).
