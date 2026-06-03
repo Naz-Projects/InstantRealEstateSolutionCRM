@@ -69,6 +69,11 @@ rm scripts/check-zillow-image.ts
 ```
 No commit — this task produces knowledge, not code.
 
+**RESULT (done 2026-06-03):** Active listing (710 N King St) → many `photos.zillowstatic.com/fp/...` photos,
+hero first as `.jpg`+`.webp`; `og:image` = junk `/apple-touch-icon.png`. Off-market (2316 W 17th St) → NO
+zillowstatic photos; only a Street View `og:image`. → `extractImageUrl` = zillowstatic-or-null (Task 2);
+Street View fallback added to the action (Task 6). Probe scripts deleted, nothing committed.
+
 ---
 
 ### Task 2: `extractImageUrl()` pure helper (TDD)
@@ -77,23 +82,34 @@ No commit — this task produces knowledge, not code.
 - Modify: `src/scraper/zillow.ts` (append a new exported function; do not touch existing functions)
 - Test: `tests/zillow.test.ts` (append a new `describe` block)
 
+**Spike finding (Task 1, 2026-06-03):** Active Zillow listings expose `photos.zillowstatic.com/fp/...` photos
+(hero first, as both `.jpg` and `.webp`); their `og:image` is junk (`/apple-touch-icon.png`). Off-market
+properties have NO zillowstatic photos — only a Street View `og:image`. Conclusion: `extractImageUrl` returns
+a zillowstatic photo or null (the unreliable `og:image` is dropped); the Street View fallback lives in the
+action (Task 6).
+
 - [ ] **Step 1: Write the failing test** (append to `tests/zillow.test.ts`)
 
 ```ts
 import { extractImageUrl } from "../src/scraper/zillow";
 
 describe("extractImageUrl", () => {
-  it("prefers a photos.zillowstatic.com listing photo over the og:image", () => {
+  it("returns the first zillowstatic photo, preferring a .jpg over the .webp of the same hero", () => {
     const text =
-      'noise ![](https://photos.zillowstatic.com/fp/abc123-cc_ft_768.jpg) more ' +
-      '<meta property="og:image" content="https://maps.googleapis.com/maps/api/staticmap?center=x"/>';
-    expect(extractImageUrl(text)).toBe("https://photos.zillowstatic.com/fp/abc123-cc_ft_768.jpg");
+      'srcset ![](https://photos.zillowstatic.com/fp/abc123-p_e.webp) and ' +
+      '<img src="https://photos.zillowstatic.com/fp/abc123-p_e.jpg"/> more';
+    expect(extractImageUrl(text)).toBe("https://photos.zillowstatic.com/fp/abc123-p_e.jpg");
   });
-  it("falls back to og:image when no zillowstatic photo is present", () => {
-    const text = '<meta property="og:image" content="https://www.zillow.com/static/logo.svg"/>';
-    expect(extractImageUrl(text)).toBe("https://www.zillow.com/static/logo.svg");
+  it("returns the first match when no .jpg is present", () => {
+    const text = "![](https://photos.zillowstatic.com/fp/xyz-p_e.webp) noise";
+    expect(extractImageUrl(text)).toBe("https://photos.zillowstatic.com/fp/xyz-p_e.webp");
   });
-  it("returns null when there is no image", () => {
+  it("returns null for an off-market page (only an og:image street view, no zillowstatic photo)", () => {
+    const text =
+      '<meta property="og:image" content="https://maps.googleapis.com/maps/api/streetview?location=x"/>';
+    expect(extractImageUrl(text)).toBeNull();
+  });
+  it("returns null when there is no image at all", () => {
     expect(extractImageUrl("just some text, no images")).toBeNull();
   });
 });
@@ -108,20 +124,17 @@ Expected: FAIL — `extractImageUrl is not a function` / import error.
 
 ```ts
 /**
- * Pull a property photo URL out of Zillow page content (markdown or rawHtml).
- * Prefers an actual listing photo on the Zillow CDN; falls back to the og:image
- * meta tag (which on a search page may be a generic map/logo). Pure + testable.
+ * Pull a Zillow listing photo URL out of page content (markdown or rawHtml).
+ * Returns the first photos.zillowstatic.com photo, preferring a universal .jpg
+ * over the .webp of the same hero. Off-market pages have no such photo (Zillow
+ * shows only a Street View og:image, handled by the caller) -> null. Pure + tested.
  */
 export function extractImageUrl(text: string): string | null {
-  const photo = text.match(
-    /https?:\/\/photos\.zillowstatic\.com\/[^\s"')<>]+?\.(?:jpg|jpeg|png|webp)/i,
+  const matches = text.match(
+    /https?:\/\/photos\.zillowstatic\.com\/[^\s"')<>]+?\.(?:jpg|jpeg|png|webp)/gi,
   );
-  if (photo) return photo[0];
-  const og = text.match(
-    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
-  );
-  if (og) return og[1];
-  return null;
+  if (!matches || matches.length === 0) return null;
+  return matches.find((u) => /\.jpe?g$/i.test(u)) ?? matches[0];
 }
 ```
 
@@ -765,9 +778,24 @@ function fcKey(): string {
   return k;
 }
 
-// Scrape a property's Zillow photo. ALWAYS scrapes the SEARCH URL built from the
-// address — the stored zillowUrl is a homedetails URL, which 403s on a direct
-// scrape (project lesson). Patches imageUrl/imageStatus; failure -> "failed".
+// Google Street View Static URL from an address (off-market fallback when Zillow has
+// no listing photo). Uses the single domain-restricted Maps key (same one geocoding
+// uses); Street View Static accepts location=<address>, so no geocoding is needed.
+// The browser loads it as <img src>, so the referrer-restricted key is authorized.
+function streetViewUrl(address: string, key: string): string {
+  const params = new URLSearchParams({
+    size: "640x480",
+    location: address,
+    source: "outdoor",
+    key,
+  });
+  return `https://maps.googleapis.com/maps/api/streetview?${params.toString()}`;
+}
+
+// Fetch a property's house photo. ALWAYS scrapes the SEARCH URL built from the address
+// (the stored zillowUrl is a homedetails URL, which 403s on a direct scrape). Active
+// listings -> a Zillow photo; off-market -> a Street View thumbnail; neither -> failed
+// (UI placeholder). Scheduled by an already-authed mutation, so no user re-check.
 export const scrapePropertyImage = internalAction({
   args: { id: v.id("properties") },
   handler: async (ctx, { id }): Promise<void> => {
@@ -776,12 +804,13 @@ export const scrapePropertyImage = internalAction({
       await ctx.runMutation(internal.propertyData.setImage, { id, status: "failed" });
       return;
     }
-    const url = buildZillowSearchUrl(p.address);
+
+    let zillowPhoto: string | null = null;
     try {
       const { markdown, rawHtml } = await withRetry(
         () =>
           firecrawlScrape({
-            url,
+            url: buildZillowSearchUrl(p.address),
             apiKey: fcKey(),
             formats: ["markdown", "rawHtml"],
             onlyMainContent: true,
@@ -791,12 +820,24 @@ export const scrapePropertyImage = internalAction({
           }),
         { attempts: 2, baseDelayMs: 2000, label: `Zillow image ${p.address}` },
       );
-      const imageUrl = extractImageUrl(rawHtml) ?? extractImageUrl(markdown);
-      await ctx.runMutation(
-        internal.propertyData.setImage,
-        imageUrl ? { id, imageUrl, status: "ok" } : { id, status: "failed" },
-      );
+      zillowPhoto = extractImageUrl(rawHtml) ?? extractImageUrl(markdown);
     } catch {
+      zillowPhoto = null; // block/timeout/no-Firecrawl-key — fall through to Street View
+    }
+
+    if (zillowPhoto) {
+      await ctx.runMutation(internal.propertyData.setImage, { id, imageUrl: zillowPhoto, status: "ok" });
+      return;
+    }
+
+    const gk = (process.env.GOOGLE_GEOCODING_API_KEY ?? "").trim();
+    if (gk) {
+      await ctx.runMutation(internal.propertyData.setImage, {
+        id,
+        imageUrl: streetViewUrl(p.address, gk),
+        status: "ok",
+      });
+    } else {
       await ctx.runMutation(internal.propertyData.setImage, { id, status: "failed" });
     }
   },
