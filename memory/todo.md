@@ -38,6 +38,23 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   → `crm.instantrealestatesolution.com`; sign-in verified live; 53 sheriff rows geocoded on prod.
 - [x] **Cloudflare CI fix** — committed `convex/_generated`; added `wrangler.jsonc` (serves `./dist` SPA).
 
+## ✅ Shipped this session (2026-06-03) — shadcn UI foundation (branch `ui/shadcn-foundation`, NOT merged)
+- [x] **Real shadcn/ui setup** — `components.json` (radix/nova, Tailwind v4), `@efferd` registry; installed the
+  **`@efferd/dashboard-3`** block (app-shell-3 + base components + recharts). Reusable utils kept (delta/formater/indicator).
+- [x] **IRES theming** — shadcn owns semantic tokens; `--primary` = green, navy `--sidebar*` + `--color-ink`,
+  IRES `--chart-1..5`; migrated brand `accent`→`primary` across existing pages (token-collision fix).
+- [x] **App shell** — navy `AppSidebar` (logo + role-gated TanStack-router nav) + `AppHeader` (toggle + breadcrumb
+  + Clerk-wired user menu), `variant="inset"`; root route renders it around `<Outlet/>`.
+- [x] **Dashboard rebuilt on real data** — stat cards + pipeline-by-stage bar + source donut + recent-runs table
+  (replaced the mock dashboard; deleted efferd support-desk mock components).
+- [x] **Real logo** from the live site (`public/ires-logo-onnavy.png` etc.). Build + tsc clean, 44 tests pass.
+
+## [ ] UI foundation — follow-ups
+- [ ] **Merge `ui/shadcn-foundation` → main** and deploy (prod still serves the OLD UI). Build the frontend, `wrangler deploy`.
+- [ ] **Decide on the shadcn skill artifacts** — `.agents/`, `.claude/`, `skills-lock.json` are untracked; gitignore or commit (a choice, not an accident).
+- [ ] **Verify the collapsed sidebar icon** (`ires-icon.png`) renders well; check Legal Notices + Admin pages live (same shell pattern as Sheriff, verified).
+- [ ] (Optional) De-dupe the breadcrumb vs per-page `PageHeader` title, or migrate Sheriff/Legal/Admin headers to shadcn components for full consistency.
+
 ## [ ] Post-launch punch list (see next-session-prompt.md)
 - [ ] **Finish the Google Maps key rotation** (in progress) — new key → Cloudflare `VITE_GOOGLE_MAPS_API_KEY`
   + Convex `GOOGLE_GEOCODING_API_KEY` (prod **and** dev) + redeploy Cloudflare. One domain-restricted key serves both.

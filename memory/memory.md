@@ -70,6 +70,33 @@ sheriff → 10/10 enriched, events incl. real "blocked" errors). NOTE: source ha
 - `src/components/ui/stepper.tsx` + `src/lib/utils.ts` (`cn`) — shadcn scaffolding (`@/` alias →
   `src`; shadcn semantic tokens added to `src/web/index.css` `@theme`).
 
+## UI foundation — shadcn/ui (2026-06-03)
+The app now has a **real shadcn/ui foundation** (was a partial hand-rolled setup). `components.json`
+(style `radix-nova`, base **radix**, Tailwind v4, css `src/web/index.css`, alias `@`, iconLibrary lucide,
+registry `@efferd → https://efferd.com/r/new-york/{name}.json`). Installed the **`@efferd/dashboard-3`** block
+(cascades `@efferd/app-shell-3` + base components: sidebar, card, chart, table, badge, avatar, dropdown-menu,
+select, breadcrumb, collapsible, tooltip, separator, kbd, sheet, skeleton, input, button — all in
+`src/components/ui/`; recharts for charts). Reusable utils kept: `delta.tsx`, `formater.ts`, `indicator.tsx`.
+- **Theming:** shadcn owns the semantic tokens; `--primary` = IRES green `#16a34a` (so `bg-primary` is green
+  everywhere), navy kept as `--color-ink`/`--color-ink-2`, the `--sidebar*` tokens are **navy** (brand anchor,
+  green active item), `--chart-1..5` = green/navy/amber/blue/slate. The old brand `accent` class (= green) was
+  migrated to `primary` across the existing pages; the stepper keeps shadcn-neutral `accent`. (See lessons for
+  the token-collision trap — Tailwind v4 silently drops/overrides.)
+- **Shell** (`src/components/app-*.tsx`): `AppShell` = `SidebarProvider` + navy `AppSidebar` (logo + role-gated
+  nav via TanStack `Link`: Dashboard/Sheriff/Legal/Admin) + sticky `AppHeader` (sidebar toggle + breadcrumb +
+  Clerk-wired `NavUser` dropdown), `variant="inset"` (white rounded content panel floating on navy). Wired into
+  the router: `src/web/app.tsx` root route renders `AppShell` around `<Outlet/>`; wrapped in `TooltipProvider`.
+- **Dashboard** (`src/components/dashboard.tsx`): fully rebuilt on real Convex data (`runs.dashboardStats` +
+  `runs.listRuns`) — 4 stat cards, **pipeline-by-stage** grouped bar (Sheriff green vs Legal navy), **source**
+  donut, **recent-runs** table with status badges. No fabricated deltas. Replaced the old mock dashboard + the
+  efferd support-desk mock components (deleted).
+- **Logo:** real IRES marks from the live site in `public/`: `ires-logo-onnavy.png` (navy bg — sidebar +
+  sign-in), `ires-logo-dark.png` (light bg), `ires-icon.png` (square, collapsed sidebar).
+- **Status:** committed on branch **`ui/shadcn-foundation`** (NOT merged; prod still serves the old UI).
+  `npm run build` + `tsc` clean, 44 tests pass. Verified visually (headless screenshots): sign-in gate,
+  dashboard, and Sheriff page inside the new shell (kept-page features intact — two-row header reads as
+  intentional). The collapsed-sidebar icon was generated but not yet seen rendered.
+
 ## Sheriff "cushion" deal screen
 `src/scraper/deal.ts` (`computeDeal`, unit-tested) turns a row into a deal: parse money, sale-type-aware
 cost-to-clear (TAX: cost=principal; MTG/JUDG: principal+balances), cushion = Zestimate − cost, tier

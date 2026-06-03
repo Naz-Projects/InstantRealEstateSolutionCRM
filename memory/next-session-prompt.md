@@ -2,6 +2,17 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
+## Most recent work — shadcn UI foundation (branch `ui/shadcn-foundation`, NOT merged)
+This session rebuilt the UI on a real **shadcn/ui** foundation (the `@efferd/dashboard-3` block) with IRES
+navy/green theming: a navy sidebar shell (logo + role-gated router nav + Clerk user menu) and a brand-new
+**Dashboard** wired to real Convex data (stat cards + pipeline-by-stage bar + source donut + recent-runs table).
+Sheriff/Legal/Admin features are untouched and render inside the new shell. Build/tsc/44-tests all green;
+verified visually via headless screenshots. Details in `memory.md` → "UI foundation — shadcn/ui".
+**First next step: review + merge `ui/shadcn-foundation` into `main` and deploy** (prod still serves the OLD UI:
+`npm run build` then `npx wrangler deploy`). Also decide what to do with the untracked shadcn-skill artifacts
+(`.agents/`, `.claude/`, `skills-lock.json`) — gitignore or commit. Then optionally verify Legal/Admin pages live
++ the collapsed-sidebar icon, and de-dupe the breadcrumb-vs-PageHeader title.
+
 ## Where we are — production is live
 The IRES CRM is **live in production** at **https://crm.instantrealestatesolution.com** — Convex prod
 `pastel-crocodile-994`, Cloudflare Workers project `instant-real-estate-solution-crm`, Clerk **production**
