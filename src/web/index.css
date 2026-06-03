@@ -1,17 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  /* IRES brand tokens that have no shadcn equivalent. Brand green is mapped to
-     shadcn --primary below; navy ("ink") stays here. Everything else (accent,
-     muted, border, ring, destructive…) is owned by the canonical shadcn tokens
-     in the @theme inline / :root blocks, so don't redefine them here. */
-  --color-ink: #0b2545;
-  --color-ink-2: #13315c;
+  /* Industrial Precision accents (no shadcn equivalent). Teal = frames / active /
+     focus / links; metallic yellow = primary CTAs (mapped to --primary below). */
+  --color-teal: #2d9c84;
+  --color-teal-glow: #3ab89e;
 }
 
 html,
@@ -22,7 +20,7 @@ body,
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -63,6 +61,7 @@ body,
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Light values kept as a fallback; the app runs in dark (`<html class="dark">`). */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -70,8 +69,8 @@ body,
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: #16a34a;
-  --primary-foreground: #ffffff;
+  --primary: #facc15;
+  --primary-foreground: #0a0a0a;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -81,57 +80,56 @@ body,
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: #16a34a;
-  /* IRES-aligned chart palette: green, navy, amber, blue, slate. */
-  --chart-1: #16a34a;
-  --chart-2: #0b2545;
-  --chart-3: #f59e0b;
-  --chart-4: #3b82f6;
-  --chart-5: #64748b;
-  --radius: 0.625rem;
-  /* Navy ("ink") sidebar — the IRES brand anchor. Active item = green. */
-  --sidebar: #0b2545;
-  --sidebar-foreground: rgba(255, 255, 255, 0.85);
-  --sidebar-primary: #16a34a;
+  --ring: #2d9c84;
+  --chart-1: #2d9c84;
+  --chart-2: #facc15;
+  --chart-3: #3ab89e;
+  --chart-4: #62626b;
+  --chart-5: #8b8b93;
+  --radius: 0.875rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #2d9c84;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #13315c;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #16a34a;
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: #2d9c84;
 }
 
+/* Industrial Precision — deep-black dark theme with teal frames + yellow CTAs. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: #16a34a;
-  --primary-foreground: #ffffff;
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: #0b2545;
-  --sidebar-foreground: rgba(255, 255, 255, 0.85);
-  --sidebar-primary: #16a34a;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #13315c;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #16a34a;
+  --background: #0a0a0a;
+  --foreground: #ffffff;
+  --card: #161616;
+  --card-foreground: #ffffff;
+  --popover: #161616;
+  --popover-foreground: #ffffff;
+  --primary: #facc15;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1c1c1c;
+  --secondary-foreground: #ffffff;
+  --muted: #161616;
+  --muted-foreground: #8a8a93;
+  --accent: rgba(45, 156, 132, 0.16);
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --border: #242424;
+  --input: #2e2e2e;
+  --ring: #2d9c84;
+  --chart-1: #2d9c84;
+  --chart-2: #facc15;
+  --chart-3: #3ab89e;
+  --chart-4: #62626b;
+  --chart-5: #9a9aa3;
+  --sidebar: #0d0d0d;
+  --sidebar-foreground: #a1a1aa;
+  --sidebar-primary: #2d9c84;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: rgba(45, 156, 132, 0.12);
+  --sidebar-accent-foreground: #3ab89e;
+  --sidebar-border: #1a1a1a;
+  --sidebar-ring: #2d9c84;
 }
 
 @layer base {
@@ -144,4 +142,75 @@ body,
   html {
     @apply font-sans;
   }
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
+  }
+}
+
+/* ── Signature styles ───────────────────────────────────────────────────── */
+
+@layer components {
+  /* Metallic yellow primary button (shadcn Button default + legacy CTAs). */
+  .btn-metal-yellow {
+    background: linear-gradient(180deg, #facc15 0%, #d4a810 100%);
+    color: #0a0a0a;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 4px 16px rgba(0, 0, 0, 0.3);
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-metal-yellow:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 6px 22px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Teal-frame cards: teal border acting as a 3D frame + heavy shadow + inset glow.
+   Unlayered so it reliably frames every shadcn Card; border stays subtle (~30%). */
+.dark [data-slot="card"] {
+  border: 1.5px solid rgba(45, 156, 132, 0.3);
+  border-radius: 14px;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.5),
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(45, 156, 132, 0.1);
+  transition:
+    border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeInUp 0.6s ease-out both;
+}
+.dark [data-slot="card"]:hover {
+  border-color: rgba(58, 184, 158, 0.55);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 14px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(58, 184, 158, 0.16);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 3% fractal-noise grain across the whole UI. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }

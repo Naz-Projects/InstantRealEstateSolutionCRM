@@ -41,8 +41,8 @@ export function AppSidebar() {
 				</SidebarMenuButton>
 			</SidebarHeader>
 			<SidebarContent>
-				<SidebarGroup>
-					<SidebarMenu>
+				<SidebarGroup className="px-3 py-4">
+					<SidebarMenu className="gap-2">
 						{items.map((item) => {
 							const isActive =
 								item.path === "/"
@@ -52,6 +52,7 @@ export function AppSidebar() {
 								<SidebarMenuItem key={item.path}>
 									<SidebarMenuButton
 										asChild
+										className="h-10 gap-3 rounded-lg px-3 text-[0.9rem] transition-all duration-300"
 										isActive={isActive}
 										tooltip={item.title}
 									>
