@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { Calculator, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { Calculator, ChevronsUpDown, Home, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
@@ -309,6 +309,17 @@ export function FlipAnalyzer() {
 
 function AnalysisEditor({ analysis }: { analysis: Analysis }) {
   const update = useMutation(api.flipData.updateAnalysis);
+  const pullComps = useAction(api.compsActions.pullComps);
+  const [pulling, setPulling] = useState(false);
+  const [showComps, setShowComps] = useState(false);
+  const doPull = async () => {
+    setPulling(true);
+    try {
+      await pullComps({ id: analysis._id });
+    } finally {
+      setPulling(false);
+    }
+  };
   const [sqft, setSqft] = useState(analysis.sqft?.toString() ?? "");
   const [arv, setArv] = useState(analysis.arv?.toString() ?? "");
   const [purchase, setPurchase] = useState(analysis.purchasePrice?.toString() ?? "");
@@ -404,6 +415,80 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
             Contingency %
             <input className={inputCls} value={cont} onChange={(e) => setCont(e.target.value)} />
           </label>
+        </div>
+
+        {/* Comps → suggested ARV */}
+        <div className="rounded-lg border border-border/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-foreground">ARV from sold comps</span>
+            <button
+              onClick={doPull}
+              disabled={pulling}
+              className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-teal disabled:opacity-50"
+            >
+              {pulling ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Home className="h-3.5 w-3.5" />}
+              {analysis.compsPulledAt ? "Refresh comps" : "Pull comps"}
+            </button>
+          </div>
+
+          {analysis.suggestedArv != null && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-teal-glow">
+                Comp value ~{fmtMoney(analysis.suggestedArv)}
+                {analysis.suggestedPricePerSqft != null &&
+                  ` · median $${Math.round(analysis.suggestedPricePerSqft)}/sqft`}
+                {" · "}
+                {analysis.comps?.length ?? 0} comps · adjust up for reno
+              </span>
+              <button
+                onClick={() => setArv(String(analysis.suggestedArv))}
+                className="rounded-md border border-teal px-2 py-0.5 text-teal-glow hover:bg-muted"
+              >
+                Use as ARV
+              </button>
+            </div>
+          )}
+          {analysis.compsError && (
+            <p className="mt-2 text-xs text-amber-400">{analysis.compsError}</p>
+          )}
+          {analysis.comps && analysis.comps.length > 0 && (
+            <>
+              <button
+                onClick={() => setShowComps((s) => !s)}
+                className="mt-2 text-xs text-teal-glow hover:underline"
+              >
+                {showComps ? "Hide" : "Show"} {analysis.comps.length} comps
+              </button>
+              {showComps && (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-muted-foreground">
+                      <tr>
+                        <th className="py-1 pr-2">Address</th>
+                        <th className="py-1 pr-2">Sold</th>
+                        <th className="py-1 pr-2 text-right">Price</th>
+                        <th className="py-1 pr-2 text-right">Bd/Ba</th>
+                        <th className="py-1 pr-2 text-right">Sqft</th>
+                        <th className="py-1 text-right">$/sqft</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysis.comps.map((c, i) => (
+                        <tr key={i} className="border-t border-border/40">
+                          <td className="py-1 pr-2">{c.address}</td>
+                          <td className="py-1 pr-2 text-muted-foreground">{c.soldDate}</td>
+                          <td className="py-1 pr-2 text-right">{fmtMoney(c.soldPrice)}</td>
+                          <td className="py-1 pr-2 text-right">{c.beds ?? "—"}/{c.baths ?? "—"}</td>
+                          <td className="py-1 pr-2 text-right">{c.sqft ?? "—"}</td>
+                          <td className="py-1 text-right">{c.pricePerSqft ? "$" + Math.round(c.pricePerSqft) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <button

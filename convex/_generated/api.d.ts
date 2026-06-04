@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as compsActions from "../compsActions.js";
 import type * as crons from "../crons.js";
 import type * as flipData from "../flipData.js";
 import type * as geocodeActions from "../geocodeActions.js";
@@ -31,6 +32,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  compsActions: typeof compsActions;
   crons: typeof crons;
   flipData: typeof flipData;
   geocodeActions: typeof geocodeActions;

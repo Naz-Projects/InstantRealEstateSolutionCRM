@@ -89,9 +89,19 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     header blended `bg-card`→`bg-background`; native property `<select>` → shadcn **Popover+Command** combobox
     with type-to-filter autocomplete, height matched to the manual-address input (added `popover`/`command`/`dialog`
     ui components + `cmdk` dep). Build clean, 54 tests pass; pushed → Cloudflare deploy.
+  - [x] **ARV from comps (2026-06-03)** — "Pull comps" button scrapes recent **Redfin** sold listings near the
+    property (Firecrawl, on demand), parses them (`src/scraper/comps.ts` +10 tests), computes a suggested ARV
+    (median $/sqft × subject sqft), caches on the row, and **"Use as ARV"** pre-fills the ARV field. New
+    `convex/compsActions.ts` (`pullComps`, gated by `getCallerInternal`) + `flipAnalyses` comp fields +
+    `getAnalysisInternal`/`storeComps`. Additive (no sheriff/legal/`deal.ts` change). Subagent-driven + TDD;
+    independently reviewed (APPROVED; fixed: surface "no comps" + show median $/sqft). 64 tests pass. **MERGED to
+    `main` + pushed** (CF build `convex deploy --cmd` deploys comps backend to prod + frontend; key fixed).
+    Spec/plan: `docs/superpowers/{specs,plans}/2026-06-03-arv-from-comps*`. Security note: pullComps uses the same
+    shared-team auth as the other flipData mutations (any member acts on any analysis by design — no per-user
+    ownership; flagged IDOR is not applicable, see chat). Comp-selection ±30% sqft / beds ±1; Redfin `sold-6mo`.
   - [ ] **Then manually smoke-test `/flip` on prod** (create from a Sheriff + a Legal listing + a manual address;
-    edit ARV/rehab/sqft/assumptions → live MAO/profit/ROI/grade; save/reopen/delete; check sidebar logo + combobox
-    render) — unit-tested + reviewed but never clicked through in a running app.
+    edit ARV/rehab/sqft/assumptions → live MAO/profit/ROI/grade; **Pull comps → Use as ARV**; save/reopen/delete;
+    check sidebar logo + combobox render) — unit-tested + reviewed but never clicked through in a running app.
 
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).

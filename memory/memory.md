@@ -156,6 +156,14 @@ holding/selling). Live outputs: **MAO (70% rule)**, profit, ROI, annualized ROI,
   (`CONVEX_DEPLOY_KEY` there is the **dev** key). UI polish (2026-06-03): removed the centered top-bar logo, full
   sidebar logo (replaced the cut `ires-icon.png` with `ires-logo-onnavy.png`, hidden when collapsed), Flip header
   blended to `bg-background`, searchable combobox. **[TODO: live smoke-test `/flip` on prod.]**
+- **ARV from comps (2026-06-03, shipped):** a "Pull comps" button scrapes recent **Redfin** `sold-6mo` listings near
+  the property (Firecrawl, on demand), parses them (`src/scraper/comps.ts`: `parseRedfinComps`/`selectComps`/
+  `suggestArv`, +10 tests), computes a suggested ARV (median $/sqft × subject sqft), caches on the row, and **"Use
+  as ARV"** pre-fills the ARV field (you adjust up for reno). New `convex/compsActions.ts` (`pullComps`, gated) +
+  `flipAnalyses` comp fields + `flipData.getAnalysisInternal`/`storeComps`. Additive; reviewed (APPROVED). The
+  comps/analyses are **shared-team** (any member acts on any analysis — same auth model as the other flipData
+  mutations; the automated IDOR flag does not apply). Build-vs-buy: chose **scrape** over RentCast/ATTOM. Merged +
+  pushed (CF `convex deploy --cmd` deploys backend+frontend). Docs: `docs/superpowers/{specs,plans}/2026-06-03-arv-from-comps*`.
 
 ## Status (current — 2026-06-02) — LIVE IN PRODUCTION
 - **Prod is live:** **https://crm.instantrealestatesolution.com** (Cloudflare Workers project

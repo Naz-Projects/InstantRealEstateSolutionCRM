@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
@@ -216,5 +216,42 @@ export const deleteAnalysis = mutation({
   handler: async (ctx, { id }) => {
     await requireUser(ctx);
     await ctx.db.delete(id);
+  },
+});
+
+// Raw analysis row for the comps action (no auth — the action gates the caller itself).
+export const getAnalysisInternal = internalQuery({
+  args: { id: v.id("flipAnalyses") },
+  handler: async (ctx, { id }) => ctx.db.get(id),
+});
+
+// Store scraped comps + suggested ARV (called by the pullComps action).
+export const storeComps = internalMutation({
+  args: {
+    id: v.id("flipAnalyses"),
+    comps: v.array(
+      v.object({
+        address: v.string(),
+        soldDate: v.string(),
+        soldPrice: v.number(),
+        beds: v.optional(v.number()),
+        baths: v.optional(v.number()),
+        sqft: v.optional(v.number()),
+        pricePerSqft: v.optional(v.number()),
+      }),
+    ),
+    suggestedArv: v.optional(v.number()),
+    suggestedPricePerSqft: v.optional(v.number()),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, a) => {
+    await ctx.db.patch(a.id, {
+      comps: a.comps,
+      suggestedArv: a.suggestedArv,
+      suggestedPricePerSqft: a.suggestedPricePerSqft,
+      compsError: a.error,
+      compsPulledAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   },
 });
