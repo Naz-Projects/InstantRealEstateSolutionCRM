@@ -6,6 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { GRADE_COLOR } from "./Properties";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function fmtMoney(n: number | null | undefined): string {
   return n === null || n === undefined ? "—" : "$" + Math.round(n).toLocaleString("en-US");
@@ -217,14 +218,17 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
               {p.dealType}
             </span>
             <div className="grid grid-cols-2 gap-3">
-              <label className="block text-xs text-muted-foreground">
-                Status
-                <select className={inputCls} value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-                  {STATUS_OPTIONS[p.dealType].map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </label>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Status</label>
+                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS[p.dealType].map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <label className="block text-xs text-muted-foreground">
                 Purchase price ($)
                 <input className={inputCls} value={purchase} onChange={(e) => setPurchase(e.target.value)} />
@@ -334,14 +338,17 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
                   </button>
                 ))}
               </div>
-              <label className="block text-xs text-muted-foreground">
-                Category
-                <select className={inputCls} value={cat} onChange={(e) => setCat(e.target.value)}>
-                  {cats.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </label>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Category</label>
+                <Select value={cat} onValueChange={setCat}>
+                  <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {cats.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <label className="block text-xs text-muted-foreground">
                 Amount ($)
                 <input className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} />

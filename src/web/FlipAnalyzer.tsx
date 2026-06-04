@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/command";
 import { DEAL_STAGES, STAGE_LABEL, type DealStage } from "./dealStages";
 import { AddressAutocomplete } from "./AddressAutocomplete";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   estimateRehab,
   computeFlip,
@@ -273,15 +274,17 @@ export function FlipAnalyzer() {
                     {GRADE_LABEL[a.metrics.grade]}
                   </td>
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    <select
+                    <Select
                       value={a.dealStatus}
-                      onChange={(e) => setStatus({ id: a._id, dealStatus: e.target.value as DealStage })}
-                      className="rounded-md border border-border bg-card px-2 py-1 text-xs focus:border-primary focus:outline-none"
+                      onValueChange={(v) => setStatus({ id: a._id, dealStatus: v as DealStage })}
                     >
-                      {DEAL_STAGES.map((s) => (
-                        <option key={s} value={s}>{STAGE_LABEL[s]}</option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DEAL_STAGES.map((s) => (
+                          <SelectItem key={s} value={s}>{STAGE_LABEL[s]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </td>
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     <button
@@ -395,15 +398,18 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
             Sqft
             <input className={inputCls} placeholder="for tiered rehab" value={sqft} onChange={(e) => setSqft(e.target.value)} />
           </label>
-          <label className="block text-xs text-muted-foreground">
-            Rehab tier
-            <select className={inputCls} value={tier} onChange={(e) => onTier(e.target.value as RehabTier)}>
-              {(["cosmetic", "moderate", "gut"] as const).map((t) => (
-                <option key={t} value={t}>{REHAB_TIERS[t].label} ({REHAB_TIERS[t].range})</option>
-              ))}
-              <option value="custom">Custom</option>
-            </select>
-          </label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Rehab tier</label>
+            <Select value={tier} onValueChange={(v) => onTier(v as RehabTier)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(["cosmetic", "moderate", "gut"] as const).map((t) => (
+                  <SelectItem key={t} value={t}>{REHAB_TIERS[t].label} ({REHAB_TIERS[t].range})</SelectItem>
+                ))}
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <label className="block text-xs text-muted-foreground">
             $/sqft
             <input className={inputCls} value={perSqft} onChange={(e) => { setPerSqft(e.target.value); setTier("custom"); }} />

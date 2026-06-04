@@ -16,6 +16,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { AddressAutocomplete } from "./AddressAutocomplete";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function fmtMoney(n: number | null | undefined): string {
   return n === null || n === undefined ? "—" : "$" + Math.round(n).toLocaleString("en-US");
@@ -34,9 +35,6 @@ export const STATUS_LABEL: Record<string, string> = {
   active: "Active",
   vacant: "Vacant",
 };
-
-const inputCls =
-  "w-full rounded-md border border-border bg-card px-2 py-1 text-sm focus:border-primary focus:outline-none";
 
 type DealType = "flip" | "rental";
 type Candidate = { id: string; address: string };
@@ -224,17 +222,16 @@ export function Properties() {
       <div className="space-y-6 p-6">
         {showAdd && (
           <div className="flex flex-wrap items-end gap-4 rounded-xl border border-border bg-card p-4">
-            <label className="block text-xs text-muted-foreground">
-              Type
-              <select
-                className={inputCls}
-                value={dealType}
-                onChange={(e) => setDealType(e.target.value as DealType)}
-              >
-                <option value="flip">Flip</option>
-                <option value="rental">Rental</option>
-              </select>
-            </label>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Type</label>
+              <Select value={dealType} onValueChange={(v) => setDealType(v as DealType)}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flip">Flip</SelectItem>
+                  <SelectItem value="rental">Rental</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">From an existing record</label>
               <div className="flex gap-2">

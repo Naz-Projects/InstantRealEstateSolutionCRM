@@ -48,6 +48,7 @@ function Inner({ value, onChange, placeholder, className }: Props) {
   const [input, setInput] = useState(value);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
+  const serviceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const tokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -55,31 +56,33 @@ function Inner({ value, onChange, placeholder, className }: Props) {
   useEffect(() => setInput(value), [value]);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
-  const fetchSuggestions = async (text: string) => {
-    // The "New" Places Data API; guard so an older Maps key/SDK degrades to free-text.
-    const AS = (places as unknown as { AutocompleteSuggestion?: { fetchAutocompleteSuggestions: (req: unknown) => Promise<{ suggestions?: unknown[] }> } } | null)?.AutocompleteSuggestion;
-    if (!places || !text.trim() || !AS?.fetchAutocompleteSuggestions) {
+  // Uses the legacy Places Autocomplete service (getPlacePredictions), which matches
+  // the "Places API" enabled on the IRES Maps key. Guarded so a missing library
+  // degrades to free-text. A session token groups keystrokes for billing.
+  const fetchSuggestions = (text: string) => {
+    if (!places?.AutocompleteService || !text.trim()) {
       setSuggestions([]);
       return;
     }
-    if (!tokenRef.current) {
-      tokenRef.current = new places.AutocompleteSessionToken();
-    }
-    try {
-      const res = await AS.fetchAutocompleteSuggestions({
+    if (!serviceRef.current) serviceRef.current = new places.AutocompleteService();
+    if (!tokenRef.current) tokenRef.current = new places.AutocompleteSessionToken();
+    serviceRef.current.getPlacePredictions(
+      {
         input: text,
         sessionToken: tokenRef.current,
-        includedRegionCodes: ["us"],
-      });
-      const out: Suggestion[] = (res.suggestions ?? [])
-        .map((s) => (s as { placePrediction?: { placeId?: string; text?: { toString(): string } } }).placePrediction)
-        .filter((p): p is NonNullable<typeof p> => Boolean(p))
-        .map((p) => ({ id: p.placeId ?? p.text?.toString() ?? "", text: p.text?.toString() ?? "" }))
-        .filter((s) => s.text.length > 0);
-      setSuggestions(out);
-    } catch {
-      setSuggestions([]);
-    }
+        componentRestrictions: { country: "us" },
+        types: ["address"],
+      },
+      (predictions, status) => {
+        if (status !== places.PlacesServiceStatus.OK || !predictions) {
+          setSuggestions([]);
+          return;
+        }
+        setSuggestions(
+          predictions.map((p) => ({ id: p.place_id, text: p.description })),
+        );
+      },
+    );
   };
 
   const onType = (text: string) => {
@@ -87,7 +90,7 @@ function Inner({ value, onChange, placeholder, className }: Props) {
     onChange(text); // free-text always propagates
     setOpen(true);
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => void fetchSuggestions(text), 250);
+    timerRef.current = setTimeout(() => fetchSuggestions(text), 250);
   };
 
   const pick = (text: string) => {

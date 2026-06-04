@@ -17,6 +17,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { DEAL_STAGES, STAGE_LABEL, type DealStage } from "./dealStages";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyMap, type MapPoint } from "./PropertyMap";
 import { ScrapeProgress } from "./ScrapeProgress";
 const ERROR_VALUES = new Set([
@@ -132,17 +133,16 @@ function ZillowCell({ url }: { url: string }) {
 
 function DealSelect({ value, onChange }: { value: DealStage; onChange: (s: DealStage) => void }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as DealStage)}
-      className="rounded-md border border-border bg-card px-2 py-1 text-xs focus:border-primary focus:outline-none"
-    >
-      {DEAL_STAGES.map((s) => (
-        <option key={s} value={s}>
-          {STAGE_LABEL[s]}
-        </option>
-      ))}
-    </select>
+    <Select value={value} onValueChange={(v) => onChange(v as DealStage)}>
+      <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {DEAL_STAGES.map((s) => (
+          <SelectItem key={s} value={s}>
+            {STAGE_LABEL[s]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

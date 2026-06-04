@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { UserPlus, Loader2, Check, Mail, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { errMsg } from "./errMsg";
 
 export function InviteUserDialog() {
@@ -77,10 +78,13 @@ export function InviteUserDialog() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-foreground">Role</label>
-                  <select value={role} onChange={(e) => setRole(e.target.value as "admin" | "member")} className={input}>
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  <Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Member</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</div>}
                 <div className="flex justify-end gap-2">

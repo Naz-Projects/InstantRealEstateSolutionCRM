@@ -148,6 +148,18 @@ body,
   h4 {
     letter-spacing: -0.02em;
   }
+  /* Anything interactive shows a pointer so it reads as clickable. Explicit
+     cursor-* utilities still override this (base layer < utilities). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  label[for],
+  summary,
+  select:not(:disabled),
+  [data-slot="select-trigger"],
+  [data-slot="dropdown-menu-trigger"] {
+    cursor: pointer;
+  }
 }
 
 /* ── Signature styles ───────────────────────────────────────────────────── */

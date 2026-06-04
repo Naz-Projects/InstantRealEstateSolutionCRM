@@ -3,6 +3,7 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Loader2, Trash2, ShieldAlert } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InviteUserDialog } from "./InviteUserDialog";
 import { errMsg } from "./errMsg";
 
@@ -15,21 +16,26 @@ function RoleSelect({ userId, role, isSelf }: { userId: Id<"users">; role: strin
   const [saveErr, setSaveErr] = useState("");
   return (
     <span className="inline-flex items-center gap-1.5">
-      <select
+      <Select
         value={role}
         disabled={saving || isSelf}
-        title={isSelf ? "Cannot change your own role" : "Change role"}
-        onChange={async (e) => {
-          const next = e.target.value as "admin" | "member";
+        onValueChange={async (next) => {
           if (next === role) return;
           setSaving(true); setSaveErr("");
-          try { await setUserRole({ userId, role: next }); } catch (err) { setSaveErr(errMsg(err, "Failed to change role")); } finally { setSaving(false); }
+          try { await setUserRole({ userId, role: next as "admin" | "member" }); } catch (err) { setSaveErr(errMsg(err, "Failed to change role")); } finally { setSaving(false); }
         }}
-        className="rounded-md border border-border px-2 py-0.5 text-xs font-semibold capitalize disabled:opacity-60"
       >
-        <option value="member">Member</option>
-        <option value="admin">Admin</option>
-      </select>
+        <SelectTrigger
+          className="h-7 w-28 text-xs font-semibold capitalize"
+          title={isSelf ? "Cannot change your own role" : "Change role"}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="member">Member</SelectItem>
+          <SelectItem value="admin">Admin</SelectItem>
+        </SelectContent>
+      </Select>
       {saving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
       {saveErr && <span className="text-xs text-red-400">{saveErr}</span>}
     </span>
