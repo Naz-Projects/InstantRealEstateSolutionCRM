@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Home, RefreshCw, Trash2, Plus, ExternalLink } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { GRADE_COLOR } from "./Properties";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 function fmtMoney(n: number | null | undefined): string {
   return n === null || n === undefined ? "—" : "$" + Math.round(n).toLocaleString("en-US");
@@ -87,8 +88,11 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
     delEntry: useMutation(api.propertyData.deleteLedgerEntry),
     delProperty: useMutation(api.propertyData.deleteProperty),
   };
+  const navigate = useNavigate();
   const p = data;
   const s = data.summary;
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // facts form
   const [status, setStatus] = useState(p.status);
@@ -292,9 +296,7 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
                 {savedFacts ? "Saved" : "Save"}
               </button>
               <button
-                onClick={() => {
-                  if (confirm("Delete this property and all its ledger entries?")) void m.delProperty({ id: pid });
-                }}
+                onClick={() => setConfirmDelete(true)}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-400"
               >
                 <Trash2 className="h-4 w-4" /> Delete
@@ -430,6 +432,19 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete this property?"
+        description="This permanently removes the property and all its ledger entries. This cannot be undone."
+        confirmLabel="Delete property"
+        destructive
+        onConfirm={async () => {
+          await m.delProperty({ id: pid });
+          await navigate({ to: "/properties" });
+        }}
+      />
     </div>
   );
 }

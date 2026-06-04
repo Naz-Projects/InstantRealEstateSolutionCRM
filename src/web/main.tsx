@@ -13,11 +13,47 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { routeTree } from "./app";
 import { AcceptInvite } from "./admin/AcceptInvite";
+import { AppErrorBoundary } from "./ErrorBoundary";
 import { errMsg } from "./admin/errMsg";
 import "./index.css";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
+
+// Last-resort global logger: anything that escapes a try/catch or an unhandled
+// promise rejection still lands on the Admin → Error Log. Best-effort and
+// loop-proof (the .catch swallows logging failures); transient browser/library
+// noise is filtered and identical errors are de-duped within a short window.
+const IGNORE_ERROR =
+  /ResizeObserver|AbortError|Load failed|Failed to fetch|NetworkError|Non-Error promise rejection/i;
+let lastKey = "";
+let lastAt = 0;
+function logUncaught(message: string, stack: string | undefined, context: string) {
+  if (!message || IGNORE_ERROR.test(message)) return;
+  const now = Date.now();
+  const key = context + ":" + message;
+  if (key === lastKey && now - lastAt < 10000) return; // de-dupe storms
+  lastKey = key;
+  lastAt = now;
+  void convex
+    .mutation(api.errors.logError, {
+      message: message.slice(0, 2000),
+      source: "uncaught" as const,
+      context,
+      route: window.location.pathname,
+      stack: stack?.slice(0, 4000),
+      userAgent: navigator.userAgent,
+    })
+    .catch(() => {});
+}
+window.addEventListener("error", (e) => {
+  logUncaught(e.message || String(e.error ?? ""), (e.error as Error | undefined)?.stack, "window.error");
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason as { data?: { message?: string }; message?: string; stack?: string } | undefined;
+  const msg = r?.data?.message || r?.message || String(r ?? "");
+  logUncaught(msg, r?.stack, "unhandledrejection");
+});
 
 const router = createRouter({ routeTree });
 declare module "@tanstack/react-router" {
@@ -76,7 +112,11 @@ function AuthedApp() {
       </div>
     );
   }
-  return <RouterProvider router={router} />;
+  return (
+    <AppErrorBoundary>
+      <RouterProvider router={router} />
+    </AppErrorBoundary>
+  );
 }
 
 const onAcceptInvite = window.location.pathname.startsWith("/accept-invite");

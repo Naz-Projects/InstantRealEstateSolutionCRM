@@ -20,6 +20,8 @@ import { DEAL_STAGES, STAGE_LABEL, type DealStage } from "./dealStages";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyMap, type MapPoint } from "./PropertyMap";
 import { ScrapeProgress } from "./ScrapeProgress";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { reportHandledError } from "./lib/errorReporting";
 const ERROR_VALUES = new Set([
   "PENDING", "NOT FOUND", "SCRAPE FAILED", "NO ADDRESS", "WRONG STATE", "NO PARCEL", "NO STATE", "BAD ADDRESS",
 ]);
@@ -336,8 +338,10 @@ export function SheriffSales() {
   const startScrape = useMutation(api.sheriffData.startScrape);
   const retryFailed = useMutation(api.sheriffData.retryFailed);
   const setDeal = useMutation(api.sheriffData.setDealStatus);
+  const logError = useMutation(api.errors.logError);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [confirmForce, setConfirmForce] = useState(false);
   const [sort, setSort] = useState<SortState>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -385,7 +389,7 @@ export function SheriffSales() {
       await startGeocode({ type: "sheriff" });
       setMsg("Geocoding started — pins will appear as addresses resolve.");
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     } finally {
       setGeocoding(false);
     }
@@ -428,7 +432,7 @@ export function SheriffSales() {
             : "Nothing to retry.",
       );
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     }
   };
 
@@ -443,27 +447,20 @@ export function SheriffSales() {
           : "Scrape started — follow the live progress below.",
       );
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     } finally {
       setBusy(false);
     }
   };
 
-  const onForce = async () => {
-    if (
-      !window.confirm(
-        "Force re-scrape will DELETE this month's existing rows — including their deal status and notes — and pull a fresh set. Continue?",
-      )
-    ) {
-      return;
-    }
+  const doForce = async () => {
     setBusy(true);
     setMsg(null);
     try {
       await startScrape({ force: true });
       setMsg("Force re-scrape started — replacing this month. Follow the live progress below.");
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     } finally {
       setBusy(false);
     }
@@ -478,7 +475,7 @@ export function SheriffSales() {
           <ScrapeMenu
             label="Scrape This Month's Sheriff Sales"
             onScrape={onScrape}
-            onForce={onForce}
+            onForce={() => setConfirmForce(true)}
             onRetry={onRetry}
             busy={busy}
             failedCount={failedCount}
@@ -487,6 +484,15 @@ export function SheriffSales() {
       />
       <div className="p-6">
         {msg && <div className="mb-4 rounded-lg bg-blue-500/10 px-4 py-2 text-sm text-blue-300">{msg}</div>}
+        <ConfirmDialog
+          open={confirmForce}
+          onOpenChange={setConfirmForce}
+          title="Force re-scrape this month?"
+          description="This DELETES this month's existing rows — including their deal status and notes — and pulls a fresh set from the county."
+          confirmLabel="Force re-scrape"
+          destructive
+          onConfirm={doForce}
+        />
         <ScrapeProgress type="sheriff" />
         {months === undefined ? (
           <Loading />
@@ -615,8 +621,10 @@ export function LegalNotices() {
   const startScrape = useMutation(api.legalData.startScrape);
   const retryFailed = useMutation(api.legalData.retryFailed);
   const setDeal = useMutation(api.legalData.setDealStatus);
+  const logError = useMutation(api.errors.logError);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [confirmForce, setConfirmForce] = useState(false);
   const [sort, setSort] = useState<SortState>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -663,7 +671,7 @@ export function LegalNotices() {
       await startGeocode({ type: "legal" });
       setMsg("Geocoding started — pins will appear as addresses resolve.");
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     } finally {
       setGeocoding(false);
     }
@@ -703,7 +711,7 @@ export function LegalNotices() {
             : "Nothing to retry.",
       );
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     }
   };
 
@@ -718,27 +726,20 @@ export function LegalNotices() {
           : "Scrape started — follow the live progress below.",
       );
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     } finally {
       setBusy(false);
     }
   };
 
-  const onForce = async () => {
-    if (
-      !window.confirm(
-        "Force re-scrape will DELETE this week's existing rows — including their deal status and notes — and pull a fresh set. Continue?",
-      )
-    ) {
-      return;
-    }
+  const doForce = async () => {
     setBusy(true);
     setMsg(null);
     try {
       await startScrape({ force: true });
       setMsg("Force re-scrape started — replacing this week. Follow the live progress below.");
     } catch (e) {
-      setMsg("Error: " + (e as Error).message);
+      setMsg(reportHandledError(logError, e, "scrapeAction"));
     } finally {
       setBusy(false);
     }
@@ -753,7 +754,7 @@ export function LegalNotices() {
           <ScrapeMenu
             label="Scrape This Week's Legal Notices"
             onScrape={onScrape}
-            onForce={onForce}
+            onForce={() => setConfirmForce(true)}
             onRetry={onRetry}
             busy={busy}
             failedCount={failedCount}
@@ -762,6 +763,15 @@ export function LegalNotices() {
       />
       <div className="p-6">
         {msg && <div className="mb-4 rounded-lg bg-blue-500/10 px-4 py-2 text-sm text-blue-300">{msg}</div>}
+        <ConfirmDialog
+          open={confirmForce}
+          onOpenChange={setConfirmForce}
+          title="Force re-scrape this week?"
+          description="This DELETES this week's existing rows — including their deal status and notes — and pulls a fresh set from the county."
+          confirmLabel="Force re-scrape"
+          destructive
+          onConfirm={doForce}
+        />
         <ScrapeProgress type="legal" />
         {weeks === undefined ? (
           <Loading />

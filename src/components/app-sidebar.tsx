@@ -18,6 +18,8 @@ export function AppSidebar() {
 	const me = useQuery(api.users.currentUser);
 	const isAdmin = me?.role === "admin";
 	const items = navItems.filter((item) => !item.adminOnly || isAdmin);
+	// Unresolved-error count badge on the Admin item (admins only; skip for members).
+	const unresolved = useQuery(api.errors.unresolvedCount, isAdmin ? {} : "skip");
 
 	return (
 		<Sidebar collapsible="icon" variant="inset">
@@ -52,6 +54,11 @@ export function AppSidebar() {
 										<Link to={item.path}>
 											<item.icon />
 											<span>{item.title}</span>
+											{item.path === "/admin" && !!unresolved && (
+												<span className="ml-auto rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-400 group-data-[collapsible=icon]:hidden">
+													{unresolved}
+												</span>
+											)}
 										</Link>
 									</SidebarMenuButton>
 								</SidebarMenuItem>

@@ -268,4 +268,26 @@ export default defineSchema({
     createdBy: v.string(),
     createdAt: v.number(),
   }).index("by_property", ["propertyId"]),
+
+  // Captured application errors surfaced on the Admin → Error Log page. Written
+  // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
+  // failures), and autonomous backend actions (cron). Admins triage + resolve.
+  errorLogs: defineTable({
+    message: v.string(), // human-readable summary (real wording, never raw code)
+    source: v.union(
+      v.literal("boundary"), // React render crash caught by the ErrorBoundary
+      v.literal("handled"),  // a caught failure from a user action (mutation/action)
+      v.literal("uncaught"), // a window error / unhandled promise rejection
+      v.literal("server"),   // an autonomous backend/cron failure (no UI to show it)
+    ),
+    severity: v.union(v.literal("error"), v.literal("warning")),
+    context: v.optional(v.string()),        // where it happened, e.g. "startScrape"
+    route: v.optional(v.string()),          // window.location.pathname
+    stack: v.optional(v.string()),          // truncated technical detail
+    componentStack: v.optional(v.string()), // React component stack (boundary only)
+    userEmail: v.optional(v.string()),      // stamped server-side from the caller
+    userAgent: v.optional(v.string()),
+    resolved: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_resolved", ["resolved"]),
 });

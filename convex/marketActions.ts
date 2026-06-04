@@ -75,6 +75,16 @@ export const refreshMarketData = internalAction({
       }
     }
 
+    // Autonomous cron: if EVERY series failed, no one would ever see it (no UI).
+    // Surface it on the Admin → Error Log so a dead FRED_API_KEY / outage is visible.
+    if (updated === 0 && FRED_SERIES.length > 0) {
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: `Market data refresh updated 0 of ${FRED_SERIES.length} series — all skipped (check FRED_API_KEY or FRED availability).`,
+        context: "refreshMarketData",
+        severity: "warning",
+      });
+    }
+
     return { updated, skipped };
   },
 });
