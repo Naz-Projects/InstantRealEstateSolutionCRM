@@ -17,6 +17,8 @@ import type * as invitations from "../invitations.js";
 import type * as legalActions from "../legalActions.js";
 import type * as legalData from "../legalData.js";
 import type * as lib_getAuthUser from "../lib/getAuthUser.js";
+import type * as propertyActions from "../propertyActions.js";
+import type * as propertyData from "../propertyData.js";
 import type * as runs from "../runs.js";
 import type * as sheriffActions from "../sheriffActions.js";
 import type * as sheriffData from "../sheriffData.js";
@@ -38,6 +40,8 @@ declare const fullApi: ApiFromModules<{
   legalActions: typeof legalActions;
   legalData: typeof legalData;
   "lib/getAuthUser": typeof lib_getAuthUser;
+  propertyActions: typeof propertyActions;
+  propertyData: typeof propertyData;
   runs: typeof runs;
   sheriffActions: typeof sheriffActions;
   sheriffData: typeof sheriffData;
