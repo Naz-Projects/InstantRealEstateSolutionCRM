@@ -103,6 +103,25 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     edit ARV/rehab/sqft/assumptions → live MAO/profit/ROI/grade; **Pull comps → Use as ARV**; save/reopen/delete;
     check sidebar logo + combobox render) — unit-tested + reviewed but never clicked through in a running app.
 
+## ✅ Shipped — Properties / Portfolio (owned-asset management, 2026-06-03)
+- [x] **Properties section** — new `/properties` list (card grid, filter All/Flips/Rentals) + `/properties/$id`
+  detail page for houses IRES **owns** (distinct from the scrapers that *find* deals and the Flip Analyzer that
+  *projects* them — this tracks **actuals**). Each property is a **flip** or **rental**; track a unified
+  **expense + income ledger** (`propertyLedger`, `direction:expense|income`, date-stamped); flips run to **sale**
+  (realized profit + ROI); rentals show net cash flow. Add manually OR **seed from** a Sheriff/Legal listing or a
+  saved Flip Analysis. House **photo from Zillow via Firecrawl** (`extractImageUrl`), with a **Google Street View**
+  fallback for off-market houses (spike found most distressed/owned properties have no Zillow listing photo) +
+  placeholder + manual paste-URL. New `properties` + `propertyLedger` tables, pure `src/scraper/portfolio.ts`
+  (tested), `convex/propertyData.ts` + `convex/propertyActions.ts`. **Additive** — zero changes to sheriff/legal/
+  flip/comps pipelines (final review confirmed). Built subagent-driven + TDD in an **isolated git worktree**
+  (parallel to the ARV-from-comps session). 75 tests pass, build clean, 4-stage review + final opus review
+  (READY TO MERGE). **MERGED to `main` + pushed → prod.** Spec/plan: `docs/superpowers/{specs,plans}/2026-06-03-properties-portfolio*`.
+  - [ ] **Manually smoke-test `/properties` on prod** (add manual flip + rental; seed from a Sheriff listing;
+    confirm photo appears or placeholder+paste works; add expense & income ledger entries; mark a flip sold →
+    profit/ROI; delete) — unit-tested + reviewed + render-screenshotted, but never clicked through live.
+  - [ ] **Confirm prod `GOOGLE_GEOCODING_API_KEY` has Street View Static enabled** (pending key-rotation punch-list
+    item) — until then, off-market property photos fall back to the placeholder (paste-URL still works).
+
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).
 - [ ] **Dashboard charts** — deals per stage per month, equity in pipeline, run-history trend.

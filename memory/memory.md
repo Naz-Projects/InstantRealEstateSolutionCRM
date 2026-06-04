@@ -165,6 +165,27 @@ holding/selling). Live outputs: **MAO (70% rule)**, profit, ROI, annualized ROI,
   mutations; the automated IDOR flag does not apply). Build-vs-buy: chose **scrape** over RentCast/ATTOM. Merged +
   pushed (CF `convex deploy --cmd` deploys backend+frontend). Docs: `docs/superpowers/{specs,plans}/2026-06-03-arv-from-comps*`.
 
+## Properties / Portfolio (owned-asset management) — 2026-06-03
+Manage houses IRES **owns** — separate from the scrapers (*find* deals) and the Flip Analyzer (*project* deals):
+this tracks **actuals**. `/properties` (card grid, filter All/Flips/Rentals) + `/properties/$id` detail.
+- **Data:** `properties` table (`dealType` flip|rental; `status` in_progress|sold|active|vacant; facts; purchase/
+  sale; `source` provenance manual|sheriff|legal|flip; `imageUrl`/`imageStatus`; `zillowUrl`). `propertyLedger` —
+  ONE unified table, `direction:expense|income`, date-stamped (rental income = a full ledger, not a fixed rent).
+- **Math:** `src/scraper/portfolio.ts` (pure, tested) — `summarizeProperty`: flip invested→realized profit+ROI on
+  sale; rental net cash flow; grades. Computed in the query, not stored.
+- **Photo:** `extractImageUrl` in `zillow.ts` pulls a `photos.zillowstatic.com` listing photo (active listings);
+  `convex/propertyActions.ts` `scrapePropertyImage` (scheduled on create + a Refresh button) **always scrapes the
+  SEARCH URL** (homedetails 403s), and for **off-market** houses (the common case — no Zillow photo) falls back to
+  a **Google Street View Static** URL built from the address with `GOOGLE_GEOCODING_API_KEY` (the one domain-
+  restricted key; needs Street View Static enabled). Else placeholder + manual paste-URL.
+- **Backend:** `convex/propertyData.ts` (queries/mutations, all `requireUser`; `deleteProperty` cascades ledger;
+  `candidates` reads sheriff/legal/flip read-only for the seed picker). **Additive** — no change to existing pipelines.
+- **Built** subagent-driven + TDD in an **isolated git worktree** (a parallel session shipped ARV-from-comps to
+  `main` concurrently — see [[concurrent-agents-convex-isolation]] in auto-memory: use a worktree +
+  `CONVEX_AGENT_MODE=anonymous`; the second merge regenerates `_generated`). 75 tests, build clean, final review
+  READY TO MERGE. Spec/plan: `docs/superpowers/{specs,plans}/2026-06-03-properties-portfolio*`. **Pending:** live
+  prod smoke-test; confirm prod key has Street View Static enabled (else off-market photos = placeholder).
+
 ## Status (current — 2026-06-02) — LIVE IN PRODUCTION
 - **Prod is live:** **https://crm.instantrealestatesolution.com** (Cloudflare Workers project
   `instant-real-estate-solution-crm`) on Convex **prod** `pastel-crocodile-994`. Clerk **production** instance
