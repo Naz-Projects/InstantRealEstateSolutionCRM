@@ -212,4 +212,6 @@ this tracks **actuals**. `/properties` (card grid, filter All/Flips/Rentals) + `
   `CLERK_SECRET_KEY` (sk_live on prod), `CLERK_INVITE_REDIRECT_URL`. Prod = restricted sign-up + email sign-up ON.
 - **Google:** ONE domain-restricted Maps key serves BOTH the browser map AND server geocoding
   (`GOOGLE_GEOCODING_API_KEY` = same value as `VITE_GOOGLE_MAPS_API_KEY`). Enable: Maps JS + Geocoding + Street
-  View Static (not Places/Directions). Website restrictions: prod domain + `http://localhost:5173/*`.
+  View Static + **Places API (New)** (the address-autocomplete on the Properties/Flip manual-address fields uses
+  it — `AutocompleteSuggestion`, browser-side; supersedes the earlier "not Places" note, confirmed 2026-06-03).
+  Website restrictions: prod domain + `http://localhost:5173/*`.
