@@ -121,6 +121,31 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     profit/ROI; delete) — unit-tested + reviewed + render-screenshotted, but never clicked through live.
   - [ ] **Confirm prod `GOOGLE_GEOCODING_API_KEY` has Street View Static enabled** (pending key-rotation punch-list
     item) — until then, off-market property photos fall back to the placeholder (paste-URL still works).
+  - [x] **Auto-fill Zillow facts on add (2026-06-04)** — the photo scrape (`scrapePropertyImage`) now also pulls
+    **beds/baths/sqft/zestimate** from the *same* page it already fetches (no extra Firecrawl call) via new pure
+    `pickZillowFacts(md, rawHtml)` (gated on the `-DE-` homedetails match; +5 tests). New `properties.zestimate`
+    column + editable **Zestimate** box on the detail page; `applyZillowFacts` internalMutation fills **only-empty**
+    fields (never clobbers seeded/typed values). `PropertyDetail` mirrors late-arriving server facts into still-empty
+    inputs via a guarded `useEffect` (inputs are useState-seeded + keyed on `_id`, so the async scrape wouldn't show
+    otherwise — and a Save on the stale form would wipe the scraped facts). Spec:
+    `docs/superpowers/specs/2026-06-04-property-zillow-facts-design.md`. 80 tests + build + convex codegen green on dev.
+    - [ ] **Live smoke-test**: add a manual DE address → stay on detail → confirm beds/baths/sqft/Zestimate populate
+      within ~5s without a reload (folds into the broader "smoke-test /properties" item above).
+  - [x] **Add-property redesign (2026-06-04)** — the add panel is now **always visible** (removed the show/hide
+    toggle), the **two** search bars (existing-record picker + manual-address) are merged into **one** combobox
+    `src/web/PropertyPicker.tsx`, and the two `+Add`/`+Add manual` buttons are replaced by **one yellow "Add Property"**
+    button. The picker shows, in one bar: **Address suggestions** (live Google Places, reusing the legacy
+    `getPlacePredictions` logic), matching **Sheriff/Legal/Flip** records, and a **Use "…"** creatable for a brand-new
+    manual address. Built on the app's existing **Popover + Command (cmdk)** pattern (`shouldFilter={false}`, controlled
+    input) — zero new deps. Replaced the old internal `CandidateCombobox`. Favicon fix: `index.html` now points at the
+    real **`ires-logo-dark.png`** (was the generic navy box `logo.svg`). Build + 93 tests green.
+    - [ ] **Live click-through** (records + Places suggestions + creatable all select correctly; yellow button gates on a
+      selection; favicon shows the IRES mark) — tsc-verified, not yet clicked in a running app.
+  - [~] **ReUI dropdown/combobox standardization — PARKED.** User pasted `@reui/c-dropdown-menu-1` and
+    `@reui/c-combobox-1`, but ReUI ships **Base UI** components (`render` prop) while this repo is on the **radix**
+    base (`asChild`). `shadcn add @reui/c-combobox-1 --dry-run` showed it would **overwrite `button.tsx` + `separator.tsx`**
+    (app-wide Radix components) → user said don't install; built the combobox with our own Radix cmdk pattern instead.
+    The dropdown-menu standardization was dropped in favor of the combobox direction.
 
 ## ✅ Shipped — Address autocomplete + UX polish (2026-06-03)
 - [x] **Google Places address autocomplete** on the **manual address** fields of both Properties ("Add property")
@@ -137,6 +162,54 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   - [ ] **Live-test autocomplete on prod** — type an address in the Properties/Flip manual field; suggestions
     should appear. If not, the key has neither legacy nor New Places enabled (check Google Cloud).
   - [ ] (Optional) shadcn-ify the map InfoWindow select via a Radix portal-container fix, if desired.
+
+## ✅ Built — Market Data Dashboard (FRED auto-pull) — 2026-06-04, DEV-verified, NOT committed/deployed
+- [x] **Live public market data on the Dashboard, auto-refreshed monthly by cron — no clicks.** Additive: new table +
+  pure parser + action + monthly cron + dashboard widgets; zero change to Sheriff/Legal/Flip/Properties.
+  Spec: `docs/superpowers/specs/2026-06-04-market-data-dashboard-design.md`. Built TDD (RED→GREEN), 93 tests pass, build clean.
+  - **Source = FRED** (St. Louis Fed) free JSON API; key `FRED_API_KEY` **set on dev `fearless-donkey-585`** (user-provided,
+    low-risk read-only; rotate later w/ the other chat-shared keys). No-key `fredgraph.csv` fallback also coded.
+  - **Files:** `src/scraper/fred.ts` (pure: `FRED_SERIES` catalog + `parseFredJson`/`parseFredCsv`/`pickLatest`/`isFresh`;
+    +13 tests `tests/fred.test.ts`) · `convex/marketData.ts` (`upsertMetric` internalMutation + `dashboardMetrics` query,
+    `requireUser`, hides stale temperature extras via `isFresh`) · `convex/marketActions.ts` (`"use node"`
+    `refreshMarketData` internalAction, tolerant per-series, explicit return type) · `convex/schema.ts` `marketMetrics`
+    table (index `by_seriesId`) · `convex/crons.ts` monthly `"0 12 1 * *"` · `src/components/market-widgets.tsx`
+    (`MarketWidgets`: rate cards + pure-SVG sparkline, county inventory table, temperature card; neutral uncolored deltas;
+    attribution) mounted in `src/components/dashboard.tsx`.
+  - **DEV live-verified** (`refreshMarketData` → updated 9 / skipped 0): mortgage 6.53% (2026-05-28, matches independent
+    search), Fed funds 3.63%; **active listings by county** New Castle 818 / Kent 490 / Sussex 1876 / DE 3183 (2026-04);
+    median DOM 48d, median list price $500k, price cuts 1002 (DE, 2026-04). All series fresh — extras stayed visible.
+  - [ ] **Commit** (dirty tree: `convex/schema.ts` + `convex/_generated` ALSO carry the pre-existing property-zillow-facts
+    WIP — stage my hunks/files deliberately, don't sweep WIP; regen `_generated` to match whatever schema is committed).
+  - [ ] **Deploy to prod:** set `FRED_API_KEY` on prod `pastel-crocodile-994` (`CONVEX_DEPLOY_KEY_PROD … env set`), then
+    push/deploy (CF `--cmd` build deploys backend+frontend). Cron activates on prod once functions are there.
+  - [ ] **Live authenticated visual check** of the Dashboard market section (headless screenshot skipped — data layer
+    proven live; UI is type-checked + uses existing Card/Table primitives + pure-SVG sparkline, no recharts).
+  - [ ] **v2 (separate spec):** median SALE price, sale-to-list %, % price drops, **city-level Wilmington/Newark**, ZORI
+    rent → page-scrape Redfin county/city page via Firecrawl (the `comps.ts` pattern; NOT the 100MB bulk TSV).
+
+## ✅ Shipped — Security & error-logging overhaul (2026-06-04)
+- [x] **Senior-dev security/robustness pass.** Audited the whole backend (read every `convex/*Data.ts` mutation/query
+  + `users`/`invitations`/`helpers`): authorization is **solid** — every browser-callable fn gates `requireUser`, every
+  admin op re-checks `role==="admin"`, destructive `clearMonth/Week` are `internalMutation`, invite flow has TOCTOU
+  re-check + Clerk rollback + self-target guards. No injection (validators + indexed queries), no unsafe XSS sink, no
+  hardcoded secrets, SSRF surface is path-only/fixed-host. **No high/med vuln found.**
+- [x] **Error logging on the Admin page** — new `errorLogs` table + `convex/errors.ts` (`logError` requireUser-gated,
+  email stamped server-side; admin-only `listErrors`/`unresolvedCount`/`setResolved`/`clearResolved`; internal
+  `logServerError`). Admin → **Error Log** tab (resolve/reopen/clear, unresolved/all filter) + **unresolved-count
+  sidebar badge**. `logServerError` wired into `refreshMarketData` (all-series-fail surfaces on the log).
+- [x] **Branded popups** — reusable `src/web/ConfirmDialog.tsx` (dark card, lucide icon, busy state, inline error)
+  replaces the **3 native `window.confirm`** (sheriff/legal force re-scrape, property delete) + the AdminPage bespoke modal.
+- [x] **Real error wording (prod bug fixed)** — `pages.tsx` was `(e as Error).message` → "Server Error" in prod;
+  now `describeError()` shows the real `ConvexError` message (expected) or a branded "contact your administrator" line
+  (unexpected), and logs it. New `src/web/lib/errorReporting.ts` (+5 tests) + `ErrorBoundary.tsx` (no more white screen)
+  + a global `window.error`/`unhandledrejection` best-effort logger in `main.tsx` (deduped, noise-filtered).
+- [x] **Hardening** — removed the `IRES_DEV` unauthenticated bypass from `requireUser` (latent full-auth-bypass footgun).
+- [x] 98 tests pass; tsc + vite build clean; live `errorLogs` write round-trip verified on dev (`convex run` + `convex data`).
+  - [ ] **Live authed click-through (user step):** trigger a forced error → see the branded card + a row land in Admin →
+    Error Log; force re-scrape + delete a property → branded confirm dialogs; confirm the sidebar badge counts unresolved.
+  - [ ] **Confirm CF prod build went green** after the push (stale `CONVEX_DEPLOY_KEY` in CF env = silent 401, serves old bundle).
+  - Note: a render crash may log twice (boundary + window.error) — harmless over-logging; admins can resolve both.
 
 ## [ ] Housekeeping
 - [ ] **Decide on the untracked shadcn-skill artifacts** (`.agents/`, `.claude/`, `_preview.png`, `skills-lock.json`) —

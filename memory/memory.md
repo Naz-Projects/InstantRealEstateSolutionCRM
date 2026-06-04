@@ -192,6 +192,52 @@ this tracks **actuals**. `/properties` (card grid, filter All/Flips/Rentals) + `
   (Properties/PropertyDetail/Flip/Sheriff-Legal `DealSelect`/Admin); the map InfoWindow select stays native (Radix
   portal vs Google InfoWindow). Built directly on a feature branch (frontend-only; no Convex), 75 tests, deployed.
 
+## Market Data Dashboard (FRED auto-pull) — 2026-06-04 (built, DEV-verified; NOT committed/deployed)
+Live **public market data** on the Dashboard, **auto-refreshed monthly by cron** (no clicks) — the answer to "what
+data does a real-estate company watch + how do we pull it automatically." **Additive**: zero change to Sheriff/Legal/
+Flip/Properties. Researched alternatives (Redfin/Zillow bulk files, news RSS) and chose **FRED only** for v1 (one free
+JSON API, county-level DE data, fits the existing `cron → action → store → reactive UI` pattern).
+- **Source = FRED** (St. Louis Fed), free. Key `FRED_API_KEY` in Convex env (**set on dev**; pending prod). Pure parser
+  also supports the **no-key `fredgraph.csv`** endpoint as a fallback.
+- **What it shows:** 30-yr mortgage (`MORTGAGE30US`) + Fed funds (`FEDFUNDS`); **active listings by county** — New Castle
+  `ACTLISCOU10003` / Kent `ACTLISCOU10001` / Sussex `ACTLISCOU10005` / DE `ACTLISCOUDE` (the headline "how many on the
+  market, county-by-county"); market temperature — median days on market `MEDDAYONMARDE`, median list price `MEDLISPRIDE`,
+  price cuts `PRIREDCOUDE`. **Freshness-honest:** each row stores its real latest-obs date, UI shows "as of {date}", and
+  temperature extras with a `freshnessDays` gate are **hidden when stale** (never shown as current).
+- **Code:** pure `src/scraper/fred.ts` (`FRED_SERIES` catalog + `parseFredJson`/`parseFredCsv`/`pickLatest`/`isFresh`;
+  +13 tests) imported by both the action and the query. `convex/marketData.ts` (`upsertMetric` internalMutation +
+  `dashboardMetrics` query, `requireUser`). `convex/marketActions.ts` (`"use node"` `refreshMarketData`, tolerant
+  per-series, explicit return type). `marketMetrics` table (one row/series, `by_seriesId`, holds `history` for sparkline +
+  prior/yearAgo for deltas). Monthly cron `"0 12 1 * *"`. UI `src/components/market-widgets.tsx` (`MarketWidgets`: rate
+  cards w/ **pure-SVG sparkline** — no recharts, renders headless; county inventory table; temperature card; **neutral
+  uncolored deltas** since a rate/price rise isn't inherently good/bad; FRED attribution) mounted atop `dashboard.tsx`.
+- **DEV live run** (`refreshMarketData`: updated 9 / skipped 0): mortgage 6.53% (2026-05-28, matches independent search),
+  Fed funds 3.63%; active New Castle 818 / Kent 490 / Sussex 1876 / DE 3183 (2026-04); DOM 48d / list $500k / cuts 1002.
+- **Pending:** deliberate commit (dirty tree — `schema.ts`+`_generated` also carry pre-existing property-zillow-facts WIP),
+  set prod `FRED_API_KEY` + deploy, live authenticated visual check. **v2:** Redfin/Zillow page-scrape for sale price /
+  sale-to-list / city-level Wilmington-Newark / ZORI rent (the `comps.ts` Firecrawl pattern; NOT the bulk TSV).
+
+## Error logging + branded dialogs + security pass (2026-06-04)
+A senior-dev security/robustness overhaul. **Backend audit result: solid** — every browser-callable Convex fn gates
+`requireUser`, admin ops re-check `role==="admin"`, destructive `clearMonth/Week` are `internalMutation`, invite flow has
+TOCTOU re-check + Clerk rollback + self-target guards; no injection/XSS/SSRF(host)/hardcoded-secret issues. The gaps were
+UX/observability, now built:
+- **`errorLogs` table + `convex/errors.ts`** — `logError` (`requireUser`; **email stamped server-side**, never trusted from
+  client; stack/message capped), admin-only `listErrors`/`unresolvedCount`/`setResolved`/`clearResolved`, internal
+  `logServerError` (autonomous failures). `source` = `boundary|handled|uncaught|server`. Index `by_resolved`.
+- **Frontend** (`src/web/lib/errorReporting.ts` — `describeError`/`reportHandledError`/`reportBoundaryError`, +5 tests):
+  `ErrorBoundary.tsx` (branded "contact your administrator" card, never a blank screen) mounted in `main.tsx`; a global
+  `window.error`/`unhandledrejection` best-effort logger (deduped 10s, noise-filtered) so silent async failures still log.
+  **Fixed a real prod bug:** `pages.tsx` showed `(e as Error).message` → Convex redacts that to "Server Error" in prod;
+  now shows real `ConvexError` wording (or the friendly line) AND logs it.
+- **`src/web/ConfirmDialog.tsx`** — one branded confirm (built from the AdminPage modal pattern) replaces all 3 native
+  `window.confirm` (sheriff/legal force re-scrape, property delete) + the AdminPage bespoke modal.
+- **Admin** (`admin/AdminPage.tsx`) — Users | **Error Log** tabs (resolve/reopen, clear-resolved, unresolved/all);
+  **unresolved-count badge** on the Admin sidebar item (`app-sidebar.tsx`, admin-only via `"skip"`).
+- **Hardening:** removed the `IRES_DEV` unauthenticated bypass from `requireUser` (`helpers.ts`).
+- 98 tests, tsc+vite clean, live `errorLogs` write round-trip verified on dev. Committed `620a7bf` (on top of the WIP
+  commit `61851c8` that bundled the previously-uncommitted market-data + Zillow-facts features). Deployed to prod via push.
+
 ## Status (current — 2026-06-02) — LIVE IN PRODUCTION
 - **Prod is live:** **https://crm.instantrealestatesolution.com** (Cloudflare Workers project
   `instant-real-estate-solution-crm`) on Convex **prod** `pastel-crocodile-994`. Clerk **production** instance
