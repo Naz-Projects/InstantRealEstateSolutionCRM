@@ -122,6 +122,28 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   - [ ] **Confirm prod `GOOGLE_GEOCODING_API_KEY` has Street View Static enabled** (pending key-rotation punch-list
     item) — until then, off-market property photos fall back to the placeholder (paste-URL still works).
 
+## ✅ Shipped — Address autocomplete + UX polish (2026-06-03)
+- [x] **Google Places address autocomplete** on the **manual address** fields of both Properties ("Add property")
+  and Flip Analyzer. New reusable `src/web/AddressAutocomplete.tsx` — dark-themed dropdown, US-restricted,
+  `types:['address']`, session-tokened, free-text fallback. Uses the **legacy** `AutocompleteService.getPlacePredictions`
+  (the IRES key has legacy "Places API", NOT "Places API (New)" — the New API was the original bug; see lessons.md).
+- [x] **Cursor-pointer** base rule in `index.css` so all buttons/links/cards/`select`/shadcn triggers show a pointer.
+- [x] **Dropdowns → shadcn `Select`** — converted 8 of 9 plain `<select>`s (Properties deal type; Property detail
+  status + ledger category; Flip Analyzer rehab tier + per-row deal status; Sheriff/Legal shared `DealSelect`;
+  both Admin role selects). The **map InfoWindow** deal-status select stayed **native by design** (a Radix Select
+  portals its dropdown outside the Google InfoWindow → outside-click closes it).
+- All three **MERGED to `main` + pushed → prod** (build `index-DFC2G_Eo.js` live, legacy autocomplete confirmed in
+  the bundle). Build clean, 75 tests pass.
+  - [ ] **Live-test autocomplete on prod** — type an address in the Properties/Flip manual field; suggestions
+    should appear. If not, the key has neither legacy nor New Places enabled (check Google Cloud).
+  - [ ] (Optional) shadcn-ify the map InfoWindow select via a Radix portal-container fix, if desired.
+
+## [ ] Housekeeping
+- [ ] **Decide on the untracked shadcn-skill artifacts** (`.agents/`, `.claude/`, `_preview.png`, `skills-lock.json`) —
+  long-lived untracked files; gitignore them or commit deliberately. (Kept OUT of all feature commits this session.)
+- [ ] **Clean the orphaned worktree dir** `.claude/worktrees/properties` (leftover from the Properties build's
+  isolated worktree; holds a stray `.env.local` copy) once its locking process exits: `Remove-Item -Recurse -Force .claude\worktrees\properties`.
+
 ## [ ] Future / bigger ideas
 - [ ] **Kanban deal-pipeline board** (drag listings across new→reviewing→contacted→offer→dead).
 - [ ] **Dashboard charts** — deals per stage per month, equity in pipeline, run-history trend.

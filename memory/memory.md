@@ -185,6 +185,12 @@ this tracks **actuals**. `/properties` (card grid, filter All/Flips/Rentals) + `
   `CONVEX_AGENT_MODE=anonymous`; the second merge regenerates `_generated`). 75 tests, build clean, final review
   READY TO MERGE. Spec/plan: `docs/superpowers/{specs,plans}/2026-06-03-properties-portfolio*`. **Pending:** live
   prod smoke-test; confirm prod key has Street View Static enabled (else off-market photos = placeholder).
+- **Address autocomplete + UX polish (2026-06-03, merged + deployed):** `src/web/AddressAutocomplete.tsx` — a
+  dark-themed Google Places autocomplete (legacy `AutocompleteService.getPlacePredictions`; US-restricted,
+  `types:['address']`, session token, free-text fallback) on the **manual address** fields of Properties + Flip
+  Analyzer. Global `cursor: pointer` base rule in `index.css`. Converted 8/9 plain `<select>`s to shadcn `Select`
+  (Properties/PropertyDetail/Flip/Sheriff-Legal `DealSelect`/Admin); the map InfoWindow select stays native (Radix
+  portal vs Google InfoWindow). Built directly on a feature branch (frontend-only; no Convex), 75 tests, deployed.
 
 ## Status (current — 2026-06-02) — LIVE IN PRODUCTION
 - **Prod is live:** **https://crm.instantrealestatesolution.com** (Cloudflare Workers project
@@ -212,6 +218,7 @@ this tracks **actuals**. `/properties` (card grid, filter All/Flips/Rentals) + `
   `CLERK_SECRET_KEY` (sk_live on prod), `CLERK_INVITE_REDIRECT_URL`. Prod = restricted sign-up + email sign-up ON.
 - **Google:** ONE domain-restricted Maps key serves BOTH the browser map AND server geocoding
   (`GOOGLE_GEOCODING_API_KEY` = same value as `VITE_GOOGLE_MAPS_API_KEY`). Enable: Maps JS + Geocoding + Street
-  View Static + **Places API (New)** (the address-autocomplete on the Properties/Flip manual-address fields uses
-  it — `AutocompleteSuggestion`, browser-side; supersedes the earlier "not Places" note, confirmed 2026-06-03).
+  View Static + **legacy "Places API"** (the address-autocomplete on the Properties/Flip manual-address fields uses
+  the LEGACY `AutocompleteService.getPlacePredictions`, browser-side — the key has legacy "Places API", NOT
+  "Places API (New)"; using the New `AutocompleteSuggestion` silently returned nothing, see lessons.md 2026-06-03).
   Website restrictions: prod domain + `http://localhost:5173/*`.

@@ -6,11 +6,26 @@ _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 The IRES CRM is **live in production** at **https://crm.instantrealestatesolution.com** — Convex prod
 `pastel-crocodile-994`, Cloudflare Workers project `instant-real-estate-solution-crm`, Clerk **production**
 instance (invite-only). Sign in as `nazhossain16@gmail.com` (seeded owner/admin). Dev = `fearless-donkey-585`
-(Clerk dev `optimal-frog-32`); `IRES_DEV` removed (dev secured). All work merged to `main` + pushed; **64 tests**
+(Clerk dev `optimal-frog-32`); `IRES_DEV` removed (dev secured). All work merged to `main` + pushed; **75 tests**
 pass; build clean. The dark **"Industrial Precision"** shadcn UI is on main/prod (the old `ui/shadcn-foundation`
 work is long since merged — ignore any stale "merge ui/shadcn-foundation" note).
 
-## Most recent work — Flip Analyzer + ARV-from-comps (shipped this session, 2026-06-03)
+## Most recent work — Properties portfolio + address autocomplete (shipped to prod, 2026-06-03)
+Two more additive features, both **merged to `main` + deployed to prod** (75 tests, build clean):
+1. **Properties / Portfolio** (`/properties`) — manage houses IRES *owns* (flip|rental); list + detail pages,
+   unified expense/income ledger (`propertyLedger`), flip→sale realized profit/ROI, rental net cash flow, photo
+   from Zillow (legacy listing photo) with a **Google Street View fallback** for off-market houses, seed-from
+   Sheriff/Legal/Flip. New `properties`+`propertyLedger` tables, `convex/propertyData.ts`+`propertyActions.ts`,
+   pure `src/scraper/portfolio.ts`. Built **subagent-driven + TDD in an isolated worktree** alongside the comps
+   session (see lessons.md: worktree + `CONVEX_AGENT_MODE=anonymous`; second merge regenerates `_generated`).
+   Spec/plan: `docs/superpowers/{specs,plans}/2026-06-03-properties-portfolio*`. (Details: `memory.md` → "Properties / Portfolio".)
+2. **Address autocomplete + UX** — `src/web/AddressAutocomplete.tsx` (Google Places autocomplete on the manual
+   address fields of Properties + Flip; **legacy** `AutocompleteService` — the key has legacy "Places API", not
+   New); global `cursor: pointer`; 8/9 plain `<select>`s → shadcn `Select` (map InfoWindow stays native).
+- **Pending verification:** live-click `/properties` AND the address autocomplete on prod (auth-gated, never
+  clicked through in a running app); confirm prod key has **Street View Static** enabled (off-market photos).
+
+## Most recent work — Flip Analyzer + ARV-from-comps (earlier this session, 2026-06-03)
 Built two additive features end-to-end (brainstorm → spec → plan → subagent-driven TDD → review → merge → deploy),
 **without touching** the Sheriff/Legal pages, their pipelines, or `deal.ts`:
 1. **Flip Analyzer** (`/flip`) — turns a property (Sheriff/Legal listing OR manual address) into a flip P&L:
@@ -24,25 +39,26 @@ Specs/plans: `docs/superpowers/{specs,plans}/2026-06-03-flip-analyzer*` and `…
 Research menu of more flip features: `memory/flip-decision-features.md`.
 
 ### ★ FIRST next steps (do these first)
-1. **Confirm the last Cloudflare build went green.** The push of `ff15cdf` (ARV-from-comps) triggers CF Workers
-   Build `npx convex deploy --cmd 'npm run build'`, which deploys **backend (prod Convex) + frontend** in one shot.
-   The CF `CONVEX_DEPLOY_KEY` was stale earlier (rotated) and the user fixed it — verify this build succeeded
-   (CF → Workers Builds log). If it 401s again, the CF env key is wrong (see Gotchas).
-2. **Live smoke-test `/flip` on prod** (never clicked through in a running app — only unit-tested + reviewed):
-   create an analysis from a Sheriff + a Legal listing + a manual DE address; edit ARV/rehab/sqft/assumptions →
-   MAO/profit/ROI/grade update live; **Pull comps → Use as ARV**; Save → reopen → delete. Confirm the sidebar logo
-   + property combobox render; confirm `/sheriff` and `/legal` are unchanged.
-3. **Push the held memory commit.** `memory.md`/`todo.md` updates for ARV-from-comps are **committed locally but
-   not pushed** (`git rev-list --count origin/main..main` = 1) — held so they wouldn't race the in-flight CF build.
-   `git push origin main` when ready (it's doc-only; re-triggers a CF build).
+Everything below (Flip Analyzer, ARV-from-comps, Properties, autocomplete) is **already merged + deployed to prod**
+(last confirmed-live bundle `index-DFC2G_Eo.js`). The remaining work is verification + housekeeping:
+1. **Live smoke-test on prod** (auth-gated; none of these were clicked through in a running app):
+   - **`/properties`** — add a manual flip + rental, seed one from a Sheriff listing, add expense & income ledger
+     entries, mark a flip sold → profit/ROI, delete.
+   - **Address autocomplete** — type into the Properties / Flip manual address field; Google suggestions should
+     appear (legacy Places API). If none appear, the key has neither legacy nor New Places enabled.
+   - **`/flip`** — create from Sheriff/Legal/manual; edit inputs → live MAO/profit/ROI; Pull comps → Use as ARV.
+   - Confirm `/sheriff` + `/legal` are unchanged.
+2. **Housekeeping (see `todo.md` → Housekeeping):** decide on the untracked shadcn-skill artifacts (`.agents/`,
+   `.claude/`, `_preview.png`, `skills-lock.json`) — gitignore or commit; delete the orphaned worktree dir
+   `.claude/worktrees/properties` (holds a stray `.env.local`).
+3. **This session's doc commit may be local-only** — `git status` / `git rev-list --count origin/main..main`;
+   `git push origin main` if you want the memory updates on origin (doc-only re-triggers a CF build).
 
-### Parallel work in progress — owned-property portfolio (another session)
-A **separate** "owned-property portfolio" feature is being built in an **isolated git worktree**:
-`.claude/worktrees/properties` on branch **`feat/properties-portfolio`** (flip/rental, unified ledger, Zillow
-photos — spec+plan at `docs/superpowers/{specs,plans}/…owned-property-portfolio…`). Its **docs** commits are already
-on `main`; its **code** stays in the worktree until that session merges it. **Do not touch that worktree/branch.**
-When it merges to `main`, it FFs cleanly (shared ancestry). Heads-up: it may also add tables/UI — coordinate if you
-touch `convex/schema.ts` or the shell.
+### (Resolved) The owned-property portfolio worktree — now MERGED + deployed
+The Properties feature that was built in the isolated worktree `.claude/worktrees/properties` has been **merged to
+`main` and deployed** (see "Most recent work" above). The branch is deleted; the worktree was removed (a leftover
+orphan dir `.claude/worktrees/properties` may remain locked on disk with a stray `.env.local` copy — delete it:
+`Remove-Item -Recurse -Force .claude\worktrees\properties`). Nothing pending here.
 
 ## ★ NEXT BIG INITIATIVE — Off-Market & Pre-Foreclosure Acquisition Engine (research → build)
 Find distressed / motivated-seller houses (esp. **pre-foreclosure**) **before they hit the MLS**, reach the owner
