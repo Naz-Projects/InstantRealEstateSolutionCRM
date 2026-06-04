@@ -251,6 +251,8 @@ export const markSold = mutation({
   args: { id: v.id("properties"), salePrice: v.number(), soldDate: v.number() },
   handler: async (ctx, { id, salePrice, soldDate }) => {
     await requireUser(ctx);
+    const p = await ctx.db.get(id);
+    if (!p) throw new Error("Property not found");
     await ctx.db.patch(id, { status: "sold", salePrice, soldDate, updatedAt: Date.now() });
   },
 });
