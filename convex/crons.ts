@@ -20,4 +20,13 @@ crons.cron(
   { triggeredBy: "cron", force: false },
 );
 
+// Public market data (FRED) — refresh on the 1st of each month, 12:00 UTC (~8am ET).
+// The county housing series are monthly; the action is idempotent (upsert by series).
+crons.cron(
+  "market data monthly",
+  "0 12 1 * *",
+  internal.marketActions.refreshMarketData,
+  {},
+);
+
 export default crons;

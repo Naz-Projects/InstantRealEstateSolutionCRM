@@ -211,6 +211,7 @@ export default defineSchema({
     beds: v.optional(v.string()),
     baths: v.optional(v.string()),
     sqft: v.optional(v.number()),
+    zestimate: v.optional(v.string()), // Zillow Zestimate (string, e.g. "$245,000")
     purchasePrice: v.optional(v.number()),
     acquiredDate: v.optional(v.number()),
     salePrice: v.optional(v.number()), // flip, set when sold
@@ -227,6 +228,33 @@ export default defineSchema({
   })
     .index("by_dealType", ["dealType"])
     .index("by_status", ["status"]),
+
+  // Public market data (FRED), one row per series, refreshed monthly by cron.
+  // Additive context for the dashboard — no link to the deal pipelines.
+  marketMetrics: defineTable({
+    metric: v.string(), // stable UI key; regions can share one (e.g. activeListings)
+    seriesId: v.string(), // FRED series id — unique per row
+    region: v.string(), // "US" | "Delaware" | "New Castle" | "Kent" | "Sussex"
+    group: v.union(
+      v.literal("rates"),
+      v.literal("inventory"),
+      v.literal("temperature"),
+    ),
+    label: v.string(),
+    unit: v.union(
+      v.literal("percent"),
+      v.literal("usd"),
+      v.literal("count"),
+      v.literal("days"),
+    ),
+    latestDate: v.string(), // "YYYY-MM-DD" of the latest observation
+    latestValue: v.number(),
+    priorValue: v.optional(v.number()), // previous observation (MoM/WoW)
+    yearAgoValue: v.optional(v.number()), // ~12 obs back (YoY) when available
+    history: v.array(v.object({ date: v.string(), value: v.number() })), // sparkline
+    source: v.string(), // attribution
+    fetchedAt: v.number(),
+  }).index("by_seriesId", ["seriesId"]),
 
   // Unified per-property ledger: expenses AND income, date-stamped. One shape for
   // flip costs and rental income; sums are computed by direction in portfolio.ts.

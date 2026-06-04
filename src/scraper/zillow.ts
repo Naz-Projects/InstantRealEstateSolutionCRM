@@ -4,6 +4,7 @@
 // the canonical homedetails URL from the first matching link.
 
 import { firecrawlScrape, withRetry } from "./firecrawl.js";
+import { parseMoney } from "./deal.js";
 import type { ZillowData } from "./types.js";
 
 /** Convert a property address into a Zillow search URL. */
@@ -90,6 +91,33 @@ export async function scrapeZillow(address: string, apiKey: string, attempts = 2
     },
     { attempts, baseDelayMs: 2000, label: `Zillow ${address}` },
   );
+}
+
+/**
+ * Pick the property facts we trust to auto-fill from a Zillow scrape. Returns the
+ * beds/baths/sqft/zestimate parsed from `markdown`, but ONLY when the page resolves to
+ * a confident Delaware homedetails match (the `-DE-` guard the rest of the app uses) —
+ * otherwise null, so we never write facts we can't trust into an owned-property record.
+ * beds/baths/zestimate stay strings (matches ZillowData + Sheriff/Legal storage); sqft is
+ * parsed to a number for the `properties.sqft` column. Pure + tested.
+ */
+export function pickZillowFacts(
+  markdown: string,
+  rawHtml: string,
+): { beds?: string; baths?: string; sqft?: number; zestimate?: string } | null {
+  const url = extractHomedetailsUrl(markdown) ?? extractHomedetailsUrl(rawHtml);
+  if (!url || !isDelawareUrl(url)) return null;
+
+  const f = extractFields(markdown);
+  const out: { beds?: string; baths?: string; sqft?: number; zestimate?: string } = {};
+  if (f.beds) out.beds = f.beds;
+  if (f.baths) out.baths = f.baths;
+  if (f.zestimate) out.zestimate = f.zestimate;
+  if (f.sqft) {
+    const n = parseMoney(f.sqft);
+    if (n != null) out.sqft = n;
+  }
+  return out;
 }
 
 /**

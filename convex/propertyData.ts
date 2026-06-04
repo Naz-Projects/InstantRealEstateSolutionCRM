@@ -221,6 +221,7 @@ export const updateProperty = mutation({
       beds: v.optional(v.union(v.string(), v.null())),
       baths: v.optional(v.union(v.string(), v.null())),
       sqft: v.optional(v.union(v.number(), v.null())),
+      zestimate: v.optional(v.union(v.string(), v.null())),
       purchasePrice: v.optional(v.union(v.number(), v.null())),
       acquiredDate: v.optional(v.union(v.number(), v.null())),
       zillowUrl: v.optional(v.union(v.string(), v.null())),
@@ -238,6 +239,7 @@ export const updateProperty = mutation({
       beds: "beds" in patch ? patch.beds ?? undefined : p.beds,
       baths: "baths" in patch ? patch.baths ?? undefined : p.baths,
       sqft: "sqft" in patch ? patch.sqft ?? undefined : p.sqft,
+      zestimate: "zestimate" in patch ? patch.zestimate ?? undefined : p.zestimate,
       purchasePrice: "purchasePrice" in patch ? patch.purchasePrice ?? undefined : p.purchasePrice,
       acquiredDate: "acquiredDate" in patch ? patch.acquiredDate ?? undefined : p.acquiredDate,
       zillowUrl: "zillowUrl" in patch ? patch.zillowUrl ?? undefined : p.zillowUrl,
@@ -318,6 +320,31 @@ export const getForImage = internalQuery({
     const p = await ctx.db.get(id);
     if (!p) return null;
     return { address: p.address, zillowUrl: p.zillowUrl };
+  },
+});
+
+// Auto-fill beds/baths/sqft/zestimate from the Zillow scrape that runs on create + the
+// "Refresh photo" button. Fill-ONLY-empty: never clobbers seeded (sheriff/legal) facts or
+// values the user typed. The caller (scrapePropertyImage) only sends facts on a confident
+// Delaware match, so this just applies them to still-empty fields.
+export const applyZillowFacts = internalMutation({
+  args: {
+    id: v.id("properties"),
+    beds: v.optional(v.string()),
+    baths: v.optional(v.string()),
+    sqft: v.optional(v.number()),
+    zestimate: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, beds, baths, sqft, zestimate }) => {
+    const p = await ctx.db.get(id);
+    if (!p) return;
+    const patch: Partial<Doc<"properties">> = {};
+    if (!p.beds && beds) patch.beds = beds;
+    if (!p.baths && baths) patch.baths = baths;
+    if (p.sqft == null && sqft != null) patch.sqft = sqft;
+    if (!p.zestimate && zestimate) patch.zestimate = zestimate;
+    if (Object.keys(patch).length === 0) return;
+    await ctx.db.patch(id, { ...patch, updatedAt: Date.now() });
   },
 });
 

@@ -33,6 +33,7 @@ import { Gavel, HandCoins, PhoneCall, Scale } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { DEAL_STAGES, STAGE_LABEL } from "../web/dealStages";
 import { formatInteger } from "@/components/formater";
+import { MarketWidgets } from "@/components/market-widgets";
 
 type Stats = NonNullable<FunctionReturnType<typeof api.runs.dashboardStats>>;
 type Runs = FunctionReturnType<typeof api.runs.listRuns>;
@@ -270,6 +271,8 @@ export function Dashboard() {
 					Your wholesaling pipeline at a glance
 				</p>
 			</div>
+
+			<MarketWidgets />
 
 			{stats === undefined || runs === undefined ? (
 				<DashboardSkeleton />

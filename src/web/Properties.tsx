@@ -1,21 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
-import { Building2, Home, Plus, ChevronsUpDown } from "lucide-react";
+import { Building2, Home, Plus } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { AddressAutocomplete } from "./AddressAutocomplete";
+import { PropertyPicker, type PropertySelection } from "./PropertyPicker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function fmtMoney(n: number | null | undefined): string {
@@ -37,74 +28,6 @@ export const STATUS_LABEL: Record<string, string> = {
 };
 
 type DealType = "flip" | "rental";
-type Candidate = { id: string; address: string };
-
-function CandidateCombobox({
-  candidates,
-  value,
-  onChange,
-}: {
-  candidates: { sheriff: Candidate[]; legal: Candidate[]; flip: Candidate[] } | undefined;
-  value: string; // "sheriff:<id>" | "legal:<id>" | "flip:<id>"
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const label = (() => {
-    if (!value || !candidates) return "";
-    const [kind, id] = value.split(":");
-    const list =
-      kind === "sheriff" ? candidates.sheriff : kind === "legal" ? candidates.legal : candidates.flip;
-    return list.find((c) => c.id === id)?.address ?? "";
-  })();
-
-  const group = (heading: string, kind: string, list: Candidate[] | undefined) =>
-    list && list.length > 0 ? (
-      <CommandGroup heading={heading}>
-        {list.map((c) => (
-          <CommandItem
-            key={c.id}
-            value={`${kind} ${c.address}`}
-            onSelect={() => {
-              onChange(`${kind}:${c.id}`);
-              setOpen(false);
-            }}
-          >
-            {c.address}
-          </CommandItem>
-        ))}
-      </CommandGroup>
-    ) : null;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          role="combobox"
-          aria-expanded={open}
-          className={cn(
-            "flex w-80 items-center justify-between gap-2 rounded-md border border-border bg-card px-2 py-1 text-left text-sm focus:border-primary focus:outline-none",
-            !label && "text-muted-foreground",
-          )}
-        >
-          <span className="truncate">{label || "Select a record…"}</span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search address…" />
-          <CommandList>
-            <CommandEmpty>No record found.</CommandEmpty>
-            {group("Sheriff Sales", "sheriff", candidates?.sheriff)}
-            {group("Legal Notices", "legal", candidates?.legal)}
-            {group("Flip Analyses", "flip", candidates?.flip)}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 type PropertyRow = FunctionReturnType<typeof api.propertyData.listProperties>[number];
 
@@ -160,10 +83,8 @@ export function Properties() {
   const navigate = useNavigate();
 
   const [filter, setFilter] = useState<"all" | "flip" | "rental">("all");
-  const [showAdd, setShowAdd] = useState(false);
   const [dealType, setDealType] = useState<DealType>("flip");
-  const [manualAddr, setManualAddr] = useState("");
-  const [pick, setPick] = useState("");
+  const [selection, setSelection] = useState<PropertySelection>(null);
 
   const all = properties ?? [];
   const counts = {
@@ -175,22 +96,19 @@ export function Properties() {
 
   const goTo = (id: Id<"properties">) => navigate({ to: "/properties/$id", params: { id } });
 
-  const addManual = async () => {
-    if (!manualAddr.trim()) return;
-    const id = await createManual({ dealType, address: manualAddr.trim() });
-    setManualAddr("");
-    setShowAdd(false);
-    goTo(id as Id<"properties">);
-  };
-  const addFromExisting = async () => {
-    if (!pick) return;
-    const [kind, rid] = pick.split(":");
+  const addProperty = async () => {
+    if (!selection) return;
     let id: unknown;
-    if (kind === "sheriff") id = await createFromSheriff({ listingId: rid as Id<"sheriffListings">, dealType });
-    else if (kind === "legal") id = await createFromLegal({ listingId: rid as Id<"legalNotices">, dealType });
-    else id = await createFromFlip({ analysisId: rid as Id<"flipAnalyses">, dealType });
-    setPick("");
-    setShowAdd(false);
+    if (selection.kind === "manual") {
+      id = await createManual({ dealType, address: selection.address });
+    } else if (selection.kind === "sheriff") {
+      id = await createFromSheriff({ listingId: selection.refId as Id<"sheriffListings">, dealType });
+    } else if (selection.kind === "legal") {
+      id = await createFromLegal({ listingId: selection.refId as Id<"legalNotices">, dealType });
+    } else {
+      id = await createFromFlip({ analysisId: selection.refId as Id<"flipAnalyses">, dealType });
+    }
+    setSelection(null);
     goTo(id as Id<"properties">);
   };
 
@@ -211,58 +129,37 @@ export function Properties() {
             Houses we own — flips and rentals. Track expenses, income, and sale outcomes.
           </p>
         </div>
-        <button
-          onClick={() => setShowAdd((s) => !s)}
-          className="btn-metal-yellow flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-semibold"
-        >
-          <Plus className="h-4 w-4" /> Add property
-        </button>
       </div>
 
       <div className="space-y-6 p-6">
-        {showAdd && (
-          <div className="flex flex-wrap items-end gap-4 rounded-xl border border-border bg-card p-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Type</label>
-              <Select value={dealType} onValueChange={(v) => setDealType(v as DealType)}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="flip">Flip</SelectItem>
-                  <SelectItem value="rental">Rental</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">From an existing record</label>
-              <div className="flex gap-2">
-                <CandidateCombobox candidates={candidates} value={pick} onChange={setPick} />
-                <button
-                  onClick={addFromExisting}
-                  className="flex items-center gap-1 rounded-md border border-border px-3 py-1 text-sm hover:border-teal"
-                >
-                  <Plus className="h-4 w-4" /> Add
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Or a manual address</label>
-              <div className="flex gap-2">
-                <AddressAutocomplete
-                  value={manualAddr}
-                  onChange={setManualAddr}
-                  placeholder="123 Main St, Wilmington, DE"
-                  className="w-72"
-                />
-                <button
-                  onClick={addManual}
-                  className="flex items-center gap-1 rounded-md border border-border px-3 py-1 text-sm hover:border-teal"
-                >
-                  <Plus className="h-4 w-4" /> Add manual
-                </button>
-              </div>
-            </div>
+        <div className="flex flex-wrap items-end gap-4 rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Type</label>
+            <Select value={dealType} onValueChange={(v) => setDealType(v as DealType)}>
+              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="flip">Flip</SelectItem>
+                <SelectItem value="rental">Rental</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        )}
+          <div className="flex min-w-72 flex-1 flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Property</label>
+            <PropertyPicker
+              candidates={candidates}
+              value={selection}
+              onChange={setSelection}
+              className="w-full"
+            />
+          </div>
+          <button
+            onClick={addProperty}
+            disabled={!selection}
+            className="btn-metal-yellow flex items-center gap-1 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" /> Add Property
+          </button>
+        </div>
 
         <div className="flex gap-2">
           {TABS.map((t) => (

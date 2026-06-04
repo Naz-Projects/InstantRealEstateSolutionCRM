@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Home, RefreshCw, Trash2, Plus, ExternalLink } from "lucide-react";
@@ -95,11 +95,25 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
   const [beds, setBeds] = useState(p.beds ?? "");
   const [baths, setBaths] = useState(p.baths ?? "");
   const [sqft, setSqft] = useState(p.sqft?.toString() ?? "");
+  const [zestimate, setZestimate] = useState(p.zestimate ?? "");
   const [purchase, setPurchase] = useState(p.purchasePrice?.toString() ?? "");
   const [acquired, setAcquired] = useState(toDateInput(p.acquiredDate));
   const [zillow, setZillow] = useState(p.zillowUrl ?? "");
   const [notes, setNotes] = useState(p.notes ?? "");
   const [savedFacts, setSavedFacts] = useState(false);
+
+  // The Zillow scrape fills beds/baths/sqft/zestimate ~seconds after a property is added
+  // (or after "Refresh photo"). These inputs are seeded from useState, which won't pick up
+  // that async DB update on its own (the component is keyed on _id, not the facts) — so
+  // mirror each server value into its box once it arrives, but only when the box is still
+  // empty (functional updater preserves anything you've typed and avoids wiping it on Save).
+  useEffect(() => {
+    const { beds: sBeds, baths: sBaths, sqft: sSqft, zestimate: sZest } = p;
+    if (sBeds) setBeds((cur) => cur || sBeds);
+    if (sBaths) setBaths((cur) => cur || sBaths);
+    if (sSqft != null) setSqft((cur) => cur || String(sSqft));
+    if (sZest) setZestimate((cur) => cur || sZest);
+  }, [p.beds, p.baths, p.sqft, p.zestimate]);
 
   // sale form
   const [salePrice, setSalePrice] = useState(p.salePrice?.toString() ?? "");
@@ -124,6 +138,7 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
         beds: beds.trim() || null,
         baths: baths.trim() || null,
         sqft: num(sqft),
+        zestimate: zestimate.trim() || null,
         purchasePrice: num(purchase),
         acquiredDate: fromDateInput(acquired),
         zillowUrl: zillow.trim() || null,
@@ -244,6 +259,10 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
               <label className="block text-xs text-muted-foreground">
                 Sqft
                 <input className={inputCls} value={sqft} onChange={(e) => setSqft(e.target.value)} />
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                Zestimate
+                <input className={inputCls} value={zestimate} onChange={(e) => setZestimate(e.target.value)} placeholder="$0" />
               </label>
               <label className="block text-xs text-muted-foreground">
                 Acquired

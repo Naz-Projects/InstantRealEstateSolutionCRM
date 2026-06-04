@@ -5,6 +5,7 @@ import {
   extractHomedetailsUrl,
   isDelawareUrl,
   extractImageUrl,
+  pickZillowFacts,
 } from "../src/scraper/zillow.js";
 
 describe("buildZillowSearchUrl", () => {
@@ -54,6 +55,36 @@ describe("isDelawareUrl", () => {
     expect(
       isDelawareUrl("https://www.zillow.com/homedetails/100-Main-St-Philadelphia-PA-19103/1_zpid/"),
     ).toBe(false);
+  });
+});
+
+describe("pickZillowFacts", () => {
+  const deLink =
+    "[home](https://www.zillow.com/homedetails/100-Main-St-Wilmington-DE-19801/12345_zpid/)";
+  const facts = "4 beds 2.5 baths 1,800 sqft. Zestimate®: $298,700.";
+
+  it("returns parsed facts on a confident Delaware match (sqft as a number)", () => {
+    const got = pickZillowFacts(`${deLink}\n${facts}`, "");
+    expect(got).toEqual({ beds: "4", baths: "2.5", sqft: 1800, zestimate: "$298,700" });
+  });
+
+  it("returns null when the match is not a Delaware property", () => {
+    const paLink =
+      "[home](https://www.zillow.com/homedetails/100-Main-St-Philadelphia-PA-19103/1_zpid/)";
+    expect(pickZillowFacts(`${paLink}\n${facts}`, "")).toBeNull();
+  });
+
+  it("returns null when there is no homedetails URL in markdown or rawHtml", () => {
+    expect(pickZillowFacts(facts, "no links here either")).toBeNull();
+  });
+
+  it("falls back to the homedetails URL found in rawHtml", () => {
+    const got = pickZillowFacts(facts, deLink);
+    expect(got).toEqual({ beds: "4", baths: "2.5", sqft: 1800, zestimate: "$298,700" });
+  });
+
+  it("omits fields Zillow did not surface (sparse page)", () => {
+    expect(pickZillowFacts(`${deLink}\n3 beds, nothing else here`, "")).toEqual({ beds: "3" });
   });
 });
 

@@ -3,7 +3,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { firecrawlScrape, withRetry } from "../src/scraper/firecrawl.js";
-import { buildZillowSearchUrl, extractImageUrl } from "../src/scraper/zillow.js";
+import { buildZillowSearchUrl, extractImageUrl, pickZillowFacts } from "../src/scraper/zillow.js";
 
 function fcKey(): string {
   const k = (process.env.FIRECRAWL_API_KEY ?? "").trim();
@@ -54,6 +54,12 @@ export const scrapePropertyImage = internalAction({
         { attempts: 2, baseDelayMs: 2000, label: `Zillow image ${p.address}` },
       );
       zillowPhoto = extractImageUrl(rawHtml) ?? extractImageUrl(markdown);
+      // Same page also carries beds/baths/sqft/zestimate — fill the empty detail boxes
+      // (only on a confident DE match; never clobbers seeded/typed facts).
+      const facts = pickZillowFacts(markdown, rawHtml);
+      if (facts && Object.keys(facts).length > 0) {
+        await ctx.runMutation(internal.propertyData.applyZillowFacts, { id, ...facts });
+      }
     } catch {
       zillowPhoto = null; // block/timeout/no-Firecrawl-key — fall through to Street View
     }
