@@ -14,6 +14,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { DEAL_STAGES, STAGE_LABEL, type DealStage } from "./dealStages";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 import {
   estimateRehab,
   computeFlip,
@@ -209,11 +210,11 @@ export function FlipAnalyzer() {
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">Or a manual address</label>
             <div className="flex gap-2">
-              <input
-                className={inputCls}
-                placeholder="123 Main St, Wilmington, DE"
+              <AddressAutocomplete
                 value={manualAddr}
-                onChange={(e) => setManualAddr(e.target.value)}
+                onChange={setManualAddr}
+                placeholder="123 Main St, Wilmington, DE"
+                className="w-72"
               />
               <button
                 onClick={addManual}

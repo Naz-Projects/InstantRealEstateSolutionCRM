@@ -15,6 +15,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 
 function fmtMoney(n: number | null | undefined): string {
   return n === null || n === undefined ? "—" : "$" + Math.round(n).toLocaleString("en-US");
@@ -249,11 +250,11 @@ export function Properties() {
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">Or a manual address</label>
               <div className="flex gap-2">
-                <input
-                  className={inputCls + " w-72"}
-                  placeholder="123 Main St, Wilmington, DE"
+                <AddressAutocomplete
                   value={manualAddr}
-                  onChange={(e) => setManualAddr(e.target.value)}
+                  onChange={setManualAddr}
+                  placeholder="123 Main St, Wilmington, DE"
+                  className="w-72"
                 />
                 <button
                   onClick={addManual}
