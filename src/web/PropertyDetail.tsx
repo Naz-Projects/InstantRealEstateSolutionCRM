@@ -57,8 +57,11 @@ export function PropertyDetail() {
   if (data === null) {
     return (
       <div className="p-6">
-        <Link to="/properties" className="text-sm text-teal-glow hover:underline">
-          ← Back to properties
+        <Link
+          to="/properties"
+          className="inline-flex items-center gap-1 text-sm text-teal-glow hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to properties
         </Link>
         <p className="mt-4 text-muted-foreground">Property not found.</p>
       </div>
@@ -297,7 +300,7 @@ function PropertyDetailInner({ data, pid }: { data: DetailData; pid: Id<"propert
             )}
           </div>
 
-          {p.dealType === "flip" && p.status !== "sold" && (
+          {p.dealType === "flip" && status !== "sold" && (
             <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
               <span className="text-sm text-muted-foreground">Mark sold:</span>
               <label className="block text-xs text-muted-foreground">
