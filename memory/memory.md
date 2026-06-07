@@ -12,7 +12,8 @@ Builds on `memory/next-initiative-offmarket.md`. **Pick up via `memory/next-sess
 `CustomMaps` folder is a **free, public, `PRCLID`-keyed suite of distress feeds** — `CodeEnforcement_CodeCases` (2,852
 code cases, **dated** via `last_edited_date`/`APDTTM` + a "Cases added last 30 days" view), `Code_Enforcement/6 Vacant
 Properties` (859), `SheriffSales/1 Vacant Monitions Candidates` (76, curated vacant+tax-delinquent), `SheriffSales/0`
-(53, **structured** w/ `CASENUMBER`/`PLANTIFF` — can replace the brittle sheriff-PDF parse), `RentalUnits/0` (39,424),
+(53, **structured** w/ `CASENUMBER`/`PLANTIFF` — **augments** the sheriff-PDF parse, NOT a replacement: lacks sale
+type/principal/sale-date that `deal.ts` needs), `RentalUnits/0` (39,424),
 `Permits/4 New Construction`, `Ownership/0` (203,752; `CNTCTLAST` = full owner-name string + mailing). So **Phases 2–3
 are FREE + serverless** (no browser/paid). Only **assessed value + tax/sewer balances** (Reblaze per-parcel site →
 browser/paid, funnel-only) and **upstream court lis-pendens** (CourtConnect, scrape — verify ToS) aren't free.

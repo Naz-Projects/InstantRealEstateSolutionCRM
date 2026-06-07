@@ -14,10 +14,12 @@ owners **off-market**. Builds ON [`memory/next-initiative-offmarket.md`](next-in
 **PHASE 0 RESULT — the win is bigger than the spec assumed (verified live; DON'T re-probe):** the NCC ArcGIS
 **`CustomMaps` folder** (`https://gis.nccde.org/agsserver/rest/services/CustomMaps`) is a **free, public, `PRCLID`-keyed
 suite of distress feeds**, several **dated** (cheap delta, no 200k re-scan):
-- `CodeEnforcement_CodeCases/0` — **2,852** code cases, dated (`last_edited_date`/`created_date`/`APDTTM`), `APDESC`
+- `CodeEnforcement_CodeCases/0` — **2,852** code cases, **dated-delta verified** (cursor `APDTTM` via
+  `where=APDTTM > TIMESTAMP '2026-05-01 00:00:00'` → 748; not `last_edited_date` (sparse); not epoch-ms (400)), `APDESC`
   (e.g. "HIGH WEED AND GRASS"), `STAT`; helper views `Code_Enforcement/MapServer` (6 Vacant Properties **859**, 9 Open
   Cases, **11 "Cases added last 30 days" 1,051**, 8 Resolved-with-Fees-Owed). ← **Phase 2 signal winner.**
-- `SheriffSales/0` — **53**, *structured* (`PARCELID`,`CASENUMBER`,`PLANTIFF`) → **can replace the brittle sheriff-PDF parse**.
+- `SheriffSales/0` — **53**, *structured* (`PARCELID`,`CASENUMBER`,`PLANTIFF`) → **augments** the sheriff-PDF parse (clean
+  PARCELID join + court case#); NOT a replacement (lacks sale type/principal/sale-date that `deal.ts` needs).
 - `SheriffSales/1 Vacant Monitions Candidates` — **76** curated vacant+tax-delinquent. `RentalUnits/0` — **39,424** (`EXPDATE`).
   `Permits/4 New Construction`. `Ownership/0` — **203,752** (`CNTCTLAST` = full owner-name string + mailing + absentee).
 - **Spine proof:** `BaseMaps/Base_Layers/MapServer/0` = **203,752** parcels; PRCLID-only key page ~39 KB (full key list ~8 MB

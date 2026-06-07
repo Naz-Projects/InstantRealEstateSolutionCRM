@@ -15,8 +15,9 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   parcel + owner search page; weekly `syncSpine` cron. Old Firecrawl parcel scrape stays untouched until a later cutover.
 - [ ] **Phase 2 — first signal: code violations** (`CodeEnforcement_CodeCases/0`, dated via `last_edited_date`) →
   `signalEvents` + `leads` + rules scoring. (Stacks with absentee from the spine.)
-- [ ] **Optional quick win** — replace the brittle sheriff-PDF parse with the structured `SheriffSales/0` layer
-  (`PARCELID`+`CASENUMBER`+`PLANTIFF`); low-risk improvement to the existing pipeline.
+- [ ] **Optional quick win** — **augment** (not replace) the sheriff-PDF parse with the structured `SheriffSales/0` layer:
+  join its clean `PARCELID` + court `CASENUMBER`/`PLANTIFF` onto scraped rows. (Layer lacks sale type/principal/sale-date
+  that `deal.ts` needs, so the PDF stays the source of truth.)
 
 ## ✅ Built & shipped
 - [x] **Scraping core** (`src/scraper/*`, runtime-agnostic, unit-tested): Firecrawl client, sheriff PDF parse,
