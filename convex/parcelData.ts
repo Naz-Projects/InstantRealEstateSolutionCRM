@@ -120,6 +120,21 @@ export const markInactiveByPrclids = internalMutation({
   },
 });
 
+// Active stored PRCLIDs within a keyset range (cursor, lastInclusive] — for the CDC
+// range-merge diff. Bounded (one key page ≈ one source range ≈ ~1000 docs).
+export const storedActivePrclidsInRange = internalQuery({
+  args: { after: v.optional(v.string()), lastInclusive: v.string() },
+  handler: async (ctx, { after, lastInclusive }) => {
+    const rows = await ctx.db
+      .query("parcels")
+      .withIndex("by_prclid", (q) =>
+        after ? q.gt("prclid", after).lte("prclid", lastInclusive) : q.lte("prclid", lastInclusive),
+      )
+      .collect();
+    return rows.filter((r) => r.active).map((r) => r.prclid);
+  },
+});
+
 // CLI-callable count (bypasses auth via the deploy key) — for proving the seed.
 export const statsInternal = internalQuery({
   args: {},
@@ -135,15 +150,18 @@ export const parcelStats = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    const latest = await ctx.db.query("parcelSync").withIndex("by_started").order("desc").first();
-    if (!latest) return null;
+    // Few rows (one per seed/sync run). Totals come from the latest SEED (full counts);
+    // a "sync" only records deltas, so reading it for totals would wrongly show ~0.
+    const runs = await ctx.db.query("parcelSync").withIndex("by_started").order("desc").collect();
+    if (runs.length === 0) return null;
+    const latestSeed = runs.find((r) => r.kind === "seed");
+    const lastRun = runs[0];
+    const base = latestSeed ?? lastRun;
     return {
-      total: latest.processed,
-      absentee: latest.absentee,
-      status: latest.status,
-      kind: latest.kind,
-      finishedAt: latest.finishedAt,
-      startedAt: latest.startedAt,
+      total: base.processed,
+      absentee: base.absentee,
+      status: base.status,
+      lastSyncedAt: lastRun.finishedAt ?? lastRun.startedAt,
     };
   },
 });

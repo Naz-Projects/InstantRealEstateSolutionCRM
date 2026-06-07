@@ -151,3 +151,28 @@ export function buildKeyPageUrl({
     `&outFields=PRCLID&returnGeometry=false&orderByFields=PRCLID&resultRecordCount=${pageSize}&f=json`
   );
 }
+
+/** Single-parcel fetch by exact PRCLID (equality — proven robust where range/IN of `*` fail). */
+export function buildParcelByIdUrl(prclid: string): string {
+  return (
+    `${ARCGIS_PARCELS_QUERY}?where=${encodeURIComponent(`PRCLID = '${prclid}'`)}` +
+    `&outFields=${encodeURIComponent(PARCEL_FIELDS)}&returnGeometry=false&f=json`
+  );
+}
+
+/**
+ * Diff a PRCLID key page against what's stored in the same range (both within one
+ * keyset window). new = in source, not stored; vanished = stored (active), not in source.
+ * Pure — the load-bearing CDC logic, unit-tested.
+ */
+export function diffPrclids(
+  sourceKeys: string[],
+  storedActiveKeys: string[],
+): { newKeys: string[]; vanishedKeys: string[] } {
+  const src = new Set(sourceKeys);
+  const stored = new Set(storedActiveKeys);
+  return {
+    newKeys: sourceKeys.filter((k) => !stored.has(k)),
+    vanishedKeys: storedActiveKeys.filter((k) => !src.has(k)),
+  };
+}

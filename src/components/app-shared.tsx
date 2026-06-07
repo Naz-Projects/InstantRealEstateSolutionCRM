@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Gavel, Scale, ShieldCheck, Calculator, Building2 } from "lucide-react";
+import { LayoutDashboard, Gavel, Scale, ShieldCheck, Calculator, Building2, MapPin } from "lucide-react";
 
 export type NavItem = {
 	title: string;
@@ -16,6 +16,7 @@ export const navItems: NavItem[] = [
 	{ title: "Legal Notices", path: "/legal", icon: Scale },
 	{ title: "Flip Analyzer", path: "/flip", icon: Calculator },
 	{ title: "Properties", path: "/properties", icon: Building2 },
+	{ title: "Parcels", path: "/parcels", icon: MapPin },
 	{ title: "Admin", path: "/admin", icon: ShieldCheck, adminOnly: true },
 ];
 

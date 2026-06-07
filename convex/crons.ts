@@ -20,6 +20,15 @@ crons.cron(
   { triggeredBy: "cron", force: false },
 );
 
+// Parcel spine — weekly cheap CDC key-diff (new construction in, vanished out). NOT a
+// full re-pull. Sundays 09:00 UTC. Self-rescheduled + resumable; idempotent.
+crons.cron(
+  "parcel spine weekly sync",
+  "0 9 * * 0",
+  internal.parcelActions.syncSpine,
+  {},
+);
+
 // Public market data (FRED) — refresh on the 1st of each month, 12:00 UTC (~8am ET).
 // The county housing series are monthly; the action is idempotent (upsert by series).
 crons.cron(

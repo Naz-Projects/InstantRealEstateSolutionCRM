@@ -6,6 +6,9 @@ import { v } from "convex/values";
 import {
   ARCGIS_PARCELS_QUERY,
   buildParcelPageUrl,
+  buildKeyPageUrl,
+  buildParcelByIdUrl,
+  diffPrclids,
   parseParcelFeature,
   deriveAbsentee,
   parcelContentHash,
@@ -150,6 +153,100 @@ export const seedSpine = internalAction({
         await ctx.runMutation(internal.parcelData.finishSync, { syncId: id, status: "complete" });
       }
       return { syncId: id, cursor: nextCursor, processed: rows.length, inserted, updated, done };
+    } catch (e) {
+      if (id) {
+        await ctx.runMutation(internal.parcelData.finishSync, {
+          syncId: id,
+          status: "failed",
+          error: String((e as Error).message).slice(0, 500),
+        });
+      }
+      throw e;
+    }
+  },
+});
+
+type SyncResult = {
+  syncId: Id<"parcelSync">;
+  cursor: string | null;
+  scanned: number;
+  newCount: number;
+  vanishedCount: number;
+  done: boolean;
+};
+
+/**
+ * Cheap incremental CDC (NOT a full re-pull): page the PRCLID key list (reliable
+ * keys-only), and per keyset range diff against what's stored — insert NEW parcels
+ * (new construction), mark VANISHED ones inactive (split/merge). Self-rescheduled +
+ * resumable. Attribute changes on existing parcels are refreshed by re-running seedSpine
+ * (heavier) on a slower cadence; this weekly job keeps the key set correct cheaply.
+ * (Edge: parcels with a PRCLID greater than every source key aren't range-checked — a
+ * rare top-tail deletion; acceptable for v1.)
+ */
+export const syncSpine = internalAction({
+  args: { syncId: v.optional(v.id("parcelSync")), afterPrclid: v.optional(v.string()) },
+  handler: async (ctx, { syncId, afterPrclid }): Promise<SyncResult> => {
+    let id = syncId;
+    try {
+      if (!id) id = await ctx.runMutation(internal.parcelData.createSync, { kind: "sync" });
+
+      const json = await fetchArcgis(buildKeyPageUrl({ afterPrclid, pageSize: 1000 }), 3);
+      const feats: Array<{ attributes: Record<string, unknown> }> = json.features ?? [];
+      const sourceKeys = feats.map((f) => String(f.attributes.PRCLID));
+      const done = sourceKeys.length === 0;
+      const rangeEnd = sourceKeys.length ? sourceKeys[sourceKeys.length - 1] : (afterPrclid ?? null);
+
+      let newCount = 0;
+      let vanishedCount = 0;
+      let absentee = 0;
+
+      if (!done && rangeEnd) {
+        const storedActive: string[] = await ctx.runQuery(
+          internal.parcelData.storedActivePrclidsInRange,
+          { after: afterPrclid, lastInclusive: rangeEnd },
+        );
+        const { newKeys, vanishedKeys } = diffPrclids(sourceKeys, storedActive);
+
+        // New parcels (usually few) — fetch each by equality (robust), then upsert.
+        const newRows = [];
+        for (const k of newKeys) {
+          const r = await fetchArcgis(buildParcelByIdUrl(k), 3);
+          const f = (r.features ?? [])[0];
+          if (f?.attributes) newRows.push(toRow(parseParcelFeature(f.attributes)));
+        }
+        for (let i = 0; i < newRows.length; i += CHUNK) {
+          const res = await ctx.runMutation(internal.parcelData.upsertParcelsBatch, {
+            rows: newRows.slice(i, i + CHUNK),
+          });
+          newCount += res.inserted;
+          absentee += res.absentee;
+        }
+        if (vanishedKeys.length) {
+          const res = await ctx.runMutation(internal.parcelData.markInactiveByPrclids, {
+            prclids: vanishedKeys,
+          });
+          vanishedCount += res.deactivated;
+        }
+        await ctx.runMutation(internal.parcelData.updateSyncProgress, {
+          syncId: id,
+          cursor: rangeEnd,
+          processedDelta: sourceKeys.length,
+          inserted: newCount,
+          updated: 0,
+          absentee,
+        });
+      }
+
+      if (!done && rangeEnd) {
+        await ctx.scheduler.runAfter(0, internal.parcelActions.syncSpine, {
+          syncId: id,
+          afterPrclid: rangeEnd,
+        });
+      } else {
+        await ctx.runMutation(internal.parcelData.finishSync, { syncId: id, status: "complete" });
+      }
+      return { syncId: id, cursor: rangeEnd, scanned: sourceKeys.length, newCount, vanishedCount, done };
     } catch (e) {
       if (id) {
         await ctx.runMutation(internal.parcelData.finishSync, {

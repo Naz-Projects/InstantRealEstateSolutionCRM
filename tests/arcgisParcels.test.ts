@@ -5,6 +5,8 @@ import {
   parcelContentHash,
   buildParcelPageUrl,
   buildKeyPageUrl,
+  buildParcelByIdUrl,
+  diffPrclids,
 } from "../src/scraper/arcgisParcels";
 
 // Real attribute row from the NCC ArcGIS Parcels layer (Phase 0 probe, 2026-06-06).
@@ -158,5 +160,25 @@ describe("URL builders (keyset pagination)", () => {
     expect(url).toContain("outFields=PRCLID");
     expect(url).not.toContain("outFields=*");
     expect(decodeURIComponent(url)).toContain("PRCLID > '0601300376'");
+  });
+
+  it("single-parcel URL uses equality + the field list", () => {
+    const url = buildParcelByIdUrl("1100830074");
+    expect(decodeURIComponent(url)).toContain("PRCLID = '1100830074'");
+    expect(decodeURIComponent(url)).toContain("CNTCTLAST");
+    expect(url).not.toContain("outFields=*");
+  });
+});
+
+describe("diffPrclids (CDC)", () => {
+  it("finds new (in source) and vanished (stored, gone from source)", () => {
+    expect(diffPrclids(["a", "b", "c"], ["b", "c", "d"])).toEqual({
+      newKeys: ["a"],
+      vanishedKeys: ["d"],
+    });
+  });
+
+  it("returns empty diffs when source and stored match", () => {
+    expect(diffPrclids(["a", "b"], ["a", "b"])).toEqual({ newKeys: [], vanishedKeys: [] });
   });
 });
