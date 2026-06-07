@@ -16,9 +16,16 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   **NCC `CustomMaps` = a free, `PRCLID`-keyed distress-feed suite** (code cases 2,852 dated · vacant 859 · vacant-monition
   candidates 76 · structured sheriff sales 53 · rentals 39,424 · permits/new-construction · owners w/ full name). Assessed
   value + tax/sewer balances = funnel-only browser/paid; upstream lis-pendens = CourtConnect scrape (verify ToS).
-- [ ] **Phase 1 (NEXT) — parcel spine + absentee + search page.** Own spec → plan → TDD build (additive, serverless/free):
-  `parcels` table fed by `BaseMaps/Base_Layers/0` (or `CustomMaps/Ownership/0`) via `PRCLID` key-diff CDC; absentee derived;
-  parcel + owner search page; weekly `syncSpine` cron. Old Firecrawl parcel scrape stays untouched until a later cutover.
+- [x] **Phase 1 — parcel spine + absentee + search page BUILT** (branch `feat/lead-engine-phase1-spine`, NOT merged/deployed).
+  Plan: `docs/superpowers/plans/2026-06-07-lead-engine-phase1-spine-search.md`. Pure `src/scraper/arcgisParcels.ts` (keyset +
+  field-list + absentee + hash + diff; 13 tests), `parcels`/`parcelSync` schema, `convex/parcelData.ts` + `parcelActions.ts`
+  (`seedSpine` resumable, `syncSpine` cheap CDC key-diff), weekly cron, `/parcels` search page (owner/address/parcel# +
+  absentee flags + owner-portfolio view). **Live-verified on DEV: seeded 203,739 distinct parcels (203,752 source), 53,293
+  absentee (26%), spot-checked; CDC sync ran clean (0 new/vanished).** 111 tests, build clean.
+  - [ ] **Merge to `main` + deploy to prod**, then **seed prod** (`npx convex run parcelActions:seedSpine` w/ prod key; ~16 min).
+  - [ ] **Live click-through** `/parcels` on dev/prod (search returns rows; absentee badges; owner-portfolio panel).
+  - [ ] **Attribute-change refresh:** weekly cron does new/vanished only; schedule/period a full `seedSpine` re-run to catch
+    owner/address changes (heavier). Also: vanished top-tail edge (PRCLID > max source) not marked — rare, documented.
 - [ ] **Phase 2 — first signal: code violations** (`CodeEnforcement_CodeCases/0`, dated via `last_edited_date`) →
   `signalEvents` + `leads` + rules scoring. (Stacks with absentee from the spine.)
 - [ ] **Optional quick win** — **augment** (not replace) the sheriff-PDF parse with the structured `SheriffSales/0` layer:
