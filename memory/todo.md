@@ -7,6 +7,10 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [x] **Spec written + committed** (`ce11b62`) — `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`.
 - [x] **Distress-signal catalog** — `memory/distress-signals.md` (full menu of "why would they sell?" signals: 4 motivation
   categories + niche lists + LIST STACKING method + NCC availability map). Feeds the scoring layer.
+- [x] **Enrichment sourcing + product vision + imagery/CV roadmap** — `memory/lead-engine-enrichment-and-vision.md`
+  (free-first→paid strategy; how to source every remaining flag incl. CourtConnect/Recorder-of-Deeds free, DE divorce
+  =confidential, bankruptcy=PACER; satellite/aerial CV via Cape Analytics/Nearmap vs cheap DIY Street View+LLM-vision;
+  saleable-product design constraints). Enrichment is **tiered + funnel-only**.
 - [x] **Phase 0 research COMPLETE** — `memory/source-matrix.md` (+ plan `docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md`).
   Verified live (throwaway cloud-dev Convex probe, removed): spine = 203,752 parcels (`PRCLID` CDC, `orderByFields` required);
   **NCC `CustomMaps` = a free, `PRCLID`-keyed distress-feed suite** (code cases 2,852 dated · vacant 859 · vacant-monition
