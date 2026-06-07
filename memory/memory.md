@@ -2,6 +2,24 @@
 
 _Read this first. It's the "what & why" so you don't have to reverse-engineer the codebase._
 
+## ★ Active initiative (2026-06-06) — Wholesaling Lead Engine
+Current build focus: turn the CRM into a New Castle County **wholesaling lead engine** (ingest ALL parcels + attach
+distress signals → score → reach owners off-market). **Design APPROVED + spec COMMITTED (`ce11b62`); Phase 0 research
+COMPLETE.** Spec: `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`; Phase 0 plan:
+`docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md`; **Source Matrix: `memory/source-matrix.md`.**
+Builds on `memory/next-initiative-offmarket.md`. **Pick up via `memory/next-session-prompt.md` (top section).**
+**PHASE 0 HEADLINE (verified live via a throwaway cloud-dev Convex probe, now removed):** the NCC ArcGIS
+`CustomMaps` folder is a **free, public, `PRCLID`-keyed suite of distress feeds** — `CodeEnforcement_CodeCases` (2,852
+code cases, **dated** via `last_edited_date`/`APDTTM` + a "Cases added last 30 days" view), `Code_Enforcement/6 Vacant
+Properties` (859), `SheriffSales/1 Vacant Monitions Candidates` (76, curated vacant+tax-delinquent), `SheriffSales/0`
+(53, **structured** w/ `CASENUMBER`/`PLANTIFF` — can replace the brittle sheriff-PDF parse), `RentalUnits/0` (39,424),
+`Permits/4 New Construction`, `Ownership/0` (203,752; `CNTCTLAST` = full owner-name string + mailing). So **Phases 2–3
+are FREE + serverless** (no browser/paid). Only **assessed value + tax/sewer balances** (Reblaze per-parcel site →
+browser/paid, funnel-only) and **upstream court lis-pendens** (CourtConnect, scrape — verify ToS) aren't free.
+Spine proof: 203,752 parcels; PRCLID-only key page ~39 KB (full list ~8 MB; **`orderByFields=PRCLID` REQUIRED** to page a
+single field or ArcGIS 400s); full seed ~167 MB. CDC keys on **`PRCLID` (not OBJECTID)**; **ingest broad, surface narrow**;
+serverless only. **NEXT: Phase 1 = `parcels` spine + absentee + search page (own spec→plan→build); then Phase 2 = code-violations signal.**
+
 ## What this is
 A CRM for **Instant Real Estate Solution (IRES)** — a Delaware / New Castle County (NCC) real-estate
 **wholesaling, flipping, and buy-and-rent** business. The CRM's headline feature is one-click automations:
@@ -192,7 +210,7 @@ this tracks **actuals**. `/properties` (card grid, filter All/Flips/Rentals) + `
   (Properties/PropertyDetail/Flip/Sheriff-Legal `DealSelect`/Admin); the map InfoWindow select stays native (Radix
   portal vs Google InfoWindow). Built directly on a feature branch (frontend-only; no Convex), 75 tests, deployed.
 
-## Market Data Dashboard (FRED auto-pull) — 2026-06-04 (built, DEV-verified; NOT committed/deployed)
+## Market Data Dashboard (FRED auto-pull) — 2026-06-04 (SHIPPED: committed to `main` + DEPLOYED TO PROD)
 Live **public market data** on the Dashboard, **auto-refreshed monthly by cron** (no clicks) — the answer to "what
 data does a real-estate company watch + how do we pull it automatically." **Additive**: zero change to Sheriff/Legal/
 Flip/Properties. Researched alternatives (Redfin/Zillow bulk files, news RSS) and chose **FRED only** for v1 (one free
@@ -213,9 +231,14 @@ JSON API, county-level DE data, fits the existing `cron → action → store →
   uncolored deltas** since a rate/price rise isn't inherently good/bad; FRED attribution) mounted atop `dashboard.tsx`.
 - **DEV live run** (`refreshMarketData`: updated 9 / skipped 0): mortgage 6.53% (2026-05-28, matches independent search),
   Fed funds 3.63%; active New Castle 818 / Kent 490 / Sussex 1876 / DE 3183 (2026-04); DOM 48d / list $500k / cuts 1002.
-- **Pending:** deliberate commit (dirty tree — `schema.ts`+`_generated` also carry pre-existing property-zillow-facts WIP),
-  set prod `FRED_API_KEY` + deploy, live authenticated visual check. **v2:** Redfin/Zillow page-scrape for sale price /
-  sale-to-list / city-level Wilmington-Newark / ZORI rent (the `comps.ts` Firecrawl pattern; NOT the bulk TSV).
+- **SHIPPED:** committed by the parallel session into `main` (`61851c8`, bundled w/ property-zillow-facts + `620a7bf`
+  error-logging + `50cf23c` docs); pushed. **Deployed to prod** `pastel-crocodile-994`: `FRED_API_KEY` set; `convex deploy`
+  (schema validated, cron active); `refreshMarketData` on prod → 9/9 with latest data (mortgage 6.48% @ 2026-06-04; active
+  listings May-2026 NCC 855 / Kent 492 / Sussex 1934 / DE 3302). Auth gate verified (CLI got UNAUTHENTICATED = correct).
+  Headless render verified earlier (throwaway preview, reverted). **Pending:** confirm the Cloudflare FRONTEND build shipped
+  (open the live CRM → Dashboard → "Delaware market" section; if missing, CF Workers build likely failed on a stale prod
+  `CONVEX_DEPLOY_KEY` in CF env — re-run it). **v2:** Redfin/Zillow page-scrape for sale price / sale-to-list / city-level
+  Wilmington-Newark / ZORI rent (the `comps.ts` Firecrawl pattern; NOT the bulk TSV).
 
 ## Error logging + branded dialogs + security pass (2026-06-04)
 A senior-dev security/robustness overhaul. **Backend audit result: solid** — every browser-callable Convex fn gates

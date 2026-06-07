@@ -3,6 +3,21 @@
 What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocked on the user.
 (History lives in git; this is the current picture, not a session log.)
 
+## ★ ACTIVE — Wholesaling Lead Engine (Phase 0 DONE → Phase 1 NEXT)
+- [x] **Spec written + committed** (`ce11b62`) — `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`.
+- [x] **Phase 0 research COMPLETE** — `memory/source-matrix.md` (+ plan `docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md`).
+  Verified live (throwaway cloud-dev Convex probe, removed): spine = 203,752 parcels (`PRCLID` CDC, `orderByFields` required);
+  **NCC `CustomMaps` = a free, `PRCLID`-keyed distress-feed suite** (code cases 2,852 dated · vacant 859 · vacant-monition
+  candidates 76 · structured sheriff sales 53 · rentals 39,424 · permits/new-construction · owners w/ full name). Assessed
+  value + tax/sewer balances = funnel-only browser/paid; upstream lis-pendens = CourtConnect scrape (verify ToS).
+- [ ] **Phase 1 (NEXT) — parcel spine + absentee + search page.** Own spec → plan → TDD build (additive, serverless/free):
+  `parcels` table fed by `BaseMaps/Base_Layers/0` (or `CustomMaps/Ownership/0`) via `PRCLID` key-diff CDC; absentee derived;
+  parcel + owner search page; weekly `syncSpine` cron. Old Firecrawl parcel scrape stays untouched until a later cutover.
+- [ ] **Phase 2 — first signal: code violations** (`CodeEnforcement_CodeCases/0`, dated via `last_edited_date`) →
+  `signalEvents` + `leads` + rules scoring. (Stacks with absentee from the spine.)
+- [ ] **Optional quick win** — replace the brittle sheriff-PDF parse with the structured `SheriffSales/0` layer
+  (`PARCELID`+`CASENUMBER`+`PLANTIFF`); low-risk improvement to the existing pipeline.
+
 ## ✅ Built & shipped
 - [x] **Scraping core** (`src/scraper/*`, runtime-agnostic, unit-tested): Firecrawl client, sheriff PDF parse,
   address cleaning, NCC parcel lookup, Zillow extract, Legal Notices LLM extraction, per-listing enrich,
@@ -163,7 +178,7 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     should appear. If not, the key has neither legacy nor New Places enabled (check Google Cloud).
   - [ ] (Optional) shadcn-ify the map InfoWindow select via a Radix portal-container fix, if desired.
 
-## ✅ Built — Market Data Dashboard (FRED auto-pull) — 2026-06-04, DEV-verified, NOT committed/deployed
+## ✅ SHIPPED — Market Data Dashboard (FRED auto-pull) — 2026-06-04, committed + DEPLOYED TO PROD
 - [x] **Live public market data on the Dashboard, auto-refreshed monthly by cron — no clicks.** Additive: new table +
   pure parser + action + monthly cron + dashboard widgets; zero change to Sheriff/Legal/Flip/Properties.
   Spec: `docs/superpowers/specs/2026-06-04-market-data-dashboard-design.md`. Built TDD (RED→GREEN), 93 tests pass, build clean.
@@ -179,12 +194,19 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   - **DEV live-verified** (`refreshMarketData` → updated 9 / skipped 0): mortgage 6.53% (2026-05-28, matches independent
     search), Fed funds 3.63%; **active listings by county** New Castle 818 / Kent 490 / Sussex 1876 / DE 3183 (2026-04);
     median DOM 48d, median list price $500k, price cuts 1002 (DE, 2026-04). All series fresh — extras stayed visible.
-  - [ ] **Commit** (dirty tree: `convex/schema.ts` + `convex/_generated` ALSO carry the pre-existing property-zillow-facts
-    WIP — stage my hunks/files deliberately, don't sweep WIP; regen `_generated` to match whatever schema is committed).
-  - [ ] **Deploy to prod:** set `FRED_API_KEY` on prod `pastel-crocodile-994` (`CONVEX_DEPLOY_KEY_PROD … env set`), then
-    push/deploy (CF `--cmd` build deploys backend+frontend). Cron activates on prod once functions are there.
-  - [ ] **Live authenticated visual check** of the Dashboard market section (headless screenshot skipped — data layer
-    proven live; UI is type-checked + uses existing Card/Table primitives + pure-SVG sparkline, no recharts).
+  - [x] **Committed** by the parallel session into `main` (bundled in `61851c8 feat(market-data, properties): …`, alongside
+    the property-zillow-facts WIP + the `620a7bf` error-logging/auth-hardening + `50cf23c` docs commits). `main` pushed to origin.
+  - [x] **Headless render verified** (throwaway preview + Chrome screenshot, then reverted): "Delaware market" section renders
+    — rate cards w/ teal SVG sparklines, county inventory table, temperature card, attribution. 98 tests pass, build clean.
+  - [x] **DEPLOYED TO PROD** (`pastel-crocodile-994`): `FRED_API_KEY` set on prod; `npx convex deploy` (schema validated,
+    functions live, **monthly cron now active on prod**); `refreshMarketData` run on prod → **updated 9 / skipped 0** with the
+    LATEST data (mortgage 6.48% @ 2026-06-04; active listings May-2026 New Castle 855 / Kent 492 / Sussex 1934 / DE 3302;
+    DOM 50d). The auth-gated `dashboardMetrics` correctly rejected the CLI (UNAUTHENTICATED) = security working.
+  - [ ] **Confirm the FRONTEND deployed** — open https://crm.instantrealestatesolution.com, sign in, check the Dashboard for the
+    "Delaware market" section. It ships via Cloudflare's build on the pushed `main`; if missing, the CF Workers build likely
+    failed on a stale prod `CONVEX_DEPLOY_KEY` in CF env (bit us 2026-06-03) → check Workers → Builds + re-run.
+  - [ ] **v2 (separate spec):** median SALE price, sale-to-list %, % price drops, **city-level Wilmington/Newark**, ZORI rent
+    → page-scrape Redfin county/city page via Firecrawl (the `comps.ts` pattern; NOT the 100MB bulk TSV).
   - [ ] **v2 (separate spec):** median SALE price, sale-to-list %, % price drops, **city-level Wilmington/Newark**, ZORI
     rent → page-scrape Redfin county/city page via Firecrawl (the `comps.ts` pattern; NOT the 100MB bulk TSV).
 

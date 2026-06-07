@@ -2,6 +2,54 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
+## ★ ACTIVE INITIATIVE (2026-06-06) — Wholesaling Lead Engine — PHASE 1 IS NEXT (PICK UP HERE)
+**Status: spec APPROVED + COMMITTED (`ce11b62`) · Phase 0 research COMPLETE · Phase 1 NOT started.** Turn the CRM into a
+**New Castle County wholesaling lead engine** — ingest ALL parcels + attach **distress signals** → score leads → reach
+owners **off-market**. Builds ON [`memory/next-initiative-offmarket.md`](next-initiative-offmarket.md).
+
+**READ FIRST:** the spec [`docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`](../docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md)
+(4-layer north-star) · the **Source Matrix [`memory/source-matrix.md`](source-matrix.md)** (Phase 0 result) · the Phase 0 plan
+[`docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md`](../docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md).
+
+**PHASE 0 RESULT — the win is bigger than the spec assumed (verified live; DON'T re-probe):** the NCC ArcGIS
+**`CustomMaps` folder** (`https://gis.nccde.org/agsserver/rest/services/CustomMaps`) is a **free, public, `PRCLID`-keyed
+suite of distress feeds**, several **dated** (cheap delta, no 200k re-scan):
+- `CodeEnforcement_CodeCases/0` — **2,852** code cases, dated (`last_edited_date`/`created_date`/`APDTTM`), `APDESC`
+  (e.g. "HIGH WEED AND GRASS"), `STAT`; helper views `Code_Enforcement/MapServer` (6 Vacant Properties **859**, 9 Open
+  Cases, **11 "Cases added last 30 days" 1,051**, 8 Resolved-with-Fees-Owed). ← **Phase 2 signal winner.**
+- `SheriffSales/0` — **53**, *structured* (`PARCELID`,`CASENUMBER`,`PLANTIFF`) → **can replace the brittle sheriff-PDF parse**.
+- `SheriffSales/1 Vacant Monitions Candidates` — **76** curated vacant+tax-delinquent. `RentalUnits/0` — **39,424** (`EXPDATE`).
+  `Permits/4 New Construction`. `Ownership/0` — **203,752** (`CNTCTLAST` = full owner-name string + mailing + absentee).
+- **Spine proof:** `BaseMaps/Base_Layers/MapServer/0` = **203,752** parcels; PRCLID-only key page ~39 KB (full key list ~8 MB
+  ⇒ cheap CDC diff; **MUST add `orderByFields=PRCLID`** to page a single field, else ArcGIS 400s); full seed ~167 MB; only
+  `TAXAREA` value-ish. FirstMap `DE_StateParcels` thinner (no owner/value) → use the NCC layer.
+- **Still NOT free (funnel-only / verify-later):** **assessed value + tax/sewer balances** (Reblaze per-parcel site →
+  Firecrawl/Scrapling browser, only for flagged parcels) and **upstream court lis-pendens** (CourtConnect scrape — verify ToS).
+
+**Locked decisions:** Phase 1 = ArcGIS parcel + absentee + **parcel/owner SEARCH page**, additive alongside the live
+Firecrawl parcel scrape (cutover later). NCC first. **Serverless only** (no Docker/VPS — hard rule). CDC key = **`PRCLID`,
+never `OBJECTID`**. **Ingest broad, surface narrow.**
+
+**EXACT NEXT STEP (do in order):**
+1. **Write the Phase 1 spec** (`docs/superpowers/specs/2026-06-06-lead-engine-phase1-spine-search.md`): `parcels` table
+   (`prclid` unique, situs, owner-mailing, `ownerName`=`CNTCTLAST`, `absentee`+reason, `contentHash`, `firstSeen/lastSeen/active`),
+   pure `src/scraper/arcgisParcels.ts` (URL build, feature→Parcel, absentee derive, hash), `convex/parcelData.ts` (upsert-by-prclid,
+   search) + `convex/parcelActions.ts` (`"use node"` `syncSpine` = paginate PRCLID keys w/ `orderByFields` → diff → enrich
+   new/changed), weekly cron, a **parcel+owner search page** (reuse `PropertyMap`/Street View, dark shadcn). Additive; no change
+   to Sheriff/Legal/Flip/Properties or the Firecrawl parcel path.
+2. → **writing-plans** skill → TDD build (consider an isolated worktree if concurrent sessions are possible;
+   `CONVEX_AGENT_MODE=anonymous` for isolated codegen). Live-prove the sync (count in / count stored / spot-checked absentee).
+3. Then **Phase 2** (code-violations signal) gets its own spec→plan.
+
+⚠ **This dev sandbox BLOCKS local outbound HTTP** — verify any new endpoint via a throwaway cloud-dev Convex action
+(`npx convex run`), NOT local curl/WebFetch (the Phase 0 probe technique; see lessons 2026-06-06). The real `syncSpine`
+runs in Convex cloud (has network), so it's unaffected.
+
+**Scraping-tool context (eval — see lessons 2026-06-06):** the NCC parcel ASP.NET site (Reblaze) needs a **real browser**
+(Scrapling `StealthyFetcher`+`page_action` drives it free, but a browser must be HOSTED → conflicts with serverless — which
+is why the free ArcGIS API is the spine path). Keep Firecrawl for Zillow. Full verdict:
+`C:\Users\nazho\Desktop\scraping-test\output\ires\VERDICT-ires.md`.
+
 ## Where we are — production is live
 The IRES CRM is **live in production** at **https://crm.instantrealestatesolution.com** — Convex prod
 `pastel-crocodile-994`, Cloudflare Workers project `instant-real-estate-solution-crm`, Clerk **production**
