@@ -269,6 +269,54 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_property", ["propertyId"]),
 
+  // Parcel "spine" — every NCC parcel from the free ArcGIS layer, keyed on PRCLID.
+  // Slowly-changing: seeded once, kept fresh by a PRCLID key-diff CDC. `absentee`
+  // (owner mailing ≠ situs) is derived. Additive; no link to the scrape pipelines.
+  // See memory/source-matrix.md + docs/superpowers/plans/2026-06-07-lead-engine-phase1*.
+  parcels: defineTable({
+    prclid: v.string(), // natural key (APN) — NEVER the ArcGIS OBJECTID
+    situsStreet: v.string(),
+    propCity: v.string(),
+    propState: v.string(),
+    propZip: v.string(),
+    propClass: v.string(),
+    lotSz: v.optional(v.number()),
+    ownerName: v.string(), // CNTCTLAST (full owner-name string)
+    ownerAddr: v.string(),
+    ownerAddr2: v.string(),
+    ownerCity: v.string(),
+    ownerState: v.string(),
+    ownerZip: v.string(),
+    ownerCountry: v.string(),
+    absentee: v.boolean(),
+    absenteeReason: v.string(), // out-of-state | in-state-absentee | owner-occupant | undetermined
+    searchText: v.string(), // situs + city + zip + owner + prclid (for the search index)
+    contentHash: v.string(), // change detection for the CDC
+    firstSeen: v.number(),
+    lastSeen: v.number(),
+    active: v.boolean(), // false once a PRCLID vanishes from the source (split/merge)
+  })
+    .index("by_prclid", ["prclid"])
+    .index("by_owner", ["ownerName"])
+    .index("by_active", ["active"])
+    .searchIndex("search_text", { searchField: "searchText" }),
+
+  // Progress/counters for the parcel seed + CDC sync (one row per run). Counters are
+  // maintained incrementally because Convex can't cheaply COUNT ~203k docs.
+  parcelSync: defineTable({
+    kind: v.union(v.literal("seed"), v.literal("sync")),
+    status: v.union(v.literal("running"), v.literal("complete"), v.literal("failed")),
+    cursor: v.optional(v.string()), // last PRCLID processed (keyset resume point)
+    total: v.optional(v.number()), // source count (returnCountOnly) for progress
+    processed: v.number(),
+    inserted: v.number(),
+    updated: v.number(),
+    absentee: v.number(), // absentee parcels seen this run
+    startedAt: v.number(),
+    finishedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+  }).index("by_started", ["startedAt"]),
+
   // Captured application errors surfaced on the Admin → Error Log page. Written
   // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
   // failures), and autonomous backend actions (cron). Admins triage + resolve.

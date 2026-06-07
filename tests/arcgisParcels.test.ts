@@ -132,21 +132,31 @@ describe("parcelContentHash", () => {
   });
 });
 
-describe("URL builders", () => {
-  it("builds a full-field page URL with PRCLID ordering and paging", () => {
-    const url = buildParcelPageUrl({ offset: 2000, pageSize: 1000 });
+describe("URL builders (keyset pagination)", () => {
+  it("first page uses where=1=1, explicit field list (not *), PRCLID order, no resultOffset", () => {
+    const url = buildParcelPageUrl({ pageSize: 1000 });
     expect(url).toContain("/BaseMaps/Base_Layers/MapServer/0/query");
-    expect(url).toContain("outFields=*");
+    expect(url).not.toContain("outFields=*"); // dodge the corrupt field
+    expect(decodeURIComponent(url)).toContain("PRCLID,ADDRESS"); // explicit projection
+    expect(decodeURIComponent(url)).toContain("CNTCTLAST");
     expect(url).toContain("orderByFields=PRCLID");
-    expect(url).toContain("resultOffset=2000");
+    expect(url).toContain("where=1%3D1");
     expect(url).toContain("resultRecordCount=1000");
     expect(url).toContain("returnGeometry=false");
+    expect(url).not.toContain("resultOffset");
   });
 
-  it("builds a PRCLID-only key page URL (the CDC diff)", () => {
-    const url = buildKeyPageUrl({ offset: 0, pageSize: 1000 });
-    expect(url).toContain("outFields=PRCLID");
+  it("subsequent page is keyset by the last PRCLID (no resultOffset)", () => {
+    const url = buildParcelPageUrl({ afterPrclid: "0601300376", pageSize: 1000 });
+    expect(decodeURIComponent(url)).toContain("PRCLID > '0601300376'");
+    expect(url).not.toContain("resultOffset");
     expect(url).toContain("orderByFields=PRCLID");
+  });
+
+  it("key page URL is PRCLID-only and also keyset", () => {
+    const url = buildKeyPageUrl({ afterPrclid: "0601300376", pageSize: 1000 });
+    expect(url).toContain("outFields=PRCLID");
     expect(url).not.toContain("outFields=*");
+    expect(decodeURIComponent(url)).toContain("PRCLID > '0601300376'");
   });
 });

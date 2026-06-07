@@ -7,6 +7,16 @@
 export const ARCGIS_PARCELS_QUERY =
   "https://gis.nccde.org/agsserver/rest/services/BaseMaps/Base_Layers/MapServer/0/query";
 
+// Request ONLY the fields we parse — NOT outFields=*. One of the layer's other ~26
+// fields holds a corrupt/oversized value in a dense region (~PRCLID 1100830074) that
+// makes `outFields=*` 400 ("Failed to execute query") for any multi-record page there,
+// while an explicit field list serializes fine (and is smaller/faster). Verified live.
+export const PARCEL_FIELDS = [
+  "PRCLID", "ADDRESS", "STNO", "STNAME", "PROPCITY", "PROPSTATE", "PROPZIP",
+  "PROPCLASS", "LOTSZ", "CNTCTLAST", "OWNADDR", "OWNADDR2", "OWNCITY",
+  "OWNSTATE", "OWNZIP", "OWNCOUNTRY",
+].join(",");
+
 export interface Parcel {
   prclid: string;
   situsStreet: string; // cleaned ADDRESS line (whitespace squashed), e.g. "1018 SMITH BRIDGE RD"
@@ -111,18 +121,33 @@ export function parcelContentHash(p: Parcel): string {
   return (h >>> 0).toString(16);
 }
 
-/** Full-field page URL for the seed (PRCLID-ordered paging). */
-export function buildParcelPageUrl({ offset, pageSize }: { offset: number; pageSize: number }): string {
+// KEYSET pagination (where PRCLID > last, ordered by PRCLID) — robust for the full
+// ~204-page extract. Deep `resultOffset` paging is fragile at scale (it intermittently
+// 400s "Failed to execute query" on this server); keyset avoids it and makes the seed
+// resumable from the last PRCLID instead of a numeric offset.
+function pageWhere(afterPrclid?: string): string {
+  return afterPrclid ? `PRCLID > '${afterPrclid}'` : "1=1";
+}
+
+/** Field-projected page URL for the seed (keyset by PRCLID; explicit fields, not *). */
+export function buildParcelPageUrl({
+  afterPrclid,
+  pageSize,
+}: { afterPrclid?: string; pageSize: number }): string {
   return (
-    `${ARCGIS_PARCELS_QUERY}?where=1%3D1&outFields=*&returnGeometry=false` +
-    `&orderByFields=PRCLID&resultRecordCount=${pageSize}&resultOffset=${offset}&f=json`
+    `${ARCGIS_PARCELS_QUERY}?where=${encodeURIComponent(pageWhere(afterPrclid))}` +
+    `&outFields=${encodeURIComponent(PARCEL_FIELDS)}&returnGeometry=false` +
+    `&orderByFields=PRCLID&resultRecordCount=${pageSize}&f=json`
   );
 }
 
-/** PRCLID-only key page URL for the CDC key-diff (cheap; orderByFields REQUIRED). */
-export function buildKeyPageUrl({ offset, pageSize }: { offset: number; pageSize: number }): string {
+/** PRCLID-only key page URL for the CDC key-diff (cheap; keyset by PRCLID). */
+export function buildKeyPageUrl({
+  afterPrclid,
+  pageSize,
+}: { afterPrclid?: string; pageSize: number }): string {
   return (
-    `${ARCGIS_PARCELS_QUERY}?where=1%3D1&outFields=PRCLID&returnGeometry=false` +
-    `&orderByFields=PRCLID&resultRecordCount=${pageSize}&resultOffset=${offset}&f=json`
+    `${ARCGIS_PARCELS_QUERY}?where=${encodeURIComponent(pageWhere(afterPrclid))}` +
+    `&outFields=PRCLID&returnGeometry=false&orderByFields=PRCLID&resultRecordCount=${pageSize}&f=json`
   );
 }

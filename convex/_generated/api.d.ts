@@ -21,6 +21,8 @@ import type * as legalData from "../legalData.js";
 import type * as lib_getAuthUser from "../lib/getAuthUser.js";
 import type * as marketActions from "../marketActions.js";
 import type * as marketData from "../marketData.js";
+import type * as parcelActions from "../parcelActions.js";
+import type * as parcelData from "../parcelData.js";
 import type * as propertyActions from "../propertyActions.js";
 import type * as propertyData from "../propertyData.js";
 import type * as runs from "../runs.js";
@@ -48,6 +50,8 @@ declare const fullApi: ApiFromModules<{
   "lib/getAuthUser": typeof lib_getAuthUser;
   marketActions: typeof marketActions;
   marketData: typeof marketData;
+  parcelActions: typeof parcelActions;
+  parcelData: typeof parcelData;
   propertyActions: typeof propertyActions;
   propertyData: typeof propertyData;
   runs: typeof runs;
