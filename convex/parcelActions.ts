@@ -99,10 +99,17 @@ type SeedResult = {
  * Seed/refresh the parcel spine via KEYSET pagination (where PRCLID > cursor, ordered).
  * Resumable + idempotent: self-reschedules one page at a time, upserting by PRCLID.
  * Initial run (no syncId) fetches the source count for progress, then walks all pages.
+ * `maxPages` caps the run (quota safety while debugging — a full unbounded seed is
+ * ~204 pages / ~203k writes; see lessons 2026-06-08). Omit it for a real full seed.
  */
 export const seedSpine = internalAction({
-  args: { syncId: v.optional(v.id("parcelSync")), afterPrclid: v.optional(v.string()) },
-  handler: async (ctx, { syncId, afterPrclid }): Promise<SeedResult> => {
+  args: {
+    syncId: v.optional(v.id("parcelSync")),
+    afterPrclid: v.optional(v.string()),
+    maxPages: v.optional(v.number()),
+    pagesDone: v.optional(v.number()),
+  },
+  handler: async (ctx, { syncId, afterPrclid, maxPages, pagesDone }): Promise<SeedResult> => {
     let id = syncId;
     try {
       if (!id) {
@@ -144,15 +151,26 @@ export const seedSpine = internalAction({
         });
       }
 
-      if (!done && nextCursor) {
+      const page = (pagesDone ?? 0) + 1;
+      const capped = maxPages !== undefined && page >= maxPages;
+      if (!done && !capped && nextCursor) {
         await ctx.scheduler.runAfter(0, internal.parcelActions.seedSpine, {
           syncId: id,
           afterPrclid: nextCursor,
+          maxPages,
+          pagesDone: page,
         });
       } else {
         await ctx.runMutation(internal.parcelData.finishSync, { syncId: id, status: "complete" });
       }
-      return { syncId: id, cursor: nextCursor, processed: rows.length, inserted, updated, done };
+      return {
+        syncId: id,
+        cursor: nextCursor,
+        processed: rows.length,
+        inserted,
+        updated,
+        done: done || capped,
+      };
     } catch (e) {
       if (id) {
         await ctx.runMutation(internal.parcelData.finishSync, {
