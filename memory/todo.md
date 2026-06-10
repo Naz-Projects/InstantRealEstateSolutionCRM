@@ -22,8 +22,12 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   (`seedSpine` resumable, `syncSpine` cheap CDC key-diff), weekly cron, `/parcels` search page (owner/address/parcel# +
   absentee flags + owner-portfolio view). **Live-verified on DEV: seeded 203,739 distinct parcels (203,752 source), 53,293
   absentee (26%), spot-checked; CDC sync ran clean (0 new/vanished).** 111 tests, build clean.
-  - [ ] **Merge to `main` + deploy to prod**, then **seed prod** (`npx convex run parcelActions:seedSpine` w/ prod key; ~16 min).
-  - [ ] **Live click-through** `/parcels` on dev/prod (search returns rows; absentee badges; owner-portfolio panel).
+  - [~] **⚠ Convex free-tier quota EXHAUSTED** (repeated dev seeding) — user is blocked on Convex; do NOT re-seed dev/prod
+    until it resets (monthly) or a plan upgrade. (See lessons 2026-06-08.) **First task next session:** add a `maxPages`/`limit`
+    arg to `seedSpine` so debugging can't accidentally full-seed; consider clearing the dev `parcels` table to reclaim space.
+  - [ ] **Merge to `main` + deploy to prod**, then **ONE-TIME** prod seed (`npx convex run parcelActions:seedSpine` w/ prod key;
+    ~16 min, ~203k writes — budget it; steady-state weekly CDC is cheap). User chose: keep on branch for now (NOT merged/deployed).
+  - [ ] **Live click-through** `/parcels` (search returns rows; absentee badges; owner-portfolio panel) — once Convex is usable again.
   - [ ] **Attribute-change refresh:** weekly cron does new/vanished only; schedule/period a full `seedSpine` re-run to catch
     owner/address changes (heavier). Also: vanished top-tail edge (PRCLID > max source) not marked — rare, documented.
 - [ ] **Phase 2 — first signal: code violations** (`CodeEnforcement_CodeCases/0`, dated via `last_edited_date`) →

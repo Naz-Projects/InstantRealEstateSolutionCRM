@@ -2,50 +2,77 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★ ACTIVE INITIATIVE (2026-06-06) — Wholesaling Lead Engine — PHASE 1 IS NEXT (PICK UP HERE)
-**Status: spec APPROVED + COMMITTED (`ce11b62`) · Phase 0 research COMPLETE · Phase 1 NOT started.** Turn the CRM into a
-**New Castle County wholesaling lead engine** — ingest ALL parcels + attach **distress signals** → score leads → reach
-owners **off-market**. Builds ON [`memory/next-initiative-offmarket.md`](next-initiative-offmarket.md).
+## ★ ACTIVE INITIATIVE — Wholesaling Lead Engine — PHASE 2 IS NEXT (PICK UP HERE)
+**Status (2026-06-08): Phase 0 DONE · Phase 1 BUILT + LIVE-VERIFIED on DEV** (branch `feat/lead-engine-phase1-spine`,
+**NOT merged, NOT on prod**). Turn the CRM into a NCC **wholesaling lead engine** — ingest ALL parcels + attach **distress
+signals** → score leads → reach owners **off-market**.
 
-**READ FIRST:** the spec [`docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`](../docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md)
-(4-layer north-star) · the **Source Matrix [`memory/source-matrix.md`](source-matrix.md)** (Phase 0 result) · the Phase 0 plan
-[`docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md`](../docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md).
+> ⚠⚠ **CONVEX FREE-TIER QUOTA EXHAUSTED** — debugging the seed re-ran the full 203k load ~4× and maxed the dev monthly
+> quota; the user is BLOCKED on Convex. **Do NOT run ANY Convex ops or re-seed** until it resets (monthly billing cycle) or
+> the plan is upgraded — they only add to usage. **All file-based work is safe** (specs, plans, pure modules + vitest,
+> `npm run build`). **FIRST next-session task: add a `maxPages`/`limit` arg to `seedSpine`** so debugging never full-seeds
+> again. (Lessons 2026-06-08.) Code-cases (Phase 2) is a TINY feed (~2,852) so it's cheap even when Convex is back.
 
-**PHASE 0 RESULT — the win is bigger than the spec assumed (verified live; DON'T re-probe):** the NCC ArcGIS
-**`CustomMaps` folder** (`https://gis.nccde.org/agsserver/rest/services/CustomMaps`) is a **free, public, `PRCLID`-keyed
-suite of distress feeds**, several **dated** (cheap delta, no 200k re-scan):
-- `CodeEnforcement_CodeCases/0` — **2,852** code cases, **dated-delta verified** (cursor `APDTTM` via
-  `where=APDTTM > TIMESTAMP '2026-05-01 00:00:00'` → 748; not `last_edited_date` (sparse); not epoch-ms (400)), `APDESC`
-  (e.g. "HIGH WEED AND GRASS"), `STAT`; helper views `Code_Enforcement/MapServer` (6 Vacant Properties **859**, 9 Open
-  Cases, **11 "Cases added last 30 days" 1,051**, 8 Resolved-with-Fees-Owed). ← **Phase 2 signal winner.**
-- `SheriffSales/0` — **53**, *structured* (`PARCELID`,`CASENUMBER`,`PLANTIFF`) → **augments** the sheriff-PDF parse (clean
-  PARCELID join + court case#); NOT a replacement (lacks sale type/principal/sale-date that `deal.ts` needs).
-- `SheriffSales/1 Vacant Monitions Candidates` — **76** curated vacant+tax-delinquent. `RentalUnits/0` — **39,424** (`EXPDATE`).
-  `Permits/4 New Construction`. `Ownership/0` — **203,752** (`CNTCTLAST` = full owner-name string + mailing + absentee).
-- **Spine proof:** `BaseMaps/Base_Layers/MapServer/0` = **203,752** parcels; PRCLID-only key page ~39 KB (full key list ~8 MB
-  ⇒ cheap CDC diff; **MUST add `orderByFields=PRCLID`** to page a single field, else ArcGIS 400s); full seed ~167 MB; only
-  `TAXAREA` value-ish. FirstMap `DE_StateParcels` thinner (no owner/value) → use the NCC layer.
-- **Still NOT free (funnel-only / verify-later):** **assessed value + tax/sewer balances** (Reblaze per-parcel site →
-  Firecrawl/Scrapling browser, only for flagged parcels) and **upstream court lis-pendens** (CourtConnect scrape — verify ToS).
+**GIT STATE — everything is LOCAL (nothing pushed to origin, nothing on prod):**
+- `main`: research/docs only (spec `ce11b62`, Phase 0 source matrix, distress catalog, enrichment/vision).
+- **`feat/lead-engine-phase1-spine` ← CHECK OUT THIS BRANCH to continue** (has everything on main PLUS the Phase 1 build + these docs).
+- **Pending user decisions:** push to origin? merge Phase 1 → prod + ONE-TIME prod seed? (User: **keep on branch for now**.)
 
-**Locked decisions:** Phase 1 = ArcGIS parcel + absentee + **parcel/owner SEARCH page**, additive alongside the live
-Firecrawl parcel scrape (cutover later). NCC first. **Serverless only** (no Docker/VPS — hard rule). CDC key = **`PRCLID`,
-never `OBJECTID`**. **Ingest broad, surface narrow.**
+**WHAT'S DONE:**
+- **Phase 0** — `memory/source-matrix.md`: NCC ArcGIS `CustomMaps` is a free `PRCLID`-keyed distress-feed suite (DON'T re-probe).
+- **Phase 1** — branch `feat/lead-engine-phase1-spine`; plan `docs/superpowers/plans/2026-06-07-lead-engine-phase1-spine-search.md`.
+  Pure `src/scraper/arcgisParcels.ts` (keyset + **explicit field list, NEVER `outFields=*`** — one ArcGIS field is corrupt in a
+  dense region & 400s `*`; absentee derive; content hash; key-diff; **13 tests**). `parcels`/`parcelSync` schema,
+  `convex/parcelData.ts` (search/upsert/stats) + `convex/parcelActions.ts` (`seedSpine` resumable + adaptive halving + retry;
+  `syncSpine` cheap keys-only CDC) + weekly cron + `/parcels` search page (`src/web/ParcelSearch.tsx`: owner/address/parcel#
+  search + absentee flags + owner-portfolio view). **Verified on dev:** **203,739 parcels, 53,293 absentee (26%)**; search index
+  + CDC new/vanished all proven. 111 tests, build clean. **Additive — zero change to Sheriff/Legal/Flip/Properties.**
 
-**EXACT NEXT STEP (do in order):**
-1. **Write the Phase 1 spec** (`docs/superpowers/specs/2026-06-06-lead-engine-phase1-spine-search.md`): `parcels` table
-   (`prclid` unique, situs, owner-mailing, `ownerName`=`CNTCTLAST`, `absentee`+reason, `contentHash`, `firstSeen/lastSeen/active`),
-   pure `src/scraper/arcgisParcels.ts` (URL build, feature→Parcel, absentee derive, hash), `convex/parcelData.ts` (upsert-by-prclid,
-   search) + `convex/parcelActions.ts` (`"use node"` `syncSpine` = paginate PRCLID keys w/ `orderByFields` → diff → enrich
-   new/changed), weekly cron, a **parcel+owner search page** (reuse `PropertyMap`/Street View, dark shadcn). Additive; no change
-   to Sheriff/Legal/Flip/Properties or the Firecrawl parcel path.
-2. → **writing-plans** skill → TDD build (consider an isolated worktree if concurrent sessions are possible;
-   `CONVEX_AGENT_MODE=anonymous` for isolated codegen). Live-prove the sync (count in / count stored / spot-checked absentee).
-3. Then **Phase 2** (code-violations signal) gets its own spec→plan.
+**READ before Phase 2:** the 4-layer spec · `memory/distress-signals.md` (signal catalog + **LIST STACKING** + equity-as-gate) ·
+`memory/lead-engine-enrichment-and-vision.md` (free→paid→satellite/CV tiers + saleable-product vision).
 
-⚠ **This dev sandbox BLOCKS local outbound HTTP** — verify any new endpoint via a throwaway cloud-dev Convex action
-(`npx convex run`), NOT local curl/WebFetch (the Phase 0 probe technique; see lessons 2026-06-06). The real `syncSpine`
-runs in Convex cloud (has network), so it's unaffected.
+## ★ THE NEXT LAYER — Phase 2: Signal Event-Streams → Leads → Scoring
+This is where the spine becomes a real LEAD ENGINE (spec layers 2+3): attach distress SIGNALS to parcels and surface SCORED
+leads. **Ingest broad, surface narrow** — a parcel becomes a visible lead only once a signal attaches; multiple stacked
+signals = higher intent (list stacking).
+
+**START with CODE VIOLATIONS** (the Phase 0 winner: free, dated, `PRCLID`-keyed, distress-grade, stacks with absentee, TINY/cheap):
+- Source `CustomMaps/CodeEnforcement_CodeCases/MapServer/0` (~2,852). **Dated cursor `APDTTM`** via
+  `where=APDTTM > TIMESTAMP 'YYYY-MM-DD HH:MM:SS'` (verified). Fields: `PRCLID`, `ADDR`, `APTYPE`/`APDESC` ("HIGH WEED AND GRASS"), `STAT` (O=open), `APDTTM`.
+
+**Proposed design (write the Phase 2 spec → plan → TDD build; mirror the Phase 1 patterns):**
+1. **`signalEvents` table** — generic, 1 row/signal: `prclid` (joins the spine), `category` (financial|life-event|physical|
+   situational, per distress-signals.md), `type` ("code-violation"), `source`, `observedDate` (ms, for recency), `externalKey`
+   (idempotency, e.g. `APNO`), `payload`. Indexes `by_prclid`, `by_type`, `by_observedDate`. One parcel → many events (stacking).
+2. **Pure `src/scraper/codeCases.ts`** (vitest) — parse a CodeCases feature → `SignalEvent` (type "code-violation", category
+   "physical", `observedDate` from `APDTTM`, payload {apdesc, stat, apno}). Build the dated-watermark query URL. Mirrors `arcgisParcels.ts`.
+3. **`convex/signalData.ts`** (upsert-event-by-`externalKey`, list events for a parcel, watermark get/set) +
+   **`convex/signalActions.ts`** (`"use node"` `syncCodeCases` = pull since stored `APDTTM` watermark → upsert events; idempotent;
+   small feed = cheap, NOT a 203k job). Weekly cron.
+4. **Leads + scoring** — a parcel with ≥1 signal is a lead. Score = stacked-signal count × recency × **absentee (from spine)**;
+   RULES first, config-driven weights (ML later). **Decide in the spec: derived reactive query (parcels⋈signalEvents) vs a
+   stored `leads` table** — lean derived-first (simpler, live, no extra writes; matters for quota).
+5. **UI** — a **Leads** page (filter by signal/score/absentee) + a signals timeline on a parcel; reuse the `/parcels` shell + search.
+6. Built TDD; the pure `codeCases.ts` + schema are **offline/cheap** — build them while Convex is over quota; defer the live
+   `syncCodeCases` run until Convex is back (it's a tiny feed, low cost).
+
+**LATER layers (each its own spec — the full architecture, already researched):** more free signals (vacant `Code_Enforcement/6`,
+vacant-monition `SheriffSales/1`, rentals/tired-landlord `RentalUnits/0`, permits) → all STACK; **T1 court scrape** (pre-foreclosure
+lis-pendens via DE CourtConnect, free; bankruptcy via PACER cheap; ⚠ DE divorce is CONFIDENTIAL); **T2/T3** per-parcel assessed
+value + tax/sewer balances (Reblaze browser, funnel-only) + skip-trace (paid, **DNC/TCPA-gated**) → the **EQUITY GATE** (value −
+liens = the ranking multiplier); **T4 imagery/CV** condition scoring (cheap DIY Street View + LLM-vision → Cape Analytics later);
+outreach (direct mail first — owner mailing is free from the spine). Full map: `memory/lead-engine-enrichment-and-vision.md`.
+
+**EXACT NEXT STEPS (do in order):**
+1. **(quota safety, do FIRST)** add `maxPages`/`limit` to `seedSpine` (file edit + `npm run build` + vitest — NO Convex). Commit.
+2. **Write the Phase 2 spec** (`docs/superpowers/specs/<date>-lead-engine-phase2-signals-leads.md`) — design above; decide
+   derived-vs-stored leads + rules-scoring weights. → **writing-plans** → **TDD build** the pure `codeCases.ts` + `signalEvents`
+   schema + signal action (all offline-testable). **Defer the live `syncCodeCases` run until Convex quota is back** (then it's cheap).
+3. Only once Convex is usable again: merge Phase 1(+2), ONE-TIME prod seed (budget ~203k writes), live click-through `/parcels` + Leads.
+
+⚠ **Dev sandbox blocks local outbound HTTP** — verify endpoints via a throwaway cloud-dev Convex action (`npx convex run`),
+NOT local curl/WebFetch — **but mind the quota** (probing costs too; code-cases is tiny vs the 203k spine). The Phase 0 probe
+technique + the `outFields=*`/keyset/field-list gotchas are in lessons 2026-06-07/08.
 
 **Scraping-tool context (eval — see lessons 2026-06-06):** the NCC parcel ASP.NET site (Reblaze) needs a **real browser**
 (Scrapling `StealthyFetcher`+`page_action` drives it free, but a browser must be HOSTED → conflicts with serverless — which

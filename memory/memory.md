@@ -2,10 +2,13 @@
 
 _Read this first. It's the "what & why" so you don't have to reverse-engineer the codebase._
 
-## ★ Active initiative (2026-06-06) — Wholesaling Lead Engine
+## ★ Active initiative (2026-06-06..08) — Wholesaling Lead Engine
 Current build focus: turn the CRM into a New Castle County **wholesaling lead engine** (ingest ALL parcels + attach
 distress signals → score → reach owners off-market). **Design APPROVED + spec COMMITTED (`ce11b62`); Phase 0 research
-COMPLETE.** Spec: `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`; Phase 0 plan:
+COMPLETE; PHASE 1 BUILT + LIVE-VERIFIED ON DEV** (branch `feat/lead-engine-phase1-spine`, **NOT merged, NOT on prod**).
+⚠ **The repeated 203k dev seeds during debugging EXHAUSTED the Convex free-tier monthly quota** — do NOT re-seed (dev or
+prod) until it resets / a plan upgrade; debug any future mass-write on a SMALL subset (see lessons 2026-06-08).
+Spec: `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`; Phase 0 plan:
 `docs/superpowers/plans/2026-06-06-wholesaling-lead-engine-phase0.md`; **Source Matrix: `memory/source-matrix.md`.**
 Builds on `memory/next-initiative-offmarket.md`. **Pick up via `memory/next-session-prompt.md` (top section).**
 **PHASE 0 HEADLINE (verified live via a throwaway cloud-dev Convex probe, now removed):** the NCC ArcGIS
@@ -19,7 +22,19 @@ are FREE + serverless** (no browser/paid). Only **assessed value + tax/sewer bal
 browser/paid, funnel-only) and **upstream court lis-pendens** (CourtConnect, scrape — verify ToS) aren't free.
 Spine proof: 203,752 parcels; PRCLID-only key page ~39 KB (full list ~8 MB; **`orderByFields=PRCLID` REQUIRED** to page a
 single field or ArcGIS 400s); full seed ~167 MB. CDC keys on **`PRCLID` (not OBJECTID)**; **ingest broad, surface narrow**;
-serverless only. **NEXT: Phase 1 = `parcels` spine + absentee + search page (own spec→plan→build); then Phase 2 = code-violations signal.**
+serverless only.
+
+**PHASE 1 — BUILT + VERIFIED (2026-06-07/08, branch `feat/lead-engine-phase1-spine`, dev only).** Pure tested
+`src/scraper/arcgisParcels.ts` (keyset + **explicit field list, NOT `outFields=*`** — one ArcGIS field is corrupt in a
+dense region & 400s `*`; absentee derive; content hash; key-diff; 13 tests). `parcels` + `parcelSync` tables;
+`convex/parcelData.ts` (search/upsert/stats) + `convex/parcelActions.ts` (`seedSpine` resumable + adaptive halving + retry;
+`syncSpine` cheap keys-only CDC key-diff). Weekly cron `syncSpine`. `/parcels` search page (`src/web/ParcelSearch.tsx`):
+search by owner/address/parcel# → absentee flags + owner-portfolio view. **Live-verified on dev:** seeded **203,739 distinct
+parcels** (203,752 source, 13 dupes), **53,293 absentee (26%)**, spot-checked; search index works (owner/street/parcel#);
+CDC new+vanished both exercised correctly. 111 tests, build clean. **Additive — zero change to Sheriff/Legal/Flip/Properties.**
+**Pending:** merge→prod + ONE-TIME prod seed (mind the free-tier cost) + live click-through; push local commits to origin.
+
+**NEXT LAYER = Phase 2 — signal event-streams + leads + scoring (start with CODE VIOLATIONS).** See `memory/next-session-prompt.md`.
 
 ## What this is
 A CRM for **Instant Real Estate Solution (IRES)** — a Delaware / New Castle County (NCC) real-estate
