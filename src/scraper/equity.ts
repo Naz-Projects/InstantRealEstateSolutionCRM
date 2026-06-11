@@ -39,6 +39,7 @@ export function computeEquity(input: EquityInput): EquityResult {
 /**
  * Parse a Zillow zestimate string to dollars. Unlike deal.ts parseMoney, this
  * handles the K/M suffixes Zillow uses on search cards ("$350K", "$1.2M").
+ * Rounded to whole dollars.
  */
 export function parseZestimate(s: string | undefined | null): number | null {
   if (!s) return null;

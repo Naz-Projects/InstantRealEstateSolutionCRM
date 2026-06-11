@@ -53,4 +53,8 @@ describe("computeEquity", () => {
   it("manualLiens of 0 still counts as taxes-only basis", () => {
     expect(computeEquity({ value: 100000, manualLiens: 0 }).basis).toBe("taxes-only");
   });
+  it("returns all-null for zero or negative value (divide-by-zero guard)", () => {
+    expect(computeEquity({ value: 0 }).equity).toBeNull();
+    expect(computeEquity({ value: -100 }).equity).toBeNull();
+  });
 });
