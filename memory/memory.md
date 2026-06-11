@@ -45,8 +45,18 @@ stack × 90-day-half-life recency × absentee ×1.5, config in `src/scraper/lead
 expandable signal timeline, unmatched-filings review, **direct-mail CSV export**). **Wholesaling pipeline v1**
 (gap analysis: `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md`): `leadStatus` stages
 (new→contacted→negotiating→under_contract→marketing→assigned→closed→dead) + notes + buyer assignment + fee on /leads;
-`buyers` CRM page; lead→Flip Analyzer handoff (`/flip?address=`). **Pending: authed click-through of /leads + /buyers
-on dev; merge→prod decision.** See `memory/next-session-prompt.md`.
+`buyers` CRM page; lead→Flip Analyzer handoff (`/flip?address=`).
+
+**★★ PROD CUTOVER COMPLETE (later 2026-06-11) — the whole lead engine + pipeline is LIVE IN PRODUCTION.**
+Merged (ff) → `main`, pushed through `09c30c7`; prod backend deployed; **ONE-TIME prod seed: 203,740 parcels /
+53,299 absentee**; prod signals: **1,951 events** (1,886 violations + 51 foreclosure cases, 35 matched / 16 unmatched);
+all 6 crons active. Same-day additions: **P1** Kanban board view on /leads + dashboard `FunnelWidget` (stage counts,
+pipeline/closed fees) · **P2** `followUps` table + per-lead follow-ups + overdue/due-today badges · **sidebar score
+legend** (collapsible, reads `SCORE_CONFIG` live). Two prod incidents found+fixed: hung fetch killed the seed chain
+at 132k (→ `AbortSignal.timeout(30s)` on ALL external fetches + cursor resume) and a partial-stem-failure sweep
+advanced the watermark (→ watermark only advances on a clean sweep; rewound + re-swept). 152 tests.
+**Pending: USER click-through on prod + CF-build-green check.** Roadmap P3–P8 in
+`docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md`. **Pick up via `memory/next-session-prompt.md`.**
 
 ## What this is
 A CRM for **Instant Real Estate Solution (IRES)** — a Delaware / New Castle County (NCC) real-estate

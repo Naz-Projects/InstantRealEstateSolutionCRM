@@ -2,27 +2,66 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★★ 2026-06-11 UPDATE — PHASE 2 + WHOLESALING PIPELINE v1 ARE BUILT (read this first)
-**Convex is PAID now (user upgraded — quota unblocked).** On branch `feat/lead-engine-phase1-spine` (still NOT
-merged/prod), built TDD + live-verified on dev this session (151 tests, build clean):
-1. **Signal streams:** code violations (1,886 events) + **CourtConnect pre-foreclosure sweep** (50 cases, 33 matched
-   to parcels, 4–7 mo before auction; serverless — no browser). Weekly crons. Watermarked + idempotent.
-2. **Scored leads:** derived `signalData.leads` + `/leads` page + direct-mail CSV export.
-3. **Pipeline v1:** `leadStatus` stages + notes + buyer assignment on /leads; `/buyers` CRM; lead→`/flip?address=` handoff.
-4. **Docs:** `memory/architecture-review-2026-06-11.md` (research: Convex costs, CourtConnect, no free bulk values,
-   `Structure_Details.zip` find) + `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (gap analysis +
-   ADDable roadmap P1–P8) + Phase 2 spec/plan (same date).
-**PROD CUTOVER + P1/P2 (later same day 2026-06-11):** merged to `main` (ff) + pushed (CF build deploys
-backend+frontend on push); backend ALSO deployed manually to prod `pastel-crocodile-994`; **ONE-TIME prod parcel
-seed run** (~203k; verify final count via `parcelData:statsInternal` w/ prod key); prod `syncCodeCases` +
-`syncForeclosures` run after seed. **P1 built:** Kanban board view on /leads (stage columns, card stage-move) +
-dashboard `FunnelWidget` (stage counts, pipeline/closed fees). **P2 built:** `followUps` table + per-lead follow-up
-add/complete + overdue/due-today badges (table, board, dashboard). 152 tests.
-**NEXT:** (a) user click-through on PROD (https://crm.instantrealestatesolution.com): /leads table+board, stage moves,
-follow-ups, CSV, /buyers, flip handoff; confirm CF build went green (stale CONVEX_DEPLOY_KEY in CF env = silent 401);
-(b) roadmap P3+ from `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (outreach log → equity gate →
-skip-trace w/ DNC module → offers/contracts → vision scoring → buyer blast); (c) probe `Structure_Details.zip` fields.
-ToS note: CourtConnect sweep = internal use, ~32 GETs/week, throttled (gray zone documented in the spec).
+## ★★ START HERE — full state as of end-of-session 2026-06-11 (everything below is LIVE ON PROD)
+
+### What the CRM is now
+The IRES CRM is a **full wholesaling pipeline, live in production** (https://crm.instantrealestatesolution.com,
+Convex prod `pastel-crocodile-994`, all of `main` through `09c30c7` pushed; CF Workers builds deploy backend+frontend
+on push). **Convex is on a PAID plan** (user upgraded 2026-06-11 — quota is no longer a constraint; a full 203k
+re-seed costs ~$0.05–0.15). Everything merged; branch `feat/lead-engine-phase1-spine` is fully merged into `main`.
+
+### What's live on prod (all verified via CLI with the prod deploy key from `.env.local` `CONVEX_DEPLOY_KEY_PROD`)
+- **Parcel spine:** 203,740 NCC parcels, 53,299 absentee (26%). Weekly keys-only CDC cron (Sun). Seed is
+  resumable (`seedSpine {syncId, afterPrclid}`) + capped (`maxPages`) + differential (unchanged rows = no write).
+- **Signal engine:** `signalEvents` = **1,951** on prod — 1,886 code violations (ArcGIS CodeCases, `APDTTM`
+  watermark, key `cc:<APNO>:<PRCLID>`) + pre-foreclosure from **51 CourtConnect cases (35 matched to parcels via
+  conservative defendant↔owner token matching, 16 on the unmatched review list)**. Weekly crons Mon (violations) +
+  Tue (foreclosure sweep, ~32 lender stems, `^N\d{2}L-` filter, 4–7 months before auction). Watermark only advances
+  on a CLEAN sweep (partial stem failures re-sweep next run — that fix is live and proven).
+- **Leads UX:** `/leads` — derived scored leads (stack × 90d-half-life recency × absentee ×1.5; config
+  `src/scraper/leadScore.ts`), table + **Kanban board** toggle, stage machine
+  (new→contacted→negotiating→under_contract→marketing→assigned→closed→dead) with notes + buyer assignment + fee,
+  follow-up tasks w/ overdue/today badges, signal timeline per lead, unmatched-filings section, **direct-mail CSV
+  export**, lead→`/flip?address=` handoff. `/buyers` cash-buyer CRM. Dashboard `FunnelWidget` (stage counts +
+  pipeline/closed fees + follow-up urgency). **Score legend** docked in the sidebar footer (collapsible, persisted,
+  reads SCORE_CONFIG live).
+- **Tests:** 152 vitest, build clean. All pure logic TDD'd on live-captured fixtures (`tests/fixtures/`).
+
+### The architecture (stable — do not re-derive)
+4 layers: **spine** (parcels, PRCLID-keyed) → **signal event-streams** (open vocabulary, `signalEvents` +
+`signalWatermarks`, watermark+overlap+idempotent-upsert) → **derived scored leads** (no stored leads table;
+`leadStatus`/`followUps`/`buyers` hold only human workflow state, all keyed to prclid) → **tiered funnel-only
+enrichment** (never run paid/browser against the 203k). Key docs: 4-layer spec (2026-06-06) ·
+`memory/architecture-review-2026-06-11.md` (Convex cost model, CourtConnect research, equity-gate verdict: NO free
+bulk assessed-value roll; NCC bulk `Structure_Details.zip`/`Owners.zip` downloads exist) ·
+`docs/superpowers/specs/2026-06-11-lead-engine-phase2-signals-leads.md` (signal engine design) ·
+**`docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (the gap analysis + P1–P8 roadmap — THE plan)**.
+
+### WHAT'S NEXT (in order)
+1. **User verification on prod** (never clicked through in a browser): /leads table+board (move stages, notes,
+   follow-ups, CSV export), /buyers CRUD, flip handoff, dashboard funnel card, sidebar score legend; confirm the
+   CF Workers build went green (stale `CONVEX_DEPLOY_KEY` in CF env = silently serves the old bundle).
+2. **Pipeline roadmap P3–P8** (from the wholesaling-pipeline spec, in ROI order — each additive):
+   **P3 outreach log** (mail batches/responses tied to leads, re-export non-responders, email alert cron on hot leads) ·
+   **P4 equity gate** (funnel-only value via existing Zillow/comps scrapers + delinquent balances from monition PDFs +
+   free-and-clear proxy via Recorder; equity multiplier into SCORE_CONFIG) ·
+   **P5 contacts + skip-trace** (paid ~$0.10/hit, build the DNC/TCPA compliance module FIRST) ·
+   **P6 offers/contracts** (offer history per lead, e-sign later) ·
+   **P7 vision condition scoring** (Street View + LLM vision ≈ $1/1k houses, just another signalEvents source) ·
+   **P8 buyer-match/blast** (lead⋈buyers on area/price, Resend email).
+3. **More free signals** (stack on the same table, parsers mirror codeCases.ts): vacant (859), vacant-monition (76),
+   rentals/tired-landlord (39k, `EXPDATE`), permits. Cheap wins.
+4. **Probe `Structure_Details.zip`** (NCC bulk daily download — year-built/size attrs the spine lacks) — fields unknown.
+5. **Backlog:** sheriff-PDF augment via `SheriffSales/0` layer · marker clustering · leadStatus stage-change
+  timestamps for days-in-stage KPIs · LLC-defendant entity matching for the unmatched list.
+
+### Operational gotchas (learned this session — see lessons.md)
+- `npx convex run` on a LONG action (foreclosure sweep, seed) often reports "✖ Failed … Error" client-side while the
+  action COMPLETES server-side — verify via `signalData:signalStatsInternal` / `parcelData:statsInternal`, not exit codes.
+- A stalled self-rescheduling chain (counter frozen + status "running") = the action was killed (e.g. hung fetch) —
+  ALL external fetches now have `AbortSignal.timeout(30_000)`; resume seeds with `{syncId, afterPrclid}` from the row.
+- CourtConnect ToS: "no commercial use" gray zone — internal use only, ~32 GETs/week, sequential + 400ms pacing. Keep it tiny.
+- Prod CLI ops: `export CONVEX_DEPLOY_KEY="$(grep ^CONVEX_DEPLOY_KEY_PROD= .env.local | cut -d= -f2-)"` then `npx convex run …`.
 
 ## (superseded 2026-06-11 — kept for context) Wholesaling Lead Engine — Phase 2 planning
 **Status (2026-06-08): Phase 0 DONE · Phase 1 BUILT + LIVE-VERIFIED on DEV** (branch `feat/lead-engine-phase1-spine`,

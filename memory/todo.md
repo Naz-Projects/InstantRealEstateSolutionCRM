@@ -22,18 +22,12 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   (`seedSpine` resumable, `syncSpine` cheap CDC key-diff), weekly cron, `/parcels` search page (owner/address/parcel# +
   absentee flags + owner-portfolio view). **Live-verified on DEV: seeded 203,739 distinct parcels (203,752 source), 53,293
   absentee (26%), spot-checked; CDC sync ran clean (0 new/vanished).** 111 tests, build clean.
-  - [~] **⚠ Convex free-tier quota EXHAUSTED** (repeated dev seeding) — user is blocked on Convex; do NOT re-seed dev/prod
-    until it resets (monthly) or a plan upgrade. (See lessons 2026-06-08.)
-  - [x] **Quota-safety code fixes (2026-06-11, on branch):** `seedSpine` `maxPages` cap (`d7aae65`) + **differential upsert** —
-    unchanged rows get NO write, so a full refresh writes only real changes, not 203k rows (`8af7cbc`). 111 tests, build clean.
-  - [~] **DECIDE: Convex plan.** Free tier = 1 GB DB-I/O/mo (one full seed ≈ 0.2 GB; weekly `syncSpine` full-doc reads ≈ 0.7 GB/mo
-    alone) and hard-disables when exceeded. **Starter = $0 base pay-as-you-go (recommended)**; Pro $25/mo. A full seed ≈ $0.05–0.15
-    in overage dollars. Details: `memory/architecture-review-2026-06-11.md` §1.
-  - [ ] **Merge to `main` + deploy to prod**, then **ONE-TIME** prod seed (`npx convex run parcelActions:seedSpine` w/ prod key;
-    ~16 min, ~203k writes — budget it; steady-state weekly CDC is cheap). User chose: keep on branch for now (NOT merged/deployed).
-  - [ ] **Live click-through** `/parcels` (search returns rows; absentee badges; owner-portfolio panel) — once Convex is usable again.
-  - [ ] **Attribute-change refresh:** weekly cron does new/vanished only; schedule/period a full `seedSpine` re-run to catch
-    owner/address changes (heavier). Also: vanished top-tail edge (PRCLID > max source) not marked — rare, documented.
+  - [x] **Quota RESOLVED (2026-06-11):** user upgraded Convex to a paid plan. Plus quota-safety code: `seedSpine` `maxPages`
+    cap (`d7aae65`) + **differential upsert** (unchanged rows = NO write, `8af7cbc`) + **30s `AbortSignal.timeout` on all
+    external fetches** (hung-fetch chain-kill fix). A full re-seed now costs ~$0.05–0.15 and is resumable via `{syncId, afterPrclid}`.
+  - [x] **Merged to `main` + DEPLOYED TO PROD + ONE-TIME prod seed done (2026-06-11): 203,740 parcels / 53,299 absentee.**
+  - [ ] **Attribute-change refresh:** weekly cron does new/vanished only; periodically re-run full `seedSpine` to catch
+    owner/address changes (now cheap — differential). Also: vanished top-tail edge (PRCLID > max source) not marked — rare, documented.
 - [x] **Phase 2 — signals + leads + scoring BUILT + LIVE-VERIFIED on dev (2026-06-11).** Code violations (1,886 distinct
   case+parcel events) + CourtConnect pre-foreclosure sweep (32 stems, 50 cases, 33 matched / 17 unmatched review list,
   4–7 mo lead time, serverless). `signalEvents`/`signalWatermarks`, weekly crons, derived scored `/leads` + mail-CSV export.
@@ -295,4 +289,5 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - Prod spine: **203,740 parcels / 53,299 absentee** (seed stalled once at 132k — hung fetch, fixed w/ 30s timeouts, resumed via cursor).
 - Prod signals: **1,951 events** = 1,886 code-violations + pre-foreclosure from **51 court cases (35 matched, 16 unmatched)**.
 - Foreclosure watermark now only advances on a CLEAN sweep (partial stem failures re-sweep next cron). All crons active on prod.
-- Pushed through `2c67e0e`; CF build ships the frontend (board + follow-ups + funnel). **User: confirm CF build green + click through prod.**
+- **Sidebar score legend shipped** (`src/components/score-legend.tsx`: collapsible, localStorage-persisted, reads `SCORE_CONFIG` live).
+- Pushed through `09c30c7`; CF build ships the frontend (board + follow-ups + funnel + legend). **User: confirm CF build green + click through prod.**
