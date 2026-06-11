@@ -13,7 +13,20 @@ export const SCORE_CONFIG = {
   recencyHalfLifeDays: 90, // a signal loses half its weight every 90 days
   stackBonus: 10, // per signal beyond the first (list stacking)
   absenteeMultiplier: 1.5,
+  // P4 equity gate: equityRatio (equity/value) → bucket → score multiplier.
+  // "unknown" (not yet enriched) = 1.0 so un-enriched leads score as before.
+  equityBuckets: { highMin: 0.5, mediumMin: 0.2 },
+  equityMultipliers: { high: 1.5, medium: 1.2, low: 0.5, unknown: 1.0 },
 };
+
+export type EquityBucketName = "high" | "medium" | "low" | "unknown";
+
+export function equityBucket(ratio: number | null): EquityBucketName {
+  if (ratio == null) return "unknown";
+  if (ratio >= SCORE_CONFIG.equityBuckets.highMin) return "high";
+  if (ratio >= SCORE_CONFIG.equityBuckets.mediumMin) return "medium";
+  return "low";
+}
 
 export interface ScorableSignal {
   type: string;
@@ -24,6 +37,7 @@ export function computeLeadScore(
   signals: ScorableSignal[],
   parcel: { absentee: boolean },
   now: number,
+  equity?: EquityBucketName,
 ): number {
   if (signals.length === 0) return 0;
   const halfLifeMs = SCORE_CONFIG.recencyHalfLifeDays * 24 * 60 * 60 * 1000;
@@ -35,5 +49,6 @@ export function computeLeadScore(
   }
   total += SCORE_CONFIG.stackBonus * (signals.length - 1);
   if (parcel.absentee) total *= SCORE_CONFIG.absenteeMultiplier;
+  total *= SCORE_CONFIG.equityMultipliers[equity ?? "unknown"];
   return Math.round(total);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SCORE_CONFIG, computeLeadScore } from "../src/scraper/leadScore";
+import { SCORE_CONFIG, computeLeadScore, equityBucket } from "../src/scraper/leadScore";
 
 const NOW = Date.UTC(2026, 5, 11);
 const DAY = 24 * 60 * 60 * 1000;
@@ -53,5 +53,46 @@ describe("computeLeadScore", () => {
 
   it("returns 0 for no signals", () => {
     expect(computeLeadScore([], { absentee: true }, NOW)).toBe(0);
+  });
+});
+
+describe("equityBucket", () => {
+  it("buckets by the configured ratio thresholds", () => {
+    expect(equityBucket(0.6)).toBe("high");
+    expect(equityBucket(0.5)).toBe("high");
+    expect(equityBucket(0.3)).toBe("medium");
+    expect(equityBucket(0.2)).toBe("medium");
+    expect(equityBucket(0.1)).toBe("low");
+    expect(equityBucket(-0.5)).toBe("low");
+  });
+  it("returns unknown for null ratio", () => {
+    expect(equityBucket(null)).toBe("unknown");
+  });
+});
+
+describe("computeLeadScore equity multiplier", () => {
+  const sig = [{ type: "code-violation", observedDate: NOW }];
+  const base = computeLeadScore(sig, { absentee: false }, NOW);
+
+  it("multiplies by the bucket multiplier", () => {
+    expect(computeLeadScore(sig, { absentee: false }, NOW, "high")).toBe(
+      Math.round(base * SCORE_CONFIG.equityMultipliers.high),
+    );
+    expect(computeLeadScore(sig, { absentee: false }, NOW, "low")).toBe(
+      Math.round(base * SCORE_CONFIG.equityMultipliers.low),
+    );
+  });
+  it("unknown bucket and omitted arg leave the score unchanged", () => {
+    expect(computeLeadScore(sig, { absentee: false }, NOW, "unknown")).toBe(base);
+    expect(computeLeadScore(sig, { absentee: false }, NOW)).toBe(base);
+  });
+  it("stacks with the absentee multiplier", () => {
+    expect(computeLeadScore(sig, { absentee: true }, NOW, "high")).toBe(
+      Math.round(
+        SCORE_CONFIG.typeWeights["code-violation"] *
+          SCORE_CONFIG.absenteeMultiplier *
+          SCORE_CONFIG.equityMultipliers.high,
+      ),
+    );
   });
 });
