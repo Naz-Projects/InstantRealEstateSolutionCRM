@@ -10,6 +10,7 @@
 
 import type * as compsActions from "../compsActions.js";
 import type * as crons from "../crons.js";
+import type * as equityData from "../equityData.js";
 import type * as errors from "../errors.js";
 import type * as flipData from "../flipData.js";
 import type * as geocodeActions from "../geocodeActions.js";
@@ -42,6 +43,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   compsActions: typeof compsActions;
   crons: typeof crons;
+  equityData: typeof equityData;
   errors: typeof errors;
   flipData: typeof flipData;
   geocodeActions: typeof geocodeActions;

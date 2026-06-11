@@ -399,6 +399,26 @@ export default defineSchema({
     active: v.boolean(),
   }).index("by_active", ["active"]),
 
+  // P4 equity gate — funnel-only enrichment per parcel (value + delinquent
+  // balances + manual liens). Separate from `parcels` ON PURPOSE: the spine's
+  // contentHash CDC must never touch scraped/hand-entered data. Tiny table:
+  // only leads someone chose to enrich. Spec: 2026-06-11-equity-gate-design.md.
+  parcelEquity: defineTable({
+    prclid: v.string(),
+    value: v.optional(v.number()), // as-is value in dollars
+    valueSource: v.optional(v.union(v.literal("zestimate"), v.literal("comps"))),
+    valueAt: v.optional(v.number()), // ms — when the value was scraped
+    countyBalance: v.optional(v.number()),
+    schoolBalance: v.optional(v.number()),
+    sewerBalance: v.optional(v.number()),
+    assessedValue: v.optional(v.number()), // county assessment total (context)
+    balancesAt: v.optional(v.number()), // ms — when balances were scraped
+    manualLiens: v.optional(v.number()), // team-entered known liens/payoff $
+    manualLiensNote: v.optional(v.string()),
+    lastError: v.optional(v.string()), // last enrich failure (visible, never silent)
+    updatedAt: v.number(),
+  }).index("by_prclid", ["prclid"]),
+
   // Captured application errors surfaced on the Admin → Error Log page. Written
   // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
   // failures), and autonomous backend actions (cron). Admins triage + resolve.
