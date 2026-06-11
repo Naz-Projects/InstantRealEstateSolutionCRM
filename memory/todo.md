@@ -39,8 +39,16 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   parcel seed + prod signal syncs run. **P1 Kanban board + FunnelWidget KPIs** and **P2 followUps (overdue badges)** built (152 tests).
   - [ ] **Click-through on PROD (user):** /leads table+board (stages, notes, follow-ups, CSV, timeline), /buyers, flip
     handoff, dashboard funnel card; confirm CF Workers build green (stale CONVEX_DEPLOY_KEY = silent stale bundle).
-  - [ ] **Pipeline roadmap next:** P3 outreach log · P4 equity gate (funnel-only) · P5 contacts/skip-trace (DNC/TCPA
-    module first) · P6 offers/contracts · P7 vision scoring (~$1/1k) · P8 buyer-match/blast. (Spec has details.)
+  - [ ] **Pipeline roadmap next (P3 re-ordered 2026-06-11):** P4 equity gate (funnel-only) · P5 contacts/skip-trace
+    (DNC/TCPA module first) · P6 offers/contracts · P7 vision scoring (~$1/1k) · P8 buyer-match (the blast-email half
+    moves to the end bucket). (Spec has details.)
+  - [~] **P3 outreach log + email alerts — DEFERRED to the END-OF-PIPELINE bucket (user, 2026-06-11):** finish the
+    pipeline shape first, then build notifications. Design is fully brainstormed + scope-locked (Resend gated on env,
+    manual response marking, free-text templates, hot = score ≥70 OR new pre-foreclosure):
+    `docs/superpowers/specs/2026-06-11-outreach-log-design.md`. The log half (batches/responses/non-responder
+    re-export) has no external dep and can be pulled forward when real mail starts going out.
+  - [ ] **END-OF-PIPELINE bucket (build once the pipeline is stable):** email notifications/alerts (P3 alerts +
+    P8 buyer blast, Resend) · mobile UI pass · other polish.
 - [ ] **Probe `Structure_Details.zip`** (NCC hub bulk daily download — building attributes; also `Owners.zip`, `Parcels_GDB.zip`)
   for year-built/size fields the REST spine lacks. Free bulk enrichment. (Equity verdict: NO free bulk assessed-value roll exists —
   values stay funnel-only via Zillow/comps or the per-parcel county page.)
