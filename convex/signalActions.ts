@@ -219,9 +219,12 @@ export const syncForeclosures = internalAction({
     }
 
     const { inserted, updated } = await upsertAll(ctx, events);
+    // Partial stem failure: keep the window open (watermark stays at beginMs) so the
+    // next run re-sweeps it — idempotent upserts make the re-pull free of duplicates.
+    const nextWatermark = stemsFailed > 0 ? beginMs : endMs;
     await ctx.runMutation(internal.signalData.setWatermark, {
       source,
-      watermark: new Date(endMs).toISOString(),
+      watermark: new Date(nextWatermark).toISOString(),
       lastResult:
         `swept ${PLAINTIFF_STEMS.length - stemsFailed}/${PLAINTIFF_STEMS.length} stems, ` +
         `${byCase.size} cases (${matched} matched, ${unmatched} unmatched), ` +
