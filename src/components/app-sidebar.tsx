@@ -12,6 +12,7 @@ import {
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { navItems } from "@/components/app-shared";
+import { ScoreLegend } from "@/components/score-legend";
 
 export function AppSidebar() {
 	const { pathname } = useLocation();
@@ -68,6 +69,7 @@ export function AppSidebar() {
 				</SidebarGroup>
 			</SidebarContent>
 			<SidebarFooter>
+				<ScoreLegend />
 				<div className="px-2 pb-1 text-[11px] text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
 					IRES CRM
 				</div>
