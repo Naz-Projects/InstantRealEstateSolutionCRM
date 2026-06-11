@@ -59,7 +59,12 @@ export const storeEnrichment = internalMutation({
       await ctx.db.patch(existing._id, patch);
       return existing._id;
     }
-    return await ctx.db.insert("parcelEquity", { prclid, ...patch } as any);
+    return await ctx.db.insert("parcelEquity", {
+      prclid,
+      ...fields,
+      lastError: lastError ?? undefined,
+      updatedAt: Date.now(),
+    });
   },
 });
 
@@ -83,6 +88,11 @@ export const setManualLiens = mutation({
       await ctx.db.patch(existing._id, patch);
       return existing._id;
     }
-    return await ctx.db.insert("parcelEquity", { prclid, ...patch } as any);
+    return await ctx.db.insert("parcelEquity", {
+      prclid,
+      manualLiens: amount ?? undefined,
+      manualLiensNote: note ?? undefined,
+      updatedAt: Date.now(),
+    });
   },
 });
