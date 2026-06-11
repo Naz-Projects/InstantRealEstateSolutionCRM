@@ -12,10 +12,17 @@ merged/prod), built TDD + live-verified on dev this session (151 tests, build cl
 4. **Docs:** `memory/architecture-review-2026-06-11.md` (research: Convex costs, CourtConnect, no free bulk values,
    `Structure_Details.zip` find) + `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (gap analysis +
    ADDable roadmap P1–P8) + Phase 2 spec/plan (same date).
-**NEXT:** (a) user click-through `/leads` + `/buyers` on dev (`npm run dev`); (b) merge→prod + ONE-TIME prod parcel
-seed (~$0.05–0.15 now) + prod runs of both syncs; (c) then roadmap P1 (Kanban board + funnel KPIs) and P2 (follow-up
-tasks) from the pipeline spec; (d) probe `Structure_Details.zip` fields. ToS note: CourtConnect sweep = internal use,
-~32 GETs/week, throttled (gray zone documented in the spec).
+**PROD CUTOVER + P1/P2 (later same day 2026-06-11):** merged to `main` (ff) + pushed (CF build deploys
+backend+frontend on push); backend ALSO deployed manually to prod `pastel-crocodile-994`; **ONE-TIME prod parcel
+seed run** (~203k; verify final count via `parcelData:statsInternal` w/ prod key); prod `syncCodeCases` +
+`syncForeclosures` run after seed. **P1 built:** Kanban board view on /leads (stage columns, card stage-move) +
+dashboard `FunnelWidget` (stage counts, pipeline/closed fees). **P2 built:** `followUps` table + per-lead follow-up
+add/complete + overdue/due-today badges (table, board, dashboard). 152 tests.
+**NEXT:** (a) user click-through on PROD (https://crm.instantrealestatesolution.com): /leads table+board, stage moves,
+follow-ups, CSV, /buyers, flip handoff; confirm CF build went green (stale CONVEX_DEPLOY_KEY in CF env = silent 401);
+(b) roadmap P3+ from `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (outreach log → equity gate →
+skip-trace w/ DNC module → offers/contracts → vision scoring → buyer blast); (c) probe `Structure_Details.zip` fields.
+ToS note: CourtConnect sweep = internal use, ~32 GETs/week, throttled (gray zone documented in the spec).
 
 ## (superseded 2026-06-11 — kept for context) Wholesaling Lead Engine — Phase 2 planning
 **Status (2026-06-08): Phase 0 DONE · Phase 1 BUILT + LIVE-VERIFIED on DEV** (branch `feat/lead-engine-phase1-spine`,

@@ -30,7 +30,12 @@ async function fetchArcgis(url: string, attempts = 4): Promise<any> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      // 30s cap — a hung connection otherwise stalls the whole self-rescheduling
+      // chain silently (the action is killed at its time limit with no throw/finalize).
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(30_000),
+      });
       const text = await res.text();
       if (!res.ok) throw new Error(`ArcGIS HTTP ${res.status}: ${text.slice(0, 160)}`);
       const json = JSON.parse(text);

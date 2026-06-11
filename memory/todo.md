@@ -41,10 +41,12 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [x] **Wholesaling pipeline v1 BUILT (2026-06-11):** `leadStatus` stages + notes + buyer assignment + fee on /leads;
   `/buyers` CRM page; lead→Flip handoff (`/flip?address=`). Gap analysis + P1–P8 roadmap:
   `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md`.
-  - [ ] **Click-through on dev (user):** /leads (stages, notes, CSV, expand timeline), /buyers (add/edit/delete), flip handoff.
-  - [ ] **Pipeline roadmap next:** P1 Kanban board + funnel KPIs · P2 follow-up tasks/reminders · P3 outreach log ·
-    P4 equity gate (funnel-only) · P5 contacts/skip-trace (DNC/TCPA module first) · P6 offers/contracts · P7 vision scoring ·
-    P8 buyer-match/blast. (Spec has details.)
+- [x] **PROD CUTOVER (2026-06-11):** merged → `main`, pushed (CF deploys), backend deployed manually, ONE-TIME prod
+  parcel seed + prod signal syncs run. **P1 Kanban board + FunnelWidget KPIs** and **P2 followUps (overdue badges)** built (152 tests).
+  - [ ] **Click-through on PROD (user):** /leads table+board (stages, notes, follow-ups, CSV, timeline), /buyers, flip
+    handoff, dashboard funnel card; confirm CF Workers build green (stale CONVEX_DEPLOY_KEY = silent stale bundle).
+  - [ ] **Pipeline roadmap next:** P3 outreach log · P4 equity gate (funnel-only) · P5 contacts/skip-trace (DNC/TCPA
+    module first) · P6 offers/contracts · P7 vision scoring (~$1/1k) · P8 buyer-match/blast. (Spec has details.)
 - [ ] **Probe `Structure_Details.zip`** (NCC hub bulk daily download — building attributes; also `Owners.zip`, `Parcels_GDB.zip`)
   for year-built/size fields the REST spine lacks. Free bulk enrichment. (Equity verdict: NO free bulk assessed-value roll exists —
   values stay funnel-only via Zillow/comps or the per-parcel county page.)

@@ -28,7 +28,11 @@ async function fetchArcgis(url: string, attempts = 3): Promise<any> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      // 30s cap — a hung connection otherwise stalls the action silently.
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(30_000),
+      });
       const text = await res.text();
       if (!res.ok) throw new Error(`ArcGIS HTTP ${res.status}: ${text.slice(0, 160)}`);
       const json = JSON.parse(text);
@@ -144,7 +148,9 @@ export const syncForeclosures = internalAction({
     for (const stem of PLAINTIFF_STEMS) {
       try {
         for (let pageNo = 1; pageNo <= 5; pageNo++) {
-          const res = await fetch(buildPartySearchUrl({ stem, beginDate, endDate, pageNo }));
+          const res = await fetch(buildPartySearchUrl({ stem, beginDate, endDate, pageNo }), {
+            signal: AbortSignal.timeout(30_000),
+          });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const page = parsePartySearchHtml(await res.text());
           for (const row of page.rows) {
