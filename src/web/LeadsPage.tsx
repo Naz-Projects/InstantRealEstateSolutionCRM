@@ -10,13 +10,18 @@ import {
   CircleHelp,
   Calculator,
   Save,
+  LayoutList,
+  Columns3,
+  CalendarClock,
+  Check,
+  Plus,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { buildMailCsv } from "./lib/mailCsv";
-import { LEAD_STAGES, STAGE_LABELS, isLeadStage } from "../scraper/wholesalePipeline";
+import { LEAD_STAGES, STAGE_LABELS, isLeadStage, followUpState } from "../scraper/wholesalePipeline";
 import {
   Select,
   SelectContent,
@@ -27,6 +32,7 @@ import {
 
 type Lead = FunctionReturnType<typeof api.signalData.leads>[number];
 type Buyer = FunctionReturnType<typeof api.pipelineData.listBuyers>[number];
+type FollowUp = FunctionReturnType<typeof api.pipelineData.openFollowUps>[number];
 
 const STAGE_CHIP: Record<string, string> = {
   new: "border-border text-muted-foreground",
@@ -123,6 +129,79 @@ function SignalTimeline({ lead }: { lead: Lead }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Due-date urgency badge for a lead's next open follow-up. */
+function FollowUpBadge({ next }: { next: FollowUp | undefined }) {
+  if (!next) return null;
+  const state = followUpState(next.dueAt, Date.now());
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+        state === "overdue" && "border-red-500/40 bg-red-500/10 text-red-400",
+        state === "today" && "border-amber-500/40 bg-amber-500/10 text-amber-400",
+        state === "upcoming" && "border-border text-muted-foreground",
+      )}
+    >
+      <CalendarClock className="h-3 w-3" />
+      {state === "overdue" ? "Overdue" : state === "today" ? "Due today" : fmtDate(next.dueAt)}
+    </span>
+  );
+}
+
+/** Open follow-ups for one lead + the add form (pipeline P2). */
+function LeadFollowUps({ lead, followUps }: { lead: Lead; followUps: FollowUp[] }) {
+  const add = useMutation(api.pipelineData.addFollowUp);
+  const setDone = useMutation(api.pipelineData.setFollowUpDone);
+  const [note, setNote] = useState("");
+  const [due, setDue] = useState("");
+
+  const submit = async () => {
+    if (!note.trim() || !due) return;
+    await add({ prclid: lead.prclid, note: note.trim(), dueAt: Date.parse(`${due}T12:00:00`) });
+    setNote("");
+    setDue("");
+  };
+
+  return (
+    <div className="space-y-2 border-t border-border/50 px-4 py-3">
+      {followUps.map((f) => (
+        <div key={f._id} className="flex items-center gap-2 text-sm">
+          <button
+            onClick={() => setDone({ id: f._id, done: true })}
+            className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:border-teal/40 hover:text-teal-glow"
+            aria-label="Mark follow-up done"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </button>
+          <FollowUpBadge next={f} />
+          <span className="text-foreground">{f.note}</span>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="date"
+          value={due}
+          onChange={(e) => setDue(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+        />
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Follow-up — e.g. call owner, second mail piece…"
+          className="h-8 w-full max-w-sm rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+        />
+        <button
+          onClick={submit}
+          disabled={!note.trim() || !due}
+          className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+        >
+          <Plus className="h-3.5 w-3.5" /> Follow-up
+        </button>
+      </div>
     </div>
   );
 }
@@ -238,15 +317,89 @@ function UnmatchedFilings() {
   );
 }
 
+/** Kanban board: one column per stage, stage moves via the card's select (P1). */
+function LeadBoard({
+  leads,
+  followUpsByParcel,
+  onMove,
+}: {
+  leads: Lead[];
+  followUpsByParcel: Map<string, FollowUp[]>;
+  onMove: (prclid: string, stage: string) => void;
+}) {
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-2">
+      {LEAD_STAGES.map((s) => {
+        const col = leads.filter((l) => l.stage === s);
+        return (
+          <div key={s} className="w-64 shrink-0 rounded-xl border border-border bg-card">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <span className={cn("rounded-md border px-2 py-0.5 text-xs font-medium", STAGE_CHIP[s])}>
+                {STAGE_LABELS[s]}
+              </span>
+              <span className="text-xs text-muted-foreground">{col.length}</span>
+            </div>
+            <div className="min-h-24 space-y-2 p-2">
+              {col.map((l) => (
+                <div key={l.prclid} className="rounded-lg border border-border/70 bg-background p-2.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={cn("text-base font-bold", scoreColor(l.score))}>{l.score}</span>
+                    <FollowUpBadge next={followUpsByParcel.get(l.prclid)?.[0]} />
+                  </div>
+                  <div className="mt-0.5 truncate text-sm font-medium text-foreground" title={l.situsStreet}>
+                    {l.situsStreet || "—"}
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {l.ownerName}
+                    {l.absentee ? " · absentee" : ""}
+                  </div>
+                  <div className="mt-1.5">
+                    <SignalChips lead={l} />
+                  </div>
+                  <div className="mt-2">
+                    <Select value={l.stage} onValueChange={(v) => onMove(l.prclid, v)}>
+                      <SelectTrigger className="h-7 w-full border-border text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LEAD_STAGES.map((st) => (
+                          <SelectItem key={st} value={st}>
+                            {STAGE_LABELS[st]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function LeadsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [absenteeOnly, setAbsenteeOnly] = useState(false);
   const [minStack, setMinStack] = useState("1");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [view, setView] = useState<"table" | "board">("table");
 
   const setStatus = useMutation(api.pipelineData.setLeadStatus);
   const buyers = useQuery(api.pipelineData.listBuyers, {}) ?? [];
+  const openFollowUps = useQuery(api.pipelineData.openFollowUps) ?? [];
+  const followUpsByParcel = useMemo(() => {
+    const m = new Map<string, FollowUp[]>();
+    for (const f of openFollowUps) {
+      const list = m.get(f.prclid);
+      if (list) list.push(f);
+      else m.set(f.prclid, [f]);
+    }
+    return m;
+  }, [openFollowUps]);
   const leads = useQuery(api.signalData.leads, {
     type: typeFilter === "all" ? undefined : typeFilter,
     stage: stageFilter === "all" ? undefined : stageFilter,
@@ -342,6 +495,26 @@ export function LeadsPage() {
             Absentee only
           </button>
           <div className="grow" />
+          <div className="flex rounded-md border border-border">
+            <button
+              onClick={() => setView("table")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-l-md px-3 py-1.5 text-sm",
+                view === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              <LayoutList className="h-4 w-4" /> Table
+            </button>
+            <button
+              onClick={() => setView("board")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-r-md px-3 py-1.5 text-sm",
+                view === "board" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              <Columns3 className="h-4 w-4" /> Board
+            </button>
+          </div>
           <button
             onClick={exportCsv}
             disabled={!leads || leads.length === 0}
@@ -359,6 +532,14 @@ export function LeadsPage() {
             <Target className="mx-auto mb-2 h-8 w-8 opacity-40" />
             No leads match these filters yet. Signals sync weekly — or run a sync from the backend.
           </div>
+        ) : view === "board" ? (
+          <LeadBoard
+            leads={leads}
+            followUpsByParcel={followUpsByParcel}
+            onMove={(prclid, s) => {
+              if (isLeadStage(s)) setStatus({ prclid, stage: s });
+            }}
+          />
         ) : (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <table className="w-full text-sm">
@@ -384,7 +565,12 @@ export function LeadsPage() {
                       )}
                     >
                       <td className={cn("px-4 py-2.5 text-lg font-bold", scoreColor(l.score))}>{l.score}</td>
-                      <td className="px-4 py-2.5 font-medium text-foreground">{l.situsStreet || "—"}</td>
+                      <td className="px-4 py-2.5 font-medium text-foreground">
+                        {l.situsStreet || "—"}
+                        <div className="mt-0.5">
+                          <FollowUpBadge next={followUpsByParcel.get(l.prclid)?.[0]} />
+                        </div>
+                      </td>
                       <td className="px-4 py-2.5 text-muted-foreground">{l.propCity}</td>
                       <td className="px-4 py-2.5">
                         <div className="text-foreground">{l.ownerName || "—"}</div>
@@ -427,6 +613,7 @@ export function LeadsPage() {
                         <td colSpan={7}>
                           <SignalTimeline lead={l} />
                           <LeadWorkflow key={l.prclid} lead={l} buyers={buyers} />
+                          <LeadFollowUps lead={l} followUps={followUpsByParcel.get(l.prclid) ?? []} />
                         </td>
                       </tr>
                     )}

@@ -34,6 +34,7 @@ import type { LucideIcon } from "lucide-react";
 import { DEAL_STAGES, STAGE_LABEL } from "../web/dealStages";
 import { formatInteger } from "@/components/formater";
 import { MarketWidgets } from "@/components/market-widgets";
+import { FunnelWidget } from "@/components/funnel-widget";
 
 type Stats = NonNullable<FunctionReturnType<typeof api.runs.dashboardStats>>;
 type Runs = FunctionReturnType<typeof api.runs.listRuns>;
@@ -271,6 +272,8 @@ export function Dashboard() {
 					Your wholesaling pipeline at a glance
 				</p>
 			</div>
+
+			<FunnelWidget />
 
 			<MarketWidgets />
 

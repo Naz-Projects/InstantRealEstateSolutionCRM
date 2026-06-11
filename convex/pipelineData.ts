@@ -61,6 +61,79 @@ export const leadStatuses = query({
   },
 });
 
+// ---- funnel KPIs (dashboard + board) ----
+
+/** Lead counts by stage + pipeline fee totals + follow-up urgency counts. */
+export const funnelStats = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    const statuses = await ctx.db.query("leadStatus").collect();
+    const byStage: Record<string, number> = {};
+    let pipelineFees = 0;
+    let closedFees = 0;
+    for (const s of statuses) {
+      byStage[s.stage] = (byStage[s.stage] ?? 0) + 1;
+      if (s.assignmentFee) {
+        if (s.stage === "closed") closedFees += s.assignmentFee;
+        else if (s.stage === "marketing" || s.stage === "assigned") pipelineFees += s.assignmentFee;
+      }
+    }
+    const openFollowUps = await ctx.db
+      .query("followUps")
+      .withIndex("by_done_due", (q) => q.eq("done", false))
+      .collect();
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    const today = Math.floor(now / DAY);
+    let overdue = 0;
+    let dueToday = 0;
+    for (const f of openFollowUps) {
+      const d = Math.floor(f.dueAt / DAY);
+      if (d < today) overdue++;
+      else if (d === today) dueToday++;
+    }
+    return { byStage, pipelineFees, closedFees, overdue, dueToday, openFollowUps: openFollowUps.length };
+  },
+});
+
+// ---- follow-up tasks (P2) ----
+
+export const addFollowUp = mutation({
+  args: { prclid: v.string(), note: v.string(), dueAt: v.number() },
+  handler: async (ctx, { prclid, note, dueAt }) => {
+    await requireUser(ctx);
+    return await ctx.db.insert("followUps", {
+      prclid,
+      note: note.trim(),
+      dueAt,
+      done: false,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const setFollowUpDone = mutation({
+  args: { id: v.id("followUps"), done: v.boolean() },
+  handler: async (ctx, { id, done }) => {
+    await requireUser(ctx);
+    await ctx.db.patch(id, { done });
+  },
+});
+
+/** All OPEN follow-ups (small), due-soonest first — badges + per-lead lists join client-side. */
+export const openFollowUps = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return await ctx.db
+      .query("followUps")
+      .withIndex("by_done_due", (q) => q.eq("done", false))
+      .order("asc")
+      .take(500);
+  },
+});
+
 // ---- buyers CRM ----
 
 export const listBuyers = query({

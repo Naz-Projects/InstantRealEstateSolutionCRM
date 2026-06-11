@@ -376,6 +376,17 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_prclid", ["prclid"]),
 
+  // Follow-up tasks per lead (pipeline P2) — the "next action" discipline.
+  followUps: defineTable({
+    prclid: v.string(),
+    note: v.string(),
+    dueAt: v.number(), // ms
+    done: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_prclid", ["prclid"])
+    .index("by_done_due", ["done", "dueAt"]),
+
   // Cash-buyer CRM (disposition side) — who we wholesale TO.
   buyers: defineTable({
     name: v.string(),

@@ -29,3 +29,14 @@ export const STAGE_LABELS: Record<LeadStage, string> = {
 export function isLeadStage(s: string): s is LeadStage {
   return (LEAD_STAGES as readonly string[]).includes(s);
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Follow-up urgency by UTC day: before today = overdue, today = today, after = upcoming. */
+export function followUpState(dueAt: number, now: number): "overdue" | "today" | "upcoming" {
+  const dueDay = Math.floor(dueAt / DAY_MS);
+  const today = Math.floor(now / DAY_MS);
+  if (dueDay < today) return "overdue";
+  if (dueDay === today) return "today";
+  return "upcoming";
+}

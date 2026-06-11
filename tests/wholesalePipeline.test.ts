@@ -26,3 +26,14 @@ describe("wholesaling pipeline stages", () => {
     expect(isLeadStage("bogus")).toBe(false);
   });
 });
+
+describe("followUpState", () => {
+  it("classifies by UTC day: overdue / today / upcoming", async () => {
+    const { followUpState } = await import("../src/scraper/wholesalePipeline");
+    const now = Date.UTC(2026, 5, 11, 15, 0, 0);
+    expect(followUpState(Date.UTC(2026, 5, 10, 23, 59), now)).toBe("overdue");
+    expect(followUpState(Date.UTC(2026, 5, 11, 0, 0), now)).toBe("today");
+    expect(followUpState(Date.UTC(2026, 5, 11, 23, 0), now)).toBe("today");
+    expect(followUpState(Date.UTC(2026, 5, 12, 1, 0), now)).toBe("upcoming");
+  });
+});
