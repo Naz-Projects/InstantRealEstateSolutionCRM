@@ -55,7 +55,7 @@ describe("parseCodeCaseFeature", () => {
       category: "physical",
       type: "code-violation",
       source: "ncc-arcgis-codecases",
-      externalKey: "cc:202603920",
+      externalKey: "cc:202603920:0903430163",
       observedDate: 1781016182000,
       status: "O",
       payload: {
@@ -77,6 +77,12 @@ describe("parseCodeCaseFeature", () => {
       expect(ev.externalKey.startsWith("cc:")).toBe(true);
       expect(ev.observedDate).toBeGreaterThan(1_500_000_000_000);
     }
+  });
+
+  it("keys per case AND parcel (one case can span multiple parcels)", () => {
+    const a = parseCodeCaseFeature({ ...first, PRCLID: "111" });
+    const b = parseCodeCaseFeature({ ...first, PRCLID: "222" });
+    expect(a.externalKey).not.toBe(b.externalKey);
   });
 
   it("falls back to prclid+date for the externalKey when APNO is missing", () => {

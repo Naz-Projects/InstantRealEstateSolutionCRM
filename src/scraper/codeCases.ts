@@ -48,7 +48,9 @@ export function parseCodeCaseFeature(attrs: Record<string, unknown>): SignalEven
     category: "physical",
     type: "code-violation",
     source: "ncc-arcgis-codecases",
-    externalKey: apno ? `cc:${apno}` : `cc:${prclid}:${observedDate}`,
+    // One event per case AND parcel — a case can span multiple parcel features,
+    // and a violation must attach to ITS parcel for list stacking.
+    externalKey: apno ? `cc:${apno}:${prclid}` : `cc:${prclid}:${observedDate}`,
     observedDate,
     status: str(attrs.STAT),
     payload: {
