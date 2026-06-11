@@ -61,9 +61,13 @@ export const upsertParcelsBatch = internalMutation({
       } else if (existing.contentHash !== row.contentHash) {
         await ctx.db.patch(existing._id, { ...row, lastSeen: now, active: true });
         updated++;
-      } else {
+      } else if (!existing.active) {
+        // Parcel reappeared in the source after being marked inactive — reactivate.
         await ctx.db.patch(existing._id, { lastSeen: now, active: true });
       }
+      // Unchanged active rows get NO write: patching lastSeen on all 203k rows made
+      // every full re-seed cost ~203k writes (the 2026-06 quota burn); lastSeen is
+      // not read anywhere, and vanished-detection is the CDC key-diff's job.
     }
     return { inserted, updated, absentee };
   },
