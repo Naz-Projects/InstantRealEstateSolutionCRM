@@ -138,16 +138,21 @@ export const leads = query({
     type: v.optional(v.string()), // filter: only leads carrying this signal type
     absenteeOnly: v.optional(v.boolean()),
     minStack: v.optional(v.number()), // minimum distinct signals on the parcel
+    stage: v.optional(v.string()), // workflow-stage filter ("new" matches no-status leads)
     windowDays: v.optional(v.number()), // how far back signals count (default 365)
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, { type, absenteeOnly, minStack, windowDays, limit }) => {
+  handler: async (ctx, { type, absenteeOnly, minStack, stage, windowDays, limit }) => {
     await requireUser(ctx);
     const cutoff = Date.now() - (windowDays ?? 365) * DAY_MS;
     const events = await ctx.db
       .query("signalEvents")
       .withIndex("by_observedDate", (q) => q.gte("observedDate", cutoff))
       .collect();
+
+    // Workflow state (small table: only human-touched leads). Untouched = "new".
+    const statuses = await ctx.db.query("leadStatus").collect();
+    const statusByPrclid = new Map(statuses.map((s) => [s.prclid, s]));
 
     const byParcel = new Map<string, typeof events>();
     for (const e of events) {
@@ -173,6 +178,10 @@ export const leads = query({
       ownerZip: string;
       absentee: boolean;
       absenteeReason: string;
+      stage: string;
+      notes?: string;
+      buyerId?: string;
+      assignmentFee?: number;
       signals: Array<{
         type: string;
         category: string;
@@ -186,6 +195,8 @@ export const leads = query({
     for (const [prclid, sigs] of byParcel) {
       if (type && !sigs.some((s) => s.type === type)) continue;
       if (minStack && new Set(sigs.map((s) => s.type)).size < minStack) continue;
+      const status = statusByPrclid.get(prclid);
+      if (stage && (status?.stage ?? "new") !== stage) continue;
       const parcel = await ctx.db
         .query("parcels")
         .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
@@ -194,6 +205,10 @@ export const leads = query({
       if (absenteeOnly && !parcel.absentee) continue;
       out.push({
         prclid,
+        stage: status?.stage ?? "new",
+        notes: status?.notes,
+        buyerId: status?.buyerId,
+        assignmentFee: status?.assignmentFee,
         score: computeLeadScore(
           sigs.map((s) => ({ type: s.type, observedDate: s.observedDate })),
           { absentee: parcel.absentee },

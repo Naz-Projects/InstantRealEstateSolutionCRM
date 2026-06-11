@@ -355,6 +355,39 @@ export default defineSchema({
     lastResult: v.string(), // short human-readable run summary (observability)
   }).index("by_source", ["source"]),
 
+  // Human workflow state per lead (wholesaling pipeline v1) — one row per worked
+  // parcel. Leads stay DERIVED (signals ⋈ parcels); this holds only what humans set.
+  // Stage list mirrors src/scraper/wholesalePipeline.ts — keep in sync.
+  leadStatus: defineTable({
+    prclid: v.string(),
+    stage: v.union(
+      v.literal("new"),
+      v.literal("contacted"),
+      v.literal("negotiating"),
+      v.literal("under_contract"),
+      v.literal("marketing"),
+      v.literal("assigned"),
+      v.literal("closed"),
+      v.literal("dead"),
+    ),
+    notes: v.optional(v.string()),
+    buyerId: v.optional(v.id("buyers")), // disposition: assigned cash buyer
+    assignmentFee: v.optional(v.number()), // $ wholesale fee on the assignment
+    updatedAt: v.number(),
+  }).index("by_prclid", ["prclid"]),
+
+  // Cash-buyer CRM (disposition side) — who we wholesale TO.
+  buyers: defineTable({
+    name: v.string(),
+    phone: v.optional(v.string()),
+    email: v.optional(v.string()),
+    buyerType: v.union(v.literal("cash"), v.literal("landlord"), v.literal("flipper")),
+    targetAreas: v.optional(v.string()), // free text: zips/cities they buy in
+    maxPrice: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    active: v.boolean(),
+  }).index("by_active", ["active"]),
+
   // Captured application errors surfaced on the Admin → Error Log page. Written
   // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
   // failures), and autonomous backend actions (cron). Admins triage + resolve.

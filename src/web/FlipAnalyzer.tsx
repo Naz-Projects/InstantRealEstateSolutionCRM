@@ -159,7 +159,10 @@ export function FlipAnalyzer() {
 
   const [selectedId, setSelectedId] = useState<Id<"flipAnalyses"> | null>(null);
   const [pick, setPick] = useState("");        // "sheriff:<id>" | "legal:<id>"
-  const [manualAddr, setManualAddr] = useState("");
+  const [manualAddr, setManualAddr] = useState(
+    // Seamless handoff from /leads ("Analyze flip"): pre-fill the manual address.
+    () => new URLSearchParams(window.location.search).get("address") ?? "",
+  );
 
   const selected = analyses?.find((a) => a._id === selectedId) ?? null;
 

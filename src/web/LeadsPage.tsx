@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "convex/react";
+import { Fragment, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import {
   Target,
   Download,
@@ -8,11 +8,15 @@ import {
   Gavel,
   TriangleAlert,
   CircleHelp,
+  Calculator,
+  Save,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { buildMailCsv } from "./lib/mailCsv";
+import { LEAD_STAGES, STAGE_LABELS, isLeadStage } from "../scraper/wholesalePipeline";
 import {
   Select,
   SelectContent,
@@ -22,6 +26,18 @@ import {
 } from "@/components/ui/select";
 
 type Lead = FunctionReturnType<typeof api.signalData.leads>[number];
+type Buyer = FunctionReturnType<typeof api.pipelineData.listBuyers>[number];
+
+const STAGE_CHIP: Record<string, string> = {
+  new: "border-border text-muted-foreground",
+  contacted: "border-sky-500/40 bg-sky-500/10 text-sky-400",
+  negotiating: "border-teal/40 bg-teal/10 text-teal-glow",
+  under_contract: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+  marketing: "border-violet-500/40 bg-violet-500/10 text-violet-400",
+  assigned: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  closed: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  dead: "border-border bg-muted/40 text-muted-foreground line-through",
+};
 
 const SIGNAL_META: Record<string, { label: string; chip: string; icon: typeof Gavel }> = {
   "pre-foreclosure": {
@@ -111,6 +127,86 @@ function SignalTimeline({ lead }: { lead: Lead }) {
   );
 }
 
+/** Workflow strip in the expanded row: stage, notes, buyer assignment, flip handoff. */
+function LeadWorkflow({ lead, buyers }: { lead: Lead; buyers: Buyer[] }) {
+  const setStatus = useMutation(api.pipelineData.setLeadStatus);
+  const [notes, setNotes] = useState(lead.notes ?? "");
+  const [fee, setFee] = useState(lead.assignmentFee?.toString() ?? "");
+  const [saving, setSaving] = useState(false);
+  const fullAddress = `${lead.situsStreet}, ${lead.propCity} DE ${lead.propZip}`;
+  const showDisposition = ["marketing", "assigned", "closed"].includes(lead.stage);
+
+  const saveNotes = async () => {
+    setSaving(true);
+    try {
+      await setStatus({ prclid: lead.prclid, notes });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-border/50 px-4 py-3">
+      <div className="flex grow items-center gap-2">
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Notes — calls, mail sent, owner situation…"
+          className="h-9 w-full max-w-md rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+        />
+        <button
+          onClick={saveNotes}
+          disabled={saving || notes === (lead.notes ?? "")}
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+        >
+          <Save className="h-3.5 w-3.5" /> Save
+        </button>
+      </div>
+      {showDisposition && (
+        <div className="flex items-center gap-2">
+          <Select
+            value={lead.buyerId ?? "none"}
+            onValueChange={(val) =>
+              setStatus({
+                prclid: lead.prclid,
+                buyerId: val === "none" ? null : (val as Id<"buyers">),
+              })
+            }
+          >
+            <SelectTrigger className="h-9 w-44">
+              <SelectValue placeholder="Assign buyer…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No buyer</SelectItem>
+              {buyers.map((b) => (
+                <SelectItem key={b._id} value={b._id}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <input
+            value={fee}
+            onChange={(e) => setFee(e.target.value)}
+            onBlur={() => {
+              const n = Number(fee.replace(/[^0-9.]/g, ""));
+              setStatus({ prclid: lead.prclid, assignmentFee: fee.trim() === "" ? null : n });
+            }}
+            placeholder="Fee $"
+            className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+          />
+        </div>
+      )}
+      <a
+        href={`/flip?address=${encodeURIComponent(fullAddress)}`}
+        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-teal/40 px-3 text-sm text-teal-glow transition-colors hover:bg-teal/10"
+      >
+        <Calculator className="h-3.5 w-3.5" /> Analyze flip
+      </a>
+    </div>
+  );
+}
+
 function UnmatchedFilings() {
   const [open, setOpen] = useState(false);
   const rows = useQuery(api.signalData.unmatchedSignals);
@@ -144,12 +240,16 @@ function UnmatchedFilings() {
 
 export function LeadsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState("all");
   const [absenteeOnly, setAbsenteeOnly] = useState(false);
   const [minStack, setMinStack] = useState("1");
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const setStatus = useMutation(api.pipelineData.setLeadStatus);
+  const buyers = useQuery(api.pipelineData.listBuyers, {}) ?? [];
   const leads = useQuery(api.signalData.leads, {
     type: typeFilter === "all" ? undefined : typeFilter,
+    stage: stageFilter === "all" ? undefined : stageFilter,
     absenteeOnly: absenteeOnly || undefined,
     minStack: minStack === "1" ? undefined : Number(minStack),
   });
@@ -217,6 +317,19 @@ export function LeadsPage() {
               <SelectItem value="3">3+ signal types</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={stageFilter} onValueChange={setStageFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All stages</SelectItem>
+              {LEAD_STAGES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STAGE_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <button
             onClick={() => setAbsenteeOnly((a) => !a)}
             className={cn(
@@ -256,14 +369,14 @@ export function LeadsPage() {
                   <th className="px-4 py-2.5 font-medium">City</th>
                   <th className="px-4 py-2.5 font-medium">Owner</th>
                   <th className="px-4 py-2.5 font-medium">Signals</th>
+                  <th className="px-4 py-2.5 font-medium">Stage</th>
                   <th className="px-4 py-2.5 font-medium">Latest</th>
                 </tr>
               </thead>
               <tbody>
                 {leads.map((l) => (
-                  <>
+                  <Fragment key={l.prclid}>
                     <tr
-                      key={l.prclid}
                       onClick={() => setExpanded(expanded === l.prclid ? null : l.prclid)}
                       className={cn(
                         "cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/50",
@@ -284,18 +397,40 @@ export function LeadsPage() {
                       <td className="px-4 py-2.5">
                         <SignalChips lead={l} />
                       </td>
+                      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <Select
+                          value={l.stage}
+                          onValueChange={(s) => {
+                            if (isLeadStage(s)) setStatus({ prclid: l.prclid, stage: s });
+                          }}
+                        >
+                          <SelectTrigger
+                            className={cn("h-7 w-40 border text-xs", STAGE_CHIP[l.stage])}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LEAD_STAGES.map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {STAGE_LABELS[s]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
                       <td className="px-4 py-2.5 text-xs text-muted-foreground">
                         {fmtDate(l.signals[0]?.observedDate ?? 0)}
                       </td>
                     </tr>
                     {expanded === l.prclid && (
-                      <tr key={`${l.prclid}-detail`} className="border-b border-border/50 bg-muted/30">
-                        <td colSpan={6}>
+                      <tr className="border-b border-border/50 bg-muted/30">
+                        <td colSpan={7}>
                           <SignalTimeline lead={l} />
+                          <LeadWorkflow key={l.prclid} lead={l} buyers={buyers} />
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

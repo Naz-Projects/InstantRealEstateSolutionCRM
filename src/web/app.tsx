@@ -8,6 +8,7 @@ import { Properties } from "./Properties";
 import { PropertyDetail } from "./PropertyDetail";
 import { ParcelSearch } from "./ParcelSearch";
 import { LeadsPage } from "./LeadsPage";
+import { BuyersPage } from "./BuyersPage";
 
 function RootLayout() {
   return (
@@ -27,5 +28,6 @@ const propertiesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/p
 const propertyDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/properties/$id", component: PropertyDetail });
 const parcelsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/parcels", component: ParcelSearch });
 const leadsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/leads", component: LeadsPage });
+const buyersRoute = createRoute({ getParentRoute: () => rootRoute, path: "/buyers", component: BuyersPage });
 
-export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, flipRoute, propertiesRoute, propertyDetailRoute, parcelsRoute, leadsRoute, adminRoute]);
+export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, flipRoute, propertiesRoute, propertyDetailRoute, parcelsRoute, leadsRoute, buyersRoute, adminRoute]);

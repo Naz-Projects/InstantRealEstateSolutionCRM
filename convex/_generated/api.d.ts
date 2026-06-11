@@ -23,6 +23,7 @@ import type * as marketActions from "../marketActions.js";
 import type * as marketData from "../marketData.js";
 import type * as parcelActions from "../parcelActions.js";
 import type * as parcelData from "../parcelData.js";
+import type * as pipelineData from "../pipelineData.js";
 import type * as propertyActions from "../propertyActions.js";
 import type * as propertyData from "../propertyData.js";
 import type * as runs from "../runs.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   marketData: typeof marketData;
   parcelActions: typeof parcelActions;
   parcelData: typeof parcelData;
+  pipelineData: typeof pipelineData;
   propertyActions: typeof propertyActions;
   propertyData: typeof propertyData;
   runs: typeof runs;
