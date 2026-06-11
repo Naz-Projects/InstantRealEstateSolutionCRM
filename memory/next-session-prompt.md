@@ -10,8 +10,11 @@ signals** → score leads → reach owners **off-market**.
 > ⚠⚠ **CONVEX FREE-TIER QUOTA EXHAUSTED** — debugging the seed re-ran the full 203k load ~4× and maxed the dev monthly
 > quota; the user is BLOCKED on Convex. **Do NOT run ANY Convex ops or re-seed** until it resets (monthly billing cycle) or
 > the plan is upgraded — they only add to usage. **All file-based work is safe** (specs, plans, pure modules + vitest,
-> `npm run build`). **FIRST next-session task: add a `maxPages`/`limit` arg to `seedSpine`** so debugging never full-seeds
-> again. (Lessons 2026-06-08.) Code-cases (Phase 2) is a TINY feed (~2,852) so it's cheap even when Convex is back.
+> `npm run build`). Code-cases (Phase 2) is a TINY feed (~2,852) so it's cheap even when Convex is back.
+> **DONE 2026-06-11 (quota-safety code, on branch):** `seedSpine maxPages` cap (`d7aae65`) + **differential upsert** — a full
+> refresh now writes only changed rows, not 203k (`8af7cbc`). **OPEN USER DECISION: Convex plan** — Starter ($0 base,
+> pay-as-you-go, recommended) ends the hard-block risk; one full seed ≈ $0.05–0.15. Note the weekly `syncSpine` range-diff
+> reads FULL docs ≈ 0.7 GB/mo ≈ 70% of free I/O by itself. Full numbers: `memory/architecture-review-2026-06-11.md` §1.
 
 **GIT STATE — everything is LOCAL (nothing pushed to origin, nothing on prod):**
 - `main`: research/docs only (spec `ce11b62`, Phase 0 source matrix, distress catalog, enrichment/vision).
@@ -29,7 +32,11 @@ signals** → score leads → reach owners **off-market**.
   + CDC new/vanished all proven. 111 tests, build clean. **Additive — zero change to Sheriff/Legal/Flip/Properties.**
 
 **READ before Phase 2:** the 4-layer spec · `memory/distress-signals.md` (signal catalog + **LIST STACKING** + equity-as-gate) ·
-`memory/lead-engine-enrichment-and-vision.md` (free→paid→satellite/CV tiers + saleable-product vision).
+`memory/lead-engine-enrichment-and-vision.md` (free→paid→satellite/CV tiers + saleable-product vision) ·
+**`memory/architecture-review-2026-06-11.md` (architecture review: Convex cost model · CourtConnect pre-foreclosure is
+SERVERLESS-buildable, no browser, `LM`/`^N\d{2}L-` case filter, plaintiff-stem sweep, 4–7 mo lead time, ToS gray zone ·
+NO free bulk assessed-value roll (equity stays funnel-only) · NEW bulk `Structure_Details.zip`/`Owners.zip` downloads ·
+vision condition scoring ≈ $1/1,000 houses · direct-mail CSV export quick win).**
 
 ## ★ THE NEXT LAYER — Phase 2: Signal Event-Streams → Leads → Scoring
 This is where the spine becomes a real LEAD ENGINE (spec layers 2+3): attach distress SIGNALS to parcels and surface SCORED
@@ -64,11 +71,15 @@ liens = the ranking multiplier); **T4 imagery/CV** condition scoring (cheap DIY 
 outreach (direct mail first — owner mailing is free from the spine). Full map: `memory/lead-engine-enrichment-and-vision.md`.
 
 **EXACT NEXT STEPS (do in order):**
-1. **(quota safety, do FIRST)** add `maxPages`/`limit` to `seedSpine` (file edit + `npm run build` + vitest — NO Convex). Commit.
-2. **Write the Phase 2 spec** (`docs/superpowers/specs/<date>-lead-engine-phase2-signals-leads.md`) — design above; decide
-   derived-vs-stored leads + rules-scoring weights. → **writing-plans** → **TDD build** the pure `codeCases.ts` + `signalEvents`
-   schema + signal action (all offline-testable). **Defer the live `syncCodeCases` run until Convex quota is back** (then it's cheap).
-3. Only once Convex is usable again: merge Phase 1(+2), ONE-TIME prod seed (budget ~203k writes), live click-through `/parcels` + Leads.
+1. ~~(quota safety) `maxPages` on `seedSpine`~~ **DONE 2026-06-11** (`d7aae65`), plus differential upsert (`8af7cbc`).
+2. **User decisions** (see architecture-review §Decisions): Convex Starter upgrade? CourtConnect sweep OK (ToS gray zone)?
+3. **Write the Phase 2 spec** (`docs/superpowers/specs/<date>-lead-engine-phase2-signals-leads.md`) — design above PLUS the
+   **CourtConnect pre-foreclosure stream** (shared `signalEvents` schema; pure `codeCases.ts` + `courtConnect.ts` parsers both
+   offline-testable; plaintiff-stem list as config; weekly action ≈ 60 small GETs). Decide derived-vs-stored leads (lean derived)
+   + rules-scoring weights. Include the **direct-mail CSV export** as the Phase 2 UI quick win. → **writing-plans** → **TDD build**
+   the pure parsers + schema (offline). **Defer live sync runs until Convex is usable** (then both feeds are cheap).
+4. Only once Convex is usable again: merge Phase 1(+2), ONE-TIME prod seed (~$0.05–0.15 on Starter; or JSONL + `npx convex import`),
+   live click-through `/parcels` + Leads.
 
 ⚠ **Dev sandbox blocks local outbound HTTP** — verify endpoints via a throwaway cloud-dev Convex action (`npx convex run`),
 NOT local curl/WebFetch — **but mind the quota** (probing costs too; code-cases is tiny vs the 203k spine). The Phase 0 probe

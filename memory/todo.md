@@ -23,15 +23,27 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   absentee flags + owner-portfolio view). **Live-verified on DEV: seeded 203,739 distinct parcels (203,752 source), 53,293
   absentee (26%), spot-checked; CDC sync ran clean (0 new/vanished).** 111 tests, build clean.
   - [~] **⚠ Convex free-tier quota EXHAUSTED** (repeated dev seeding) — user is blocked on Convex; do NOT re-seed dev/prod
-    until it resets (monthly) or a plan upgrade. (See lessons 2026-06-08.) **First task next session:** add a `maxPages`/`limit`
-    arg to `seedSpine` so debugging can't accidentally full-seed; consider clearing the dev `parcels` table to reclaim space.
+    until it resets (monthly) or a plan upgrade. (See lessons 2026-06-08.)
+  - [x] **Quota-safety code fixes (2026-06-11, on branch):** `seedSpine` `maxPages` cap (`d7aae65`) + **differential upsert** —
+    unchanged rows get NO write, so a full refresh writes only real changes, not 203k rows (`8af7cbc`). 111 tests, build clean.
+  - [~] **DECIDE: Convex plan.** Free tier = 1 GB DB-I/O/mo (one full seed ≈ 0.2 GB; weekly `syncSpine` full-doc reads ≈ 0.7 GB/mo
+    alone) and hard-disables when exceeded. **Starter = $0 base pay-as-you-go (recommended)**; Pro $25/mo. A full seed ≈ $0.05–0.15
+    in overage dollars. Details: `memory/architecture-review-2026-06-11.md` §1.
   - [ ] **Merge to `main` + deploy to prod**, then **ONE-TIME** prod seed (`npx convex run parcelActions:seedSpine` w/ prod key;
     ~16 min, ~203k writes — budget it; steady-state weekly CDC is cheap). User chose: keep on branch for now (NOT merged/deployed).
   - [ ] **Live click-through** `/parcels` (search returns rows; absentee badges; owner-portfolio panel) — once Convex is usable again.
   - [ ] **Attribute-change refresh:** weekly cron does new/vanished only; schedule/period a full `seedSpine` re-run to catch
     owner/address changes (heavier). Also: vanished top-tail edge (PRCLID > max source) not marked — rare, documented.
-- [ ] **Phase 2 — first signal: code violations** (`CodeEnforcement_CodeCases/0`, dated via `last_edited_date`) →
-  `signalEvents` + `leads` + rules scoring. (Stacks with absentee from the spine.)
+- [ ] **Phase 2 — signals: code violations + PRE-FORECLOSURE (CourtConnect)** → `signalEvents` + derived leads + rules scoring.
+  Architecture review (2026-06-11, `memory/architecture-review-2026-06-11.md`) live-verified that **DE CourtConnect needs NO
+  browser** — plain GET, no captcha; NCC mortgage foreclosures = case type `LM`, numbers `^N\d{2}L-`; weekly plaintiff-stem sweep
+  (~30–60 stems) joined to the spine by defendant name; **4–7 months lead time** before the sheriff sale. ⚠ ToS "no commercial
+  use" gray zone — throttle, internal use. Code violations (`CodeEnforcement_CodeCases/0`, cursor `APDTTM`) stays the first build.
+- [ ] **Probe `Structure_Details.zip`** (NCC hub bulk daily download — building attributes; also `Owners.zip`, `Parcels_GDB.zip`)
+  for year-built/size fields the REST spine lacks. Free bulk enrichment. (Equity verdict: NO free bulk assessed-value roll exists —
+  values stay funnel-only via Zillow/comps or the per-parcel county page.)
+- [ ] **Quick wins after Phase 2:** one-click **direct-mail CSV export** of filtered leads (owner mailing already in spine);
+  **Street View + vision condition scoring** funnel-only (~$1 per 1,000 houses w/ Haiku batch; just another signalEvents source).
 - [ ] **Optional quick win** — **augment** (not replace) the sheriff-PDF parse with the structured `SheriffSales/0` layer:
   join its clean `PARCELID` + court `CASENUMBER`/`PLANTIFF` onto scraped rows. (Layer lacks sale type/principal/sale-date
   that `deal.ts` needs, so the PDF stays the source of truth.)
