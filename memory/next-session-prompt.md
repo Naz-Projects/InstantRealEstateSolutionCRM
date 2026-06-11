@@ -2,7 +2,22 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★ ACTIVE INITIATIVE — Wholesaling Lead Engine — PHASE 2 IS NEXT (PICK UP HERE)
+## ★★ 2026-06-11 UPDATE — PHASE 2 + WHOLESALING PIPELINE v1 ARE BUILT (read this first)
+**Convex is PAID now (user upgraded — quota unblocked).** On branch `feat/lead-engine-phase1-spine` (still NOT
+merged/prod), built TDD + live-verified on dev this session (151 tests, build clean):
+1. **Signal streams:** code violations (1,886 events) + **CourtConnect pre-foreclosure sweep** (50 cases, 33 matched
+   to parcels, 4–7 mo before auction; serverless — no browser). Weekly crons. Watermarked + idempotent.
+2. **Scored leads:** derived `signalData.leads` + `/leads` page + direct-mail CSV export.
+3. **Pipeline v1:** `leadStatus` stages + notes + buyer assignment on /leads; `/buyers` CRM; lead→`/flip?address=` handoff.
+4. **Docs:** `memory/architecture-review-2026-06-11.md` (research: Convex costs, CourtConnect, no free bulk values,
+   `Structure_Details.zip` find) + `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (gap analysis +
+   ADDable roadmap P1–P8) + Phase 2 spec/plan (same date).
+**NEXT:** (a) user click-through `/leads` + `/buyers` on dev (`npm run dev`); (b) merge→prod + ONE-TIME prod parcel
+seed (~$0.05–0.15 now) + prod runs of both syncs; (c) then roadmap P1 (Kanban board + funnel KPIs) and P2 (follow-up
+tasks) from the pipeline spec; (d) probe `Structure_Details.zip` fields. ToS note: CourtConnect sweep = internal use,
+~32 GETs/week, throttled (gray zone documented in the spec).
+
+## (superseded 2026-06-11 — kept for context) Wholesaling Lead Engine — Phase 2 planning
 **Status (2026-06-08): Phase 0 DONE · Phase 1 BUILT + LIVE-VERIFIED on DEV** (branch `feat/lead-engine-phase1-spine`,
 **NOT merged, NOT on prod**). Turn the CRM into a NCC **wholesaling lead engine** — ingest ALL parcels + attach **distress
 signals** → score leads → reach owners **off-market**.

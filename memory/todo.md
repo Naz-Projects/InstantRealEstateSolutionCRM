@@ -34,11 +34,17 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   - [ ] **Live click-through** `/parcels` (search returns rows; absentee badges; owner-portfolio panel) — once Convex is usable again.
   - [ ] **Attribute-change refresh:** weekly cron does new/vanished only; schedule/period a full `seedSpine` re-run to catch
     owner/address changes (heavier). Also: vanished top-tail edge (PRCLID > max source) not marked — rare, documented.
-- [ ] **Phase 2 — signals: code violations + PRE-FORECLOSURE (CourtConnect)** → `signalEvents` + derived leads + rules scoring.
-  Architecture review (2026-06-11, `memory/architecture-review-2026-06-11.md`) live-verified that **DE CourtConnect needs NO
-  browser** — plain GET, no captcha; NCC mortgage foreclosures = case type `LM`, numbers `^N\d{2}L-`; weekly plaintiff-stem sweep
-  (~30–60 stems) joined to the spine by defendant name; **4–7 months lead time** before the sheriff sale. ⚠ ToS "no commercial
-  use" gray zone — throttle, internal use. Code violations (`CodeEnforcement_CodeCases/0`, cursor `APDTTM`) stays the first build.
+- [x] **Phase 2 — signals + leads + scoring BUILT + LIVE-VERIFIED on dev (2026-06-11).** Code violations (1,886 distinct
+  case+parcel events) + CourtConnect pre-foreclosure sweep (32 stems, 50 cases, 33 matched / 17 unmatched review list,
+  4–7 mo lead time, serverless). `signalEvents`/`signalWatermarks`, weekly crons, derived scored `/leads` + mail-CSV export.
+  151 tests. Spec/plan: `docs/superpowers/{specs,plans}/2026-06-11-lead-engine-phase2-signals-leads.md`.
+- [x] **Wholesaling pipeline v1 BUILT (2026-06-11):** `leadStatus` stages + notes + buyer assignment + fee on /leads;
+  `/buyers` CRM page; lead→Flip handoff (`/flip?address=`). Gap analysis + P1–P8 roadmap:
+  `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md`.
+  - [ ] **Click-through on dev (user):** /leads (stages, notes, CSV, expand timeline), /buyers (add/edit/delete), flip handoff.
+  - [ ] **Pipeline roadmap next:** P1 Kanban board + funnel KPIs · P2 follow-up tasks/reminders · P3 outreach log ·
+    P4 equity gate (funnel-only) · P5 contacts/skip-trace (DNC/TCPA module first) · P6 offers/contracts · P7 vision scoring ·
+    P8 buyer-match/blast. (Spec has details.)
 - [ ] **Probe `Structure_Details.zip`** (NCC hub bulk daily download — building attributes; also `Owners.zip`, `Parcels_GDB.zip`)
   for year-built/size fields the REST spine lacks. Free bulk enrichment. (Equity verdict: NO free bulk assessed-value roll exists —
   values stay funnel-only via Zillow/comps or the per-parcel county page.)

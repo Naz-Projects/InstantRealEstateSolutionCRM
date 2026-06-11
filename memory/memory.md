@@ -34,7 +34,19 @@ parcels** (203,752 source, 13 dupes), **53,293 absentee (26%)**, spot-checked; s
 CDC new+vanished both exercised correctly. 111 tests, build clean. **Additive — zero change to Sheriff/Legal/Flip/Properties.**
 **Pending:** merge→prod + ONE-TIME prod seed (mind the free-tier cost) + live click-through; push local commits to origin.
 
-**NEXT LAYER = Phase 2 — signal event-streams + leads + scoring (start with CODE VIOLATIONS).** See `memory/next-session-prompt.md`.
+**PHASE 2 + PIPELINE v1 — BUILT + LIVE-VERIFIED ON DEV (2026-06-11, same branch).** Convex upgraded to PAID
+(quota unblocked). Architecture review (`memory/architecture-review-2026-06-11.md`): Convex cost model, CourtConnect
+pre-foreclosure = serverless (no browser!), no free bulk assessed-value roll, NCC bulk downloads find. Built TDD
+(151 tests): **signal streams** — code violations (ArcGIS, `APDTTM` watermark; live: 2,883 fetched → 1,886 distinct
+case+parcel events) + **pre-foreclosure CourtConnect weekly sweep** (32 lender stems, `^N\d{2}L-` filter, caption-
+defendant → spine-owner token matching; live: 50 cases, 33 matched/17 unmatched, 57 events; **4–7 months before the
+sheriff auction**); `signalEvents`/`signalWatermarks` tables; weekly crons. **Derived scored leads** (`signalData.leads`:
+stack × 90-day-half-life recency × absentee ×1.5, config in `src/scraper/leadScore.ts`) + `/leads` page (filters,
+expandable signal timeline, unmatched-filings review, **direct-mail CSV export**). **Wholesaling pipeline v1**
+(gap analysis: `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md`): `leadStatus` stages
+(new→contacted→negotiating→under_contract→marketing→assigned→closed→dead) + notes + buyer assignment + fee on /leads;
+`buyers` CRM page; lead→Flip Analyzer handoff (`/flip?address=`). **Pending: authed click-through of /leads + /buyers
+on dev; merge→prod decision.** See `memory/next-session-prompt.md`.
 
 ## What this is
 A CRM for **Instant Real Estate Solution (IRES)** — a Delaware / New Castle County (NCC) real-estate
