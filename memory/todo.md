@@ -291,3 +291,8 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 ## Notes
 - `memory/` is the source of truth for context; git history is the source of truth for changes.
 - Twenty app source is archived in `docs/twenty-app-archived/` (UI reference only — do not re-propose Twenty/Docker).
+## ✅ PROD CUTOVER VERIFIED (2026-06-11, late session)
+- Prod spine: **203,740 parcels / 53,299 absentee** (seed stalled once at 132k — hung fetch, fixed w/ 30s timeouts, resumed via cursor).
+- Prod signals: **1,951 events** = 1,886 code-violations + pre-foreclosure from **51 court cases (35 matched, 16 unmatched)**.
+- Foreclosure watermark now only advances on a CLEAN sweep (partial stem failures re-sweep next cron). All crons active on prod.
+- Pushed through `2c67e0e`; CF build ships the frontend (board + follow-ups + funnel). **User: confirm CF build green + click through prod.**
