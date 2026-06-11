@@ -7,6 +7,7 @@ import { FlipAnalyzer } from "./FlipAnalyzer";
 import { Properties } from "./Properties";
 import { PropertyDetail } from "./PropertyDetail";
 import { ParcelSearch } from "./ParcelSearch";
+import { LeadsPage } from "./LeadsPage";
 
 function RootLayout() {
   return (
@@ -25,5 +26,6 @@ const flipRoute = createRoute({ getParentRoute: () => rootRoute, path: "/flip", 
 const propertiesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/properties", component: Properties });
 const propertyDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/properties/$id", component: PropertyDetail });
 const parcelsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/parcels", component: ParcelSearch });
+const leadsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/leads", component: LeadsPage });
 
-export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, flipRoute, propertiesRoute, propertyDetailRoute, parcelsRoute, adminRoute]);
+export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, flipRoute, propertiesRoute, propertyDetailRoute, parcelsRoute, leadsRoute, adminRoute]);

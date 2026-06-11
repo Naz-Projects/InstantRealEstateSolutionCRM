@@ -28,6 +28,8 @@ import type * as propertyData from "../propertyData.js";
 import type * as runs from "../runs.js";
 import type * as sheriffActions from "../sheriffActions.js";
 import type * as sheriffData from "../sheriffData.js";
+import type * as signalActions from "../signalActions.js";
+import type * as signalData from "../signalData.js";
 import type * as users from "../users.js";
 
 import type {
@@ -57,6 +59,8 @@ declare const fullApi: ApiFromModules<{
   runs: typeof runs;
   sheriffActions: typeof sheriffActions;
   sheriffData: typeof sheriffData;
+  signalActions: typeof signalActions;
+  signalData: typeof signalData;
   users: typeof users;
 }>;
 

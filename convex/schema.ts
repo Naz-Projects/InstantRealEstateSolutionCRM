@@ -317,6 +317,44 @@ export default defineSchema({
     error: v.optional(v.string()),
   }).index("by_started", ["startedAt"]),
 
+  // Distress-signal events (lead engine Phase 2) — one row per signal observation,
+  // attached to a parcel by PRCLID ("" = unmatched, kept for review). A parcel with
+  // ≥1 event IS a lead (derived reactively — no stored leads table). Mirrors
+  // src/scraper/signals.ts. Spec: docs/superpowers/specs/2026-06-11-lead-engine-phase2-*.
+  signalEvents: defineTable({
+    prclid: v.string(),
+    category: v.union(
+      v.literal("financial"),
+      v.literal("life-event"),
+      v.literal("physical"),
+      v.literal("situational"),
+    ),
+    type: v.string(), // "code-violation" | "pre-foreclosure" | …
+    source: v.string(), // provenance, e.g. "ncc-arcgis-codecases"
+    externalKey: v.string(), // natural idempotency key (upsert target)
+    observedDate: v.number(), // ms — recency for scoring
+    status: v.string(), // source-specific state (e.g. "O" open, "NEW-NEW")
+    matchConfidence: v.optional(
+      v.union(v.literal("exact"), v.literal("strong"), v.literal("weak")),
+    ),
+    payload: v.any(),
+    firstSeen: v.number(),
+    lastSeen: v.number(),
+  })
+    .index("by_prclid", ["prclid"])
+    .index("by_externalKey", ["externalKey"])
+    .index("by_type", ["type"])
+    .index("by_observedDate", ["observedDate"]),
+
+  // One watermark row per signal source — where the next incremental pull starts.
+  // Pulls overlap a few days + upsert by externalKey, so a missed run loses nothing.
+  signalWatermarks: defineTable({
+    source: v.string(),
+    watermark: v.string(), // ISO datetime the next pull starts from
+    lastRunAt: v.number(),
+    lastResult: v.string(), // short human-readable run summary (observability)
+  }).index("by_source", ["source"]),
+
   // Captured application errors surfaced on the Admin → Error Log page. Written
   // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
   // failures), and autonomous backend actions (cron). Admins triage + resolve.

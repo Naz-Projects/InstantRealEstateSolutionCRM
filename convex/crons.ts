@@ -29,6 +29,23 @@ crons.cron(
   {},
 );
 
+// Distress signals (lead engine Phase 2) — both feeds are tiny + watermarked +
+// idempotent. Code cases = a few ArcGIS pages; foreclosures = ~30 polite CourtConnect
+// GETs (internal use, throttled — see the Phase 2 spec ToS note).
+crons.cron(
+  "code violations weekly sync",
+  "0 10 * * 1",
+  internal.signalActions.syncCodeCases,
+  {},
+);
+
+crons.cron(
+  "foreclosure filings weekly sweep",
+  "0 10 * * 2",
+  internal.signalActions.syncForeclosures,
+  {},
+);
+
 // Public market data (FRED) — refresh on the 1st of each month, 12:00 UTC (~8am ET).
 // The county housing series are monthly; the action is idempotent (upsert by series).
 crons.cron(
