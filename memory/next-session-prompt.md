@@ -37,18 +37,24 @@ bulk assessed-value roll; NCC bulk `Structure_Details.zip`/`Owners.zip` download
 `docs/superpowers/specs/2026-06-11-lead-engine-phase2-signals-leads.md` (signal engine design) ·
 **`docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (the gap analysis + P1–P8 roadmap — THE plan)**.
 
-### WHAT'S NEXT (in order)
-1. **User verification on prod** (never clicked through in a browser): /leads table+board (move stages, notes,
-   follow-ups, CSV export), /buyers CRUD, flip handoff, dashboard funnel card, sidebar score legend; confirm the
-   CF Workers build went green (stale `CONVEX_DEPLOY_KEY` in CF env = silently serves the old bundle).
-2. **Pipeline roadmap P3–P8** (from the wholesaling-pipeline spec, in ROI order — each additive):
-   **P3 outreach log** (mail batches/responses tied to leads, re-export non-responders, email alert cron on hot leads) ·
-   **P4 equity gate** (funnel-only value via existing Zillow/comps scrapers + delinquent balances from monition PDFs +
-   free-and-clear proxy via Recorder; equity multiplier into SCORE_CONFIG) ·
+### WHAT'S NEXT (in order — updated 2026-06-12)
+0. **STANDING DIRECTIVE (user, 2026-06-11):** ALL coding/implementation goes to **Opus 4.8 subagents**
+   (`model: "opus"` on every implementer/reviewer dispatch); the main loop only orchestrates (specs, plans,
+   dispatch, review coordination, git/deploy). Saved in auto-memory `implementation-via-opus-subagents`.
+1. **User verification on prod** (never clicked through in a browser): /leads table+board (stages, notes,
+   follow-ups, CSV) + **NEW P4 equity features** (expand lead → Pull value & balances → equity badge + score shift;
+   min-equity filter; Enrich top N dialog; manual liens; legend equity rows), /buyers CRUD, flip handoff, dashboard
+   funnel card; confirm the CF Workers build went green (stale `CONVEX_DEPLOY_KEY` in CF env = silently serves the
+   old bundle; prod BACKEND was also deployed manually 2026-06-12, so only the frontend depends on CF).
+2. **Pipeline roadmap** (each additive; P3 deferred, P4 done):
+   ~~P3 outreach log~~ **DEFERRED to end-of-pipeline bucket** (design saved:
+   `docs/superpowers/specs/2026-06-11-outreach-log-design.md`) ·
+   ~~P4 equity gate~~ **SHIPPED 2026-06-12** (`85f4a12`; spec/plan `2026-06-11-equity-gate*`) ·
    **P5 contacts + skip-trace** (paid ~$0.10/hit, build the DNC/TCPA compliance module FIRST) ·
    **P6 offers/contracts** (offer history per lead, e-sign later) ·
    **P7 vision condition scoring** (Street View + LLM vision ≈ $1/1k houses, just another signalEvents source) ·
-   **P8 buyer-match/blast** (lead⋈buyers on area/price, Resend email).
+   **P8 buyer-match** (lead⋈buyers on area/price; the blast-email half → end bucket) ·
+   **END bucket:** email notifications/alerts (P3 alerts + P8 blast, Resend) + mobile UI pass.
 3. **More free signals** (stack on the same table, parsers mirror codeCases.ts): vacant (859), vacant-monition (76),
    rentals/tired-landlord (39k, `EXPDATE`), permits. Cheap wins.
 4. **Probe `Structure_Details.zip`** (NCC bulk daily download — year-built/size attrs the spine lacks) — fields unknown.

@@ -39,9 +39,25 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   parcel seed + prod signal syncs run. **P1 Kanban board + FunnelWidget KPIs** and **P2 followUps (overdue badges)** built (152 tests).
   - [ ] **Click-through on PROD (user):** /leads table+board (stages, notes, follow-ups, CSV, timeline), /buyers, flip
     handoff, dashboard funnel card; confirm CF Workers build green (stale CONVEX_DEPLOY_KEY = silent stale bundle).
-  - [ ] **Pipeline roadmap next (P3 re-ordered 2026-06-11):** P4 equity gate (funnel-only) · P5 contacts/skip-trace
-    (DNC/TCPA module first) · P6 offers/contracts · P7 vision scoring (~$1/1k) · P8 buyer-match (the blast-email half
-    moves to the end bucket). (Spec has details.)
+  - [ ] **Pipeline roadmap next (P3 re-ordered 2026-06-11):** ~~P4 equity gate~~ **DONE 2026-06-12** · P5
+    contacts/skip-trace (DNC/TCPA module first) · P6 offers/contracts · P7 vision scoring (~$1/1k) · P8 buyer-match
+    (the blast-email half moves to the end bucket). (Spec has details.)
+- [x] **P4 EQUITY GATE — SHIPPED TO PROD (2026-06-12).** Funnel-only enrichment: `parcelEquity` table (separate from
+  the spine ON PURPOSE — CDC never touches it) · `equityActions.enrichEquity/enrichBatch` (Zillow zestimate → comps
+  fallback → NCC balances via existing `lookupParcel`; cap 50/click, 2.5s stagger; partial success OK, `lastError`
+  visible) · pure `src/scraper/equity.ts` + `equityBucket`/multipliers in `SCORE_CONFIG` (unknown ×1.0 = un-enriched
+  scores unchanged) · `/leads` equity column + LeadEquity panel (pull button, manual liens) + min-equity filter +
+  "Enrich top N" + CSV value/equity columns + legend rows. Built subagent-driven (Opus 4.8 per user directive),
+  TDD, two-stage review per task + final review (READY TO MERGE). 170 tests. **Live-verified on dev** (2 parcels:
+  zestimate $495k/$631k + balances $0 legit + assessed). Merged ff → `main` `85f4a12`, pushed (CF deploys frontend),
+  prod backend deployed manually (`parcelEquity.by_prclid` added). Spec/plan:
+  `docs/superpowers/{specs,plans}/2026-06-11-equity-gate*`.
+  - [ ] **Prod click-through (user):** /leads → expand a lead → "Pull value & balances" → equity badge + score shift;
+    min-equity filter; "Enrich top N" confirm dialog; manual liens save; legend equity rows; CSV has value/equity.
+  - [ ] **Comps-fallback path never exercised live** (both dev test parcels had zestimates) — verify when a
+    no-zestimate lead shows up.
+  - [ ] Backlog (from review): CSV formula-injection hardening (leading `=`/`+`/`-`/`@` cells) if mail CSVs are
+    ever opened in Excel directly · normalize the liens input on blur (cosmetic Save re-enable on "150,000").
   - [~] **P3 outreach log + email alerts — DEFERRED to the END-OF-PIPELINE bucket (user, 2026-06-11):** finish the
     pipeline shape first, then build notifications. Design is fully brainstormed + scope-locked (Resend gated on env,
     manual response marking, free-text templates, hot = score ≥70 OR new pre-foreclosure):

@@ -58,6 +58,14 @@ advanced the watermark (→ watermark only advances on a clean sweep; rewound + 
 **Pending: USER click-through on prod + CF-build-green check.** Roadmap P3–P8 in
 `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md`. **Pick up via `memory/next-session-prompt.md`.**
 
+**P4 EQUITY GATE SHIPPED (2026-06-12, `85f4a12` → prod).** P3 outreach log DEFERRED to the end-of-pipeline bucket
+(user decision; design saved at `docs/superpowers/specs/2026-06-11-outreach-log-design.md`). P4: `parcelEquity`
+table (funnel-only, separate from the spine), `equityActions` enrichment (zestimate → comps fallback → NCC
+balances via `lookupParcel`, cap 50, staggered), equity buckets/multipliers in `SCORE_CONFIG` (unknown ×1.0),
+/leads equity column + panel + filter + batch button, CSV value/equity, legend rows. 170 tests; live-verified on
+dev; prod backend deployed manually. Built per the **standing user directive: all implementation via Opus 4.8
+subagents** (auto-memory `implementation-via-opus-subagents`). Next: P5 (DNC/TCPA first) → P6 → P7 → P8.
+
 ## What this is
 A CRM for **Instant Real Estate Solution (IRES)** — a Delaware / New Castle County (NCC) real-estate
 **wholesaling, flipping, and buy-and-rent** business. The CRM's headline feature is one-click automations:
