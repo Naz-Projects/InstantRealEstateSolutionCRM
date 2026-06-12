@@ -47,6 +47,15 @@ export function ScoreLegend() {
             <Row label="Each extra signal" value={`+${SCORE_CONFIG.stackBonus}`} />
             <Row label="Absentee owner" value={`×${SCORE_CONFIG.absenteeMultiplier}`} />
             <Row label={`Halves every ${SCORE_CONFIG.recencyHalfLifeDays} days`} value="decay" />
+            <Row
+              label={`High equity (≥${SCORE_CONFIG.equityBuckets.highMin * 100}%)`}
+              value={`×${SCORE_CONFIG.equityMultipliers.high}`}
+            />
+            <Row
+              label={`Some equity (≥${SCORE_CONFIG.equityBuckets.mediumMin * 100}%)`}
+              value={`×${SCORE_CONFIG.equityMultipliers.medium}`}
+            />
+            <Row label="Low/negative equity" value={`×${SCORE_CONFIG.equityMultipliers.low}`} />
           </div>
           <div className="flex items-center gap-2 pt-0.5">
             <Tier dot="bg-red-400" label="70+ hot" />
