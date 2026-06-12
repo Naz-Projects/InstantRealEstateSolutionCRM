@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { query, internalMutation, internalQuery } from "./_generated/server";
 import { requireUser } from "./helpers";
-import { computeLeadScore } from "../src/scraper/leadScore";
+import { computeLeadScore, equityBucket } from "../src/scraper/leadScore";
+import { computeEquity } from "../src/scraper/equity";
 
 // One signal event as the sync actions pass it (parsed in src/scraper/*).
 const signalEventInput = v.object({
@@ -141,8 +142,9 @@ export const leads = query({
     stage: v.optional(v.string()), // workflow-stage filter ("new" matches no-status leads)
     windowDays: v.optional(v.number()), // how far back signals count (default 365)
     limit: v.optional(v.number()),
+    minEquityRatio: v.optional(v.number()), // 0–1; set ⇒ unknown-equity leads are excluded
   },
-  handler: async (ctx, { type, absenteeOnly, minStack, stage, windowDays, limit }) => {
+  handler: async (ctx, { type, absenteeOnly, minStack, stage, windowDays, limit, minEquityRatio }) => {
     await requireUser(ctx);
     const cutoff = Date.now() - (windowDays ?? 365) * DAY_MS;
     const events = await ctx.db
@@ -153,6 +155,10 @@ export const leads = query({
     // Workflow state (small table: only human-touched leads). Untouched = "new".
     const statuses = await ctx.db.query("leadStatus").collect();
     const statusByPrclid = new Map(statuses.map((s) => [s.prclid, s]));
+
+    // Enrichment rows (small table: only enriched leads — funnel-only).
+    const equityRows = await ctx.db.query("parcelEquity").collect();
+    const equityByPrclid = new Map(equityRows.map((e) => [e.prclid, e]));
 
     const byParcel = new Map<string, typeof events>();
     for (const e of events) {
@@ -182,6 +188,21 @@ export const leads = query({
       notes?: string;
       buyerId?: string;
       assignmentFee?: number;
+      value?: number;
+      valueSource?: "zestimate" | "comps";
+      valueAt?: number;
+      countyBalance?: number;
+      schoolBalance?: number;
+      sewerBalance?: number;
+      assessedValue?: number;
+      balancesAt?: number;
+      manualLiens?: number;
+      manualLiensNote?: string;
+      equity: number | null;
+      equityRatio: number | null;
+      equityBucket: "high" | "medium" | "low" | "unknown";
+      equityBasis: "taxes-only" | "incl-manual-liens" | null;
+      equityError?: string;
       signals: Array<{
         type: string;
         category: string;
@@ -203,16 +224,44 @@ export const leads = query({
         .first();
       if (!parcel) continue;
       if (absenteeOnly && !parcel.absentee) continue;
+      const eq = equityByPrclid.get(prclid);
+      const equityResult = computeEquity({
+        value: eq?.value ?? null,
+        countyBalance: eq?.countyBalance,
+        schoolBalance: eq?.schoolBalance,
+        sewerBalance: eq?.sewerBalance,
+        manualLiens: eq?.manualLiens,
+      });
+      if (minEquityRatio !== undefined) {
+        if (equityResult.equityRatio == null || equityResult.equityRatio < minEquityRatio) continue;
+      }
+      const bucket = equityBucket(equityResult.equityRatio);
       out.push({
         prclid,
         stage: status?.stage ?? "new",
         notes: status?.notes,
         buyerId: status?.buyerId,
         assignmentFee: status?.assignmentFee,
+        value: eq?.value,
+        valueSource: eq?.valueSource,
+        valueAt: eq?.valueAt,
+        countyBalance: eq?.countyBalance,
+        schoolBalance: eq?.schoolBalance,
+        sewerBalance: eq?.sewerBalance,
+        assessedValue: eq?.assessedValue,
+        balancesAt: eq?.balancesAt,
+        manualLiens: eq?.manualLiens,
+        manualLiensNote: eq?.manualLiensNote,
+        equity: equityResult.equity,
+        equityRatio: equityResult.equityRatio,
+        equityBucket: bucket,
+        equityBasis: equityResult.basis,
+        equityError: eq?.lastError,
         score: computeLeadScore(
           sigs.map((s) => ({ type: s.type, observedDate: s.observedDate })),
           { absentee: parcel.absentee },
           now,
+          bucket,
         ),
         situsStreet: parcel.situsStreet,
         propCity: parcel.propCity,
