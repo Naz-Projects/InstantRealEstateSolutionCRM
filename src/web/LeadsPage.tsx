@@ -639,6 +639,7 @@ export function LeadsPage() {
               <Columns3 className="h-4 w-4" /> Board
             </button>
           </div>
+          {/* 50 mirrors BATCH_CAP in convex/equityActions.ts ("use node" — can't import into the browser bundle) */}
           <button
             onClick={() => setEnrichOpen(true)}
             disabled={!leads || leads.length === 0}
