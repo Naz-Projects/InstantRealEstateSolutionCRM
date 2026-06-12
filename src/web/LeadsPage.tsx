@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Target,
   Download,
@@ -15,6 +15,8 @@ import {
   CalendarClock,
   Check,
   Plus,
+  RefreshCw,
+  Zap,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
@@ -29,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 type Lead = FunctionReturnType<typeof api.signalData.leads>[number];
 type Buyer = FunctionReturnType<typeof api.pipelineData.listBuyers>[number];
@@ -70,6 +73,18 @@ function scoreColor(score: number): string {
   if (score >= 40) return "text-amber-400";
   return "text-foreground";
 }
+
+function fmtMoney(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+const EQUITY_CHIP: Record<string, string> = {
+  high: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  medium: "border-teal/40 bg-teal/10 text-teal-glow",
+  low: "border-red-500/40 bg-red-500/10 text-red-400",
+  unknown: "border-border text-muted-foreground",
+};
 
 function SignalChips({ lead }: { lead: Lead }) {
   const types = [...new Set(lead.signals.map((s) => s.type))];
@@ -286,6 +301,97 @@ function LeadWorkflow({ lead, buyers }: { lead: Lead; buyers: Buyer[] }) {
   );
 }
 
+/** Equity panel in the expanded row: enrich button, balances detail, manual liens (P4). */
+function LeadEquity({ lead }: { lead: Lead }) {
+  const enrich = useAction(api.equityActions.enrichEquity);
+  const setLiens = useMutation(api.equityData.setManualLiens);
+  const [pulling, setPulling] = useState(false);
+  const [pullErr, setPullErr] = useState<string | null>(null);
+  const [liens, setLiens_] = useState(lead.manualLiens?.toString() ?? "");
+  const [liensNote, setLiensNote] = useState(lead.manualLiensNote ?? "");
+
+  const pull = async () => {
+    setPulling(true);
+    setPullErr(null);
+    try {
+      await enrich({ prclid: lead.prclid });
+    } catch (e) {
+      setPullErr((e as Error).message);
+    } finally {
+      setPulling(false);
+    }
+  };
+
+  const saveLiens = async () => {
+    const n = Number(liens.replace(/[^0-9.]/g, ""));
+    await setLiens({
+      prclid: lead.prclid,
+      amount: liens.trim() === "" ? null : n,
+      note: liensNote.trim() === "" ? null : liensNote.trim(),
+    });
+  };
+
+  return (
+    <div className="space-y-2 border-t border-border/50 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span className="text-muted-foreground">
+          Value: <span className="text-foreground">{fmtMoney(lead.value)}</span>
+          {lead.valueSource && (
+            <span className="ml-1 text-xs">({lead.valueSource}, {fmtDate(lead.valueAt ?? 0)})</span>
+          )}
+        </span>
+        <span className="text-muted-foreground">
+          Balances:{" "}
+          <span className="text-foreground">
+            {lead.balancesAt
+              ? `county ${fmtMoney(lead.countyBalance)} · school ${fmtMoney(lead.schoolBalance)} · sewer ${fmtMoney(lead.sewerBalance)}`
+              : "—"}
+          </span>
+          {lead.balancesAt ? <span className="ml-1 text-xs">({fmtDate(lead.balancesAt)})</span> : null}
+        </span>
+        {lead.assessedValue != null && (
+          <span className="text-muted-foreground">
+            Assessed: <span className="text-foreground">{fmtMoney(lead.assessedValue)}</span>
+          </span>
+        )}
+        <button
+          onClick={pull}
+          disabled={pulling}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-teal/40 px-2.5 text-sm text-teal-glow transition-colors hover:bg-teal/10 disabled:opacity-40"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", pulling && "animate-spin")} />
+          {pulling ? "Pulling…" : "Pull value & balances"}
+        </button>
+      </div>
+      {(pullErr ?? lead.equityError) && (
+        <div className="text-xs text-amber-400">{pullErr ?? lead.equityError}</div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">Known liens $</span>
+        <input
+          value={liens}
+          onChange={(e) => setLiens_(e.target.value)}
+          placeholder="e.g. 150000"
+          className="h-8 w-28 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+        />
+        <input
+          value={liensNote}
+          onChange={(e) => setLiensNote(e.target.value)}
+          placeholder="Note — e.g. mortgage per docket"
+          className="h-8 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+        />
+        <button
+          onClick={saveLiens}
+          disabled={liens === (lead.manualLiens?.toString() ?? "") && liensNote === (lead.manualLiensNote ?? "")}
+          className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+        >
+          <Save className="h-3.5 w-3.5" /> Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function UnmatchedFilings() {
   const [open, setOpen] = useState(false);
   const rows = useQuery(api.signalData.unmatchedSignals);
@@ -387,6 +493,9 @@ export function LeadsPage() {
   const [minStack, setMinStack] = useState("1");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [view, setView] = useState<"table" | "board">("table");
+  const [minEquity, setMinEquity] = useState("any");
+  const [enrichOpen, setEnrichOpen] = useState(false);
+  const enrichBatch = useAction(api.equityActions.enrichBatch);
 
   const setStatus = useMutation(api.pipelineData.setLeadStatus);
   const buyers = useQuery(api.pipelineData.listBuyers, {}) ?? [];
@@ -405,6 +514,7 @@ export function LeadsPage() {
     stage: stageFilter === "all" ? undefined : stageFilter,
     absenteeOnly: absenteeOnly || undefined,
     minStack: minStack === "1" ? undefined : Number(minStack),
+    minEquityRatio: minEquity === "any" ? undefined : Number(minEquity),
   });
 
   const exportCsv = useMemo(
@@ -496,6 +606,17 @@ export function LeadsPage() {
           >
             Absentee only
           </button>
+          <Select value={minEquity} onValueChange={setMinEquity}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Any equity</SelectItem>
+              <SelectItem value="0">Has equity</SelectItem>
+              <SelectItem value="0.2">≥20% equity</SelectItem>
+              <SelectItem value="0.5">≥50% equity</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="grow" />
           <div className="flex rounded-md border border-border">
             <button
@@ -517,6 +638,21 @@ export function LeadsPage() {
               <Columns3 className="h-4 w-4" /> Board
             </button>
           </div>
+          <button
+            onClick={() => setEnrichOpen(true)}
+            disabled={!leads || leads.length === 0}
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+          >
+            <Zap className="h-4 w-4" /> Enrich top {Math.min(leads?.length ?? 0, 50)}
+          </button>
+          <ConfirmDialog
+            open={enrichOpen}
+            onOpenChange={setEnrichOpen}
+            title="Enrich top leads?"
+            description={`Pull value + county balances for the top ${Math.min(leads?.length ?? 0, 50)} filtered leads. Uses ~2 Firecrawl credits per lead and runs staggered in the background (~${Math.ceil((Math.min(leads?.length ?? 0, 50) * 2.5) / 60)} min).`}
+            confirmLabel="Enrich"
+            onConfirm={() => enrichBatch({ prclids: (leads ?? []).slice(0, 50).map((l) => l.prclid) })}
+          />
           <button
             onClick={exportCsv}
             disabled={!leads || leads.length === 0}
@@ -548,6 +684,7 @@ export function LeadsPage() {
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                   <th className="px-4 py-2.5 font-medium">Score</th>
+                  <th className="px-4 py-2.5 font-medium">Equity</th>
                   <th className="px-4 py-2.5 font-medium">Address</th>
                   <th className="px-4 py-2.5 font-medium">City</th>
                   <th className="px-4 py-2.5 font-medium">Owner</th>
@@ -567,6 +704,20 @@ export function LeadsPage() {
                       )}
                     >
                       <td className={cn("px-4 py-2.5 text-lg font-bold", scoreColor(l.score))}>{l.score}</td>
+                      <td className="px-4 py-2.5">
+                        {l.equity != null ? (
+                          <div>
+                            <span className={cn("rounded-md border px-1.5 py-0.5 text-xs font-medium", EQUITY_CHIP[l.equityBucket])}>
+                              {fmtMoney(l.equity)} · {Math.round((l.equityRatio ?? 0) * 100)}%
+                            </span>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground">
+                              {l.equityBasis === "incl-manual-liens" ? "incl. liens" : "taxes-only"} · worth {fmtMoney(l.value)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 font-medium text-foreground">
                         {l.situsStreet || "—"}
                         <div className="mt-0.5">
@@ -612,8 +763,9 @@ export function LeadsPage() {
                     </tr>
                     {expanded === l.prclid && (
                       <tr className="border-b border-border/50 bg-muted/30">
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <SignalTimeline lead={l} />
+                          <LeadEquity key={`eq-${l.prclid}`} lead={l} />
                           <LeadWorkflow key={l.prclid} lead={l} buyers={buyers} />
                           <LeadFollowUps lead={l} followUps={followUpsByParcel.get(l.prclid) ?? []} />
                         </td>
