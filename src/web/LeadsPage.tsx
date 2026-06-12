@@ -423,6 +423,8 @@ export function LeadsPage() {
           propZip: l.propZip,
           score: l.score,
           signalTypes: [...new Set(l.signals.map((s) => s.type))],
+          value: l.value ?? null,
+          equity: l.equity,
         })),
       );
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));

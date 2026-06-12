@@ -13,11 +13,13 @@ export interface MailCsvLead {
   propZip: string;
   score: number;
   signalTypes: string[];
+  value: number | null;
+  equity: number | null;
 }
 
 const HEADERS = [
   "owner_name", "mail_address", "mail_address_2", "mail_city", "mail_state", "mail_zip",
-  "property_address", "property_city", "property_zip", "score", "signals",
+  "property_address", "property_city", "property_zip", "score", "signals", "value", "equity",
 ];
 
 const cell = (v: string | number): string => {
@@ -30,6 +32,7 @@ export function buildMailCsv(leads: MailCsvLead[]): string {
     [
       l.ownerName, l.ownerAddr, l.ownerAddr2, l.ownerCity, l.ownerState, l.ownerZip,
       l.situsStreet, l.propCity, l.propZip, l.score, l.signalTypes.join("|"),
+      l.value ?? "", l.equity ?? "",
     ]
       .map(cell)
       .join(","),
