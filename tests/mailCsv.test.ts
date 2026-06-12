@@ -58,4 +58,17 @@ describe("buildMailCsv", () => {
     expect(lines[1]).toContain("250000,245000");
     expect(lines[2].endsWith(",,")).toBe(true);
   });
+
+  it("renders zero value/equity as 0, not blank", () => {
+    const csv = buildMailCsv([
+      {
+        ownerName: "ZERO CASE", ownerAddr: "5 LOW ST", ownerAddr2: "", ownerCity: "WILMINGTON",
+        ownerState: "DE", ownerZip: "19801", situsStreet: "6 EDGE WAY", propCity: "NEWARK",
+        propZip: "19711", score: 10, signalTypes: ["code-violation"],
+        value: 0, equity: 0,
+      },
+    ]);
+    const lines = csv.trim().split("\n");
+    expect(lines[1].endsWith(",0,0")).toBe(true);
+  });
 });
