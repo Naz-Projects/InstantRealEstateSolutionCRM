@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { describeError } from "./lib/errorReporting";
 
 type Lead = FunctionReturnType<typeof api.signalData.leads>[number];
 type Buyer = FunctionReturnType<typeof api.pipelineData.listBuyers>[number];
@@ -316,7 +317,7 @@ function LeadEquity({ lead }: { lead: Lead }) {
     try {
       await enrich({ prclid: lead.prclid });
     } catch (e) {
-      setPullErr((e as Error).message);
+      setPullErr(describeError(e).message);
     } finally {
       setPulling(false);
     }
