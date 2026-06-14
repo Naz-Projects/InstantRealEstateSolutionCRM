@@ -2,6 +2,32 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
+## ★★★★ START HERE — 2026-06-14 (latest; two feature branches in flight, NEITHER merged)
+
+> NOTE: this note lives on branch `feat/p6-offers-contracts`. The P5 memory updates (lessons + todo + a
+> next-session block) live on branch `feat/p5-contacts-skiptrace`. Both branch off `main`; when each merges,
+> reconcile the memory files (append both lesson sets) and **regenerate `convex/_generated`** (both add tables
+> to `schema.ts` — the SECOND to merge must regen against the merged tree + `npm run build`, never hand-merge `api.*`).
+
+**P5 — contacts + skip-trace (Tracerfy): BUILT OFFLINE, branch `feat/p5-contacts-skiptrace` (9 commits, READY TO MERGE).**
+Blocked only on the user loading the **Tracerfy key + ~$10** → then merge + deploy + ONE live trace to verify. The action
+throws a clear "TRACERFY_API_KEY is not set" until then. Spec `docs/superpowers/specs/2026-06-12-contacts-skiptrace-design.md`,
+plan `docs/superpowers/plans/2026-06-13-contacts-skiptrace.md`. Do NOT merge before the key (user decision: no key-less
+erroring button in prod). 187 tests on that branch.
+
+**P6 — offers + contracts e-sign: DESIGNED + PLANNED + APPROVED, branch `feat/p6-offers-contracts`. BUILD NOT STARTED.**
+Spec `docs/superpowers/specs/2026-06-14-offers-contracts-esign-design.md`; staged plan
+`docs/superpowers/plans/2026-06-14-offers-contracts-esign.md` (the build guide — 11 tasks, Stages 0→E). Scope (user-locked):
+offer-negotiation tracking per lead + e-sign for BOTH the seller PSA and the buyer Assignment, **generated from templates**,
+via a **fully serverless BlueRock-style portal** (`signature_pad` + `@react-pdf/renderer` → Convex `_storage`; public
+token-gated `/sign/$token` route). Delivery = **copy-link first, Resend optional/key-gated** (no hard external dep; storage
+is Convex built-in, no R2). E-sign reference: `C:\Users\nazho\Desktop\blue-rock-crm` (SignaturePad.tsx + trim-signature.ts =
+copy verbatim MIT; ContractPDF.tsx + AcceptanceBlock.tsx = adapt). **NEXT ACTION: execute the P6 plan** via the
+Opus-subagent TDD flow (subagent-driven-development), Stage 0 (deps) → A (offers) → B (contracts data) → C (PDF/portal/UI)
+→ D (optional Resend) → E (final). Legal posture: templates are attorney-review STARTING POINTS, "not legal advice".
+
+**Standing directive (unchanged):** all implementation via Opus 4.8 subagents; main loop orchestrates (spec/plan/dispatch/review/git).
+
 ## ★★ START HERE — full state as of end-of-session 2026-06-11 (everything below is LIVE ON PROD)
 
 ### What the CRM is now
