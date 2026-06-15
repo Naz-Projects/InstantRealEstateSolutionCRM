@@ -17,6 +17,7 @@ import {
   Plus,
   RefreshCw,
   Zap,
+  Trash2,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
@@ -24,6 +25,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { buildMailCsv } from "./lib/mailCsv";
 import { LEAD_STAGES, STAGE_LABELS, isLeadStage, followUpState } from "../scraper/wholesalePipeline";
+import { summarizeOffers, canTransition, OFFER_STATUSES, type OfferStatus } from "../scraper/offers";
 import {
   Select,
   SelectContent,
@@ -389,6 +391,284 @@ function LeadEquity({ lead }: { lead: Lead }) {
           <Save className="h-3.5 w-3.5" /> Save
         </button>
       </div>
+    </div>
+  );
+}
+
+type Offer = FunctionReturnType<typeof api.offerData.offersForParcel>[number];
+
+const OFFER_STATUS_CHIP = (status: OfferStatus): string => {
+  if (status === "accepted") return "border-teal/40 text-teal-glow";
+  if (status === "pending" || status === "countered") return "border-amber-500/40 text-amber-400";
+  return "border-border text-muted-foreground";
+};
+
+/** One offer in the thread: details + (for non-terminal offers) status/counter/delete controls. */
+function OfferRow({
+  offer,
+  updateStatus,
+  del,
+}: {
+  offer: Offer;
+  updateStatus: ReturnType<typeof useMutation<typeof api.offerData.updateOfferStatus>>;
+  del: ReturnType<typeof useMutation<typeof api.offerData.deleteOffer>>;
+}) {
+  const [counterDraft, setCounterDraft] = useState("");
+  const [showCounter, setShowCounter] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const active = offer.status === "pending" || offer.status === "countered";
+
+  const changeStatus = async (target: OfferStatus) => {
+    if (target === "countered") {
+      setShowCounter(true);
+      return;
+    }
+    setShowCounter(false);
+    setBusy(true);
+    setErr(null);
+    try {
+      await updateStatus({ offerId: offer._id, status: target });
+    } catch (e) {
+      setErr(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitCounter = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await updateStatus({ offerId: offer._id, status: "countered", counterAmount: Number(counterDraft) });
+      setShowCounter(false);
+      setCounterDraft("");
+    } catch (e) {
+      setErr(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await del({ offerId: offer._id });
+    } catch (e) {
+      setErr(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1 border-b border-border/50 py-2 last:border-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="font-medium text-foreground">{fmtMoney(offer.amount)}</span>
+        <span className={cn("rounded-md border px-1.5 py-0.5 text-xs font-medium", OFFER_STATUS_CHIP(offer.status))}>
+          {offer.status}
+        </span>
+        {offer.counterAmount != null && (
+          <span className="text-xs text-muted-foreground">counter: {fmtMoney(offer.counterAmount)}</span>
+        )}
+        {offer.earnestMoney != null && (
+          <span className="text-xs text-muted-foreground">earnest {fmtMoney(offer.earnestMoney)}</span>
+        )}
+        {offer.closingDate && (
+          <span className="text-xs text-muted-foreground">closing {offer.closingDate}</span>
+        )}
+        {offer.inspectionDays != null && (
+          <span className="text-xs text-muted-foreground">{offer.inspectionDays}d inspection</span>
+        )}
+      </div>
+      {offer.notes && <div className="text-sm text-muted-foreground">{offer.notes}</div>}
+      <div className="text-xs text-muted-foreground">
+        {offer.createdByEmail} · {fmtDate(offer.createdAt)}
+      </div>
+      {active && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={offer.status} onValueChange={(v) => changeStatus(v as OfferStatus)}>
+            <SelectTrigger className="h-8 w-36 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {OFFER_STATUSES.map((s) => (
+                <SelectItem key={s} value={s} disabled={!canTransition(offer.status, s)}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {showCounter && (
+            <>
+              <input
+                type="number"
+                value={counterDraft}
+                onChange={(e) => setCounterDraft(e.target.value)}
+                placeholder="Counter $"
+                className="h-8 w-28 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+              />
+              <button
+                onClick={submitCounter}
+                disabled={busy || counterDraft.trim() === ""}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+              >
+                <Check className="h-3.5 w-3.5" /> Counter
+              </button>
+            </>
+          )}
+          <button
+            onClick={remove}
+            disabled={busy}
+            aria-label="Delete offer"
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      {err && <div className="text-xs text-amber-400">{err}</div>}
+    </div>
+  );
+}
+
+/** Offer thread, status transitions, add form, and accepted→under_contract affordance (P6). */
+function LeadOffers({ prclid }: { prclid: string }) {
+  const offers = useQuery(api.offerData.offersForParcel, { prclid });
+  const add = useMutation(api.offerData.addOffer);
+  const updateStatus = useMutation(api.offerData.updateOfferStatus);
+  const del = useMutation(api.offerData.deleteOffer);
+  const setStatus = useMutation(api.pipelineData.setLeadStatus);
+
+  const [amount, setAmount] = useState("");
+  const [earnestMoney, setEarnestMoney] = useState("");
+  const [closingDate, setClosingDate] = useState("");
+  const [inspectionDays, setInspectionDays] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [addErr, setAddErr] = useState<string | null>(null);
+
+  const [moving, setMoving] = useState(false);
+  const [moveErr, setMoveErr] = useState<string | null>(null);
+
+  const sum = summarizeOffers(offers ?? []);
+
+  const submit = async () => {
+    setBusy(true);
+    setAddErr(null);
+    try {
+      await add({
+        prclid,
+        amount: Number(amount),
+        ...(earnestMoney.trim() ? { earnestMoney: Number(earnestMoney) } : {}),
+        ...(closingDate ? { closingDate } : {}),
+        ...(inspectionDays.trim() ? { inspectionDays: Number(inspectionDays) } : {}),
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
+      });
+      setAmount("");
+      setEarnestMoney("");
+      setClosingDate("");
+      setInspectionDays("");
+      setNotes("");
+    } catch (e) {
+      setAddErr(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const moveToContract = async () => {
+    setMoving(true);
+    setMoveErr(null);
+    try {
+      await setStatus({ prclid, stage: "under_contract" });
+    } catch (e) {
+      setMoveErr(describeError(e).message);
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t border-border/50 px-4 py-3">
+      <div className="text-sm font-bold text-foreground">Offers</div>
+      {offers === undefined ? (
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : (
+        <>
+          {offers.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No offers yet.</div>
+          ) : (
+            <div>
+              {offers.map((o) => (
+                <OfferRow key={o._id} offer={o} updateStatus={updateStatus} del={del} />
+              ))}
+            </div>
+          )}
+
+          {sum.acceptedOffer && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Accepted: <span className="text-foreground">{fmtMoney(sum.acceptedPrice)}</span>
+              </span>
+              <button
+                onClick={moveToContract}
+                disabled={moving}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-teal/40 px-2.5 text-sm text-teal-glow transition-colors hover:bg-teal/10 disabled:opacity-40"
+              >
+                <Check className="h-3.5 w-3.5" /> Move to under_contract
+              </button>
+              {/* P6 Task C3 adds a "Generate purchase agreement" button here */}
+              {moveErr && <div className="text-xs text-amber-400">{moveErr}</div>}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Amount $"
+              className="h-8 w-28 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+            />
+            <input
+              type="number"
+              value={earnestMoney}
+              onChange={(e) => setEarnestMoney(e.target.value)}
+              placeholder="Earnest $"
+              className="h-8 w-28 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+            />
+            <input
+              type="date"
+              value={closingDate}
+              onChange={(e) => setClosingDate(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+            />
+            <input
+              type="number"
+              value={inspectionDays}
+              onChange={(e) => setInspectionDays(e.target.value)}
+              placeholder="Inspection days"
+              className="h-8 w-24 rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+            />
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes"
+              className="h-8 w-full max-w-xs rounded-md border border-border bg-background px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal"
+            />
+            <button
+              onClick={submit}
+              disabled={busy || amount.trim() === "" || Number.isNaN(Number(amount))}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-teal/40 px-2.5 text-sm text-teal-glow transition-colors hover:bg-teal/10 disabled:opacity-40"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add offer
+            </button>
+          </div>
+          {addErr && <div className="text-xs text-amber-400">{addErr}</div>}
+        </>
+      )}
     </div>
   );
 }
@@ -768,6 +1048,7 @@ export function LeadsPage() {
                         <td colSpan={8}>
                           <SignalTimeline lead={l} />
                           <LeadEquity key={`eq-${l.prclid}`} lead={l} />
+                          <LeadOffers key={`of-${l.prclid}`} prclid={l.prclid} />
                           <LeadWorkflow key={l.prclid} lead={l} buyers={buyers} />
                           <LeadFollowUps lead={l} followUps={followUpsByParcel.get(l.prclid) ?? []} />
                         </td>
