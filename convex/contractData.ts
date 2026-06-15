@@ -16,11 +16,14 @@ const BUYER_ENTITY = "Instant Real Estate Solution";
 
 // Private (NOT exported) — the single credential check shared by every portal fn.
 async function tokenLookup(ctx: QueryCtx | MutationCtx, token: string) {
+  // SECURITY: publicToken is an optional indexed field — an empty/undefined token would q.eq-match tokenless
+  // draft/voided rows (an auth bypass). Reject falsy tokens, and re-check the matched row actually has one.
   if (!token) return null;
-  return await ctx.db
+  const row = await ctx.db
     .query("contracts")
     .withIndex("by_token", (q) => q.eq("publicToken", token))
     .first();
+  return row?.publicToken ? row : null;
 }
 
 // ---------------------------------------------------------------------------
