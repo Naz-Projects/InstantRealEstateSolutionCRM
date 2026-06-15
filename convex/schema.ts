@@ -419,6 +419,25 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_prclid", ["prclid"]),
 
+  // P6 offers — negotiation thread to the OWNER, prclid-keyed (funnel-only, mirrors parcelEquity).
+  // Status transitions guarded by src/scraper/offers.ts. Spec: 2026-06-14-offers-contracts-esign-design.md.
+  offers: defineTable({
+    prclid: v.string(),
+    amount: v.number(),
+    status: v.union(
+      v.literal("pending"), v.literal("countered"), v.literal("accepted"),
+      v.literal("rejected"), v.literal("withdrawn"), v.literal("expired"),
+    ),
+    counterAmount: v.optional(v.number()),
+    earnestMoney: v.optional(v.number()),
+    closingDate: v.optional(v.string()),
+    inspectionDays: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    createdByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_prclid", ["prclid"]),
+
   // Captured application errors surfaced on the Admin → Error Log page. Written
   // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
   // failures), and autonomous backend actions (cron). Admins triage + resolve.
