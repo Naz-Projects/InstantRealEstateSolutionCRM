@@ -13,6 +13,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { routeTree } from "./app";
 import { AcceptInvite } from "./admin/AcceptInvite";
+import { SignPortal } from "./contracts/SignPortal";
 import { AppErrorBoundary } from "./ErrorBoundary";
 import { errMsg } from "./admin/errMsg";
 import "./index.css";
@@ -120,20 +121,27 @@ function AuthedApp() {
 }
 
 const onAcceptInvite = window.location.pathname.startsWith("/accept-invite");
+const onSign = window.location.pathname.startsWith("/sign/");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-        <AuthLoading>
-          <div className="grid min-h-screen place-items-center bg-background text-white/60">Loading…</div>
-        </AuthLoading>
-        <Authenticated>
-          <AuthedApp />
-        </Authenticated>
-        <Unauthenticated>
-          {onAcceptInvite ? <AcceptInvite /> : <SignInGate />}
-        </Unauthenticated>
+        {onSign ? (
+          <SignPortal />
+        ) : (
+          <>
+            <AuthLoading>
+              <div className="grid min-h-screen place-items-center bg-background text-white/60">Loading…</div>
+            </AuthLoading>
+            <Authenticated>
+              <AuthedApp />
+            </Authenticated>
+            <Unauthenticated>
+              {onAcceptInvite ? <AcceptInvite /> : <SignInGate />}
+            </Unauthenticated>
+          </>
+        )}
       </ConvexProviderWithClerk>
     </ClerkProvider>
   </React.StrictMode>,
