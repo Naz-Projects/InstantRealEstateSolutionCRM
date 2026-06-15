@@ -15,16 +15,28 @@ throws a clear "TRACERFY_API_KEY is not set" until then. Spec `docs/superpowers/
 plan `docs/superpowers/plans/2026-06-13-contacts-skiptrace.md`. Do NOT merge before the key (user decision: no key-less
 erroring button in prod). 187 tests on that branch.
 
-**P6 — offers + contracts e-sign: DESIGNED + PLANNED + APPROVED, branch `feat/p6-offers-contracts`. BUILD NOT STARTED.**
-Spec `docs/superpowers/specs/2026-06-14-offers-contracts-esign-design.md`; staged plan
-`docs/superpowers/plans/2026-06-14-offers-contracts-esign.md` (the build guide — 11 tasks, Stages 0→E). Scope (user-locked):
-offer-negotiation tracking per lead + e-sign for BOTH the seller PSA and the buyer Assignment, **generated from templates**,
-via a **fully serverless BlueRock-style portal** (`signature_pad` + `@react-pdf/renderer` → Convex `_storage`; public
-token-gated `/sign/$token` route). Delivery = **copy-link first, Resend optional/key-gated** (no hard external dep; storage
-is Convex built-in, no R2). E-sign reference: `C:\Users\nazho\Desktop\blue-rock-crm` (SignaturePad.tsx + trim-signature.ts =
-copy verbatim MIT; ContractPDF.tsx + AcceptanceBlock.tsx = adapt). **NEXT ACTION: execute the P6 plan** via the
-Opus-subagent TDD flow (subagent-driven-development), Stage 0 (deps) → A (offers) → B (contracts data) → C (PDF/portal/UI)
-→ D (optional Resend) → E (final). Legal posture: templates are attorney-review STARTING POINTS, "not legal advice".
+**P6 — offers + contracts e-sign: BUILT, branch `feat/p6-offers-contracts` (14 commits, READY TO MERGE per the final whole-feature review). NOT merged.**
+Built 2026-06-14/15 via the Opus-subagent TDD flow (per-task spec+quality review; the security-critical contract data layer was
+double-reviewed + hardened). **197 tests, build clean, strictly additive (+3734/−10; the −10 is the `main.tsx` auth-gate
+restructure, no existing feature logic touched).** Spec `docs/superpowers/specs/2026-06-14-offers-contracts-esign-design.md`;
+plan `docs/superpowers/plans/2026-06-14-offers-contracts-esign.md`. What shipped:
+- **Offers** (`offers` table, pure `src/scraper/offers.ts`, `convex/offerData.ts`, `LeadOffers` panel): per-lead offer/counter
+  thread, status machine, accepted→under_contract one-click.
+- **Contracts e-sign** (BOTH seller PSA + buyer Assignment): pure `src/scraper/contracts.ts` (term builders + name-match +
+  token/expiry/transition guards), `contracts` table, `convex/contractData.ts` (team auth fns + PUBLIC token-gated portal fns
+  + Convex `_storage`), `ContractPDF.tsx` (`@react-pdf/renderer` templates), public `/sign/$token` portal `SignPortal.tsx`
+  (mounted in `main.tsx` before the auth gate; `signature_pad` typed+drawn; ESIGN consent + forensic trail), `LeadContracts`
+  panel (generate PSA/Assignment, send→mint token, copy signing link, download signed PDF, void). Delivery = **copy-link
+  first** (works with no external dep); **optional Resend** email (`convex/contractActions.ts`, key-gated, no-op without
+  `RESEND_API_KEY`). Storage = Convex built-in (no R2).
+- **Legal posture:** generated PSA/Assignment templates are attorney-review STARTING POINTS, "not legal advice" disclaimer baked in.
+- **NEXT ACTIONS:** (1) MERGE decision — P6 has NO external blocker (copy-link works without any key), so it can merge to
+  main + deploy now (a USER decision). (2) Manual click-through (auth-gated SPA, never clicked live): add offer→accept→Generate
+  PSA→Send→copy `/sign/<token>`→open logged-out→review→sign typed+drawn→signed PDF downloads + status flips; Assignment from
+  an assigned buyer; decline/void/expiry. (3) OPTIONAL email: set `RESEND_API_KEY`/`RESEND_FROM`/`PORTAL_BASE_URL` (+`RESEND_TO`)
+  on Convex to enable auto-email. **Backlog nits (cosmetic, from the final review — ship-as-is OK):** assignment `terms.underlyingContractRef`
+  is never set (the assignment doc doesn't name its PSA) · a no-op ternary in SignPortal `typedName` · a stale "P6 Task C3 adds…"
+  comment in LeadsPage · `acceptContract` orphans the uploaded blob on a duplicate (two-tab) submit (benign Convex storage leak).
 
 **Standing directive (unchanged):** all implementation via Opus 4.8 subagents; main loop orchestrates (spec/plan/dispatch/review/git).
 

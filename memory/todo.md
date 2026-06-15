@@ -65,6 +65,26 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     re-export) has no external dep and can be pulled forward when real mail starts going out.
   - [ ] **END-OF-PIPELINE bucket (build once the pipeline is stable):** email notifications/alerts (P3 alerts +
     P8 buyer blast, Resend) · mobile UI pass · other polish.
+- [~] **P5 contacts + skip-trace (Tracerfy) — BUILT OFFLINE on branch `feat/p5-contacts-skiptrace` (not merged).** READY TO
+  MERGE; blocked only on the user loading the Tracerfy key + ~$10. (Full details in that branch's `memory/todo.md`.) Do NOT
+  merge before the key (user decision). Spec `2026-06-12-contacts-skiptrace-design.md`.
+- [~] **P6 offers + contracts e-sign — BUILT on branch `feat/p6-offers-contracts` (14 commits, NOT merged). READY TO MERGE.**
+  197 tests, build clean, strictly additive. Spec `docs/superpowers/specs/2026-06-14-offers-contracts-esign-design.md`; plan
+  `docs/superpowers/plans/2026-06-14-offers-contracts-esign.md`. Offer-negotiation thread per lead + e-sign for BOTH the
+  seller PSA and the buyer Assignment (template-generated `@react-pdf/renderer`), a fully serverless public token-gated
+  `/sign/$token` portal (`signature_pad`, typed+drawn, Convex `_storage`), `LeadOffers` + `LeadContracts` panels. Copy-link
+  delivery (no external dep); optional key-gated Resend email. Legal: templates are attorney-review starting points.
+  - [ ] **MERGE decision (user):** P6 has NO external blocker (copy-link works without any key) → can merge to main +
+    deploy now. (Unlike P5, which waits on the Tracerfy key.)
+  - [ ] **Manual click-through (user, never clicked live):** offer→accept→Generate PSA→Send→copy `/sign/<token>`→open
+    logged-out→review→sign typed+drawn→signed PDF downloads + status flips; Assignment from an assigned buyer; decline/void/expiry.
+  - [ ] **OPTIONAL email:** set `RESEND_API_KEY`/`RESEND_FROM`/`PORTAL_BASE_URL` (+`RESEND_TO`) on Convex to enable auto-email
+    (signing request + signed copy). Without them the actions no-op; copy-link is unaffected.
+  - [ ] **Backlog nits (cosmetic, from the final review — ship-as-is OK):** set assignment `terms.underlyingContractRef` (the
+    assignment doc doesn't name its PSA) · drop the no-op `typedName` ternary in SignPortal · remove the stale "P6 Task C3 adds…"
+    comment in LeadsPage · `acceptContract` orphans the uploaded blob on a duplicate (two-tab) submit (benign Convex storage leak).
+  - [ ] **MERGE-ORDER hazard (P5 + P6 both add tables to schema.ts):** the SECOND branch to merge MUST regenerate
+    `convex/_generated` against the merged tree + `npm run build` (never hand-merge `api.*`). Reconcile the divergent memory docs too.
 - [ ] **Probe `Structure_Details.zip`** (NCC hub bulk daily download — building attributes; also `Owners.zip`, `Parcels_GDB.zip`)
   for year-built/size fields the REST spine lacks. Free bulk enrichment. (Equity verdict: NO free bulk assessed-value roll exists —
   values stay funnel-only via Zillow/comps or the per-parcel county page.)
