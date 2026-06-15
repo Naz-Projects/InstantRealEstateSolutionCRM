@@ -438,6 +438,50 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_prclid", ["prclid"]),
 
+  // P6 contracts — PSA (seller) + Assignment (buyer) with a serverless e-sign lifecycle.
+  // PORTAL fns are gated by `publicToken` (unguessable), NOT auth. terms = frozen snapshot at send.
+  // Spec: 2026-06-14-offers-contracts-esign-design.md.
+  contracts: defineTable({
+    prclid: v.string(),
+    type: v.union(v.literal("psa"), v.literal("assignment")),
+    status: v.union(
+      v.literal("draft"), v.literal("sent"), v.literal("signed"),
+      v.literal("declined"), v.literal("voided"),
+    ),
+    terms: v.object({
+      propertyAddress: v.string(),
+      buyerEntity: v.string(),
+      sellerName: v.optional(v.string()),
+      price: v.optional(v.number()),
+      earnestMoney: v.optional(v.number()),
+      closingDate: v.optional(v.string()),
+      inspectionDays: v.optional(v.number()),
+      assigneeName: v.optional(v.string()),
+      assignmentFee: v.optional(v.number()),
+      underlyingContractRef: v.optional(v.string()),
+    }),
+    signerName: v.string(),
+    signerEmail: v.optional(v.string()),
+    signerRole: v.union(v.literal("seller"), v.literal("buyer")),
+    publicToken: v.optional(v.string()),
+    tokenCreatedAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
+    acceptedAt: v.optional(v.number()),
+    acceptedByName: v.optional(v.string()),
+    acceptedUserAgent: v.optional(v.string()),
+    acknowledgments: v.optional(v.object({ bindingContract: v.boolean() })),
+    signatureMode: v.optional(v.union(v.literal("typed"), v.literal("drawn"))),
+    signedStorageId: v.optional(v.id("_storage")),
+    signedFilename: v.optional(v.string()),
+    declinedAt: v.optional(v.number()),
+    declineReason: v.optional(v.string()),
+    createdByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_prclid", ["prclid"])
+    .index("by_token", ["publicToken"]),
+
   // Captured application errors surfaced on the Admin → Error Log page. Written
   // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
   // failures), and autonomous backend actions (cron). Admins triage + resolve.
