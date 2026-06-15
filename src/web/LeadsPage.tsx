@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import {
   Target,
   Download,
@@ -18,6 +18,10 @@ import {
   RefreshCw,
   Zap,
   Trash2,
+  FileText,
+  Send,
+  Copy,
+  Ban,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
@@ -673,6 +677,221 @@ function LeadOffers({ prclid }: { prclid: string }) {
   );
 }
 
+type Contract = FunctionReturnType<typeof api.contractData.contractsForParcel>[number];
+
+const CONTRACT_STATUS_CHIP: Record<Contract["status"], string> = {
+  draft: "border-border text-muted-foreground",
+  sent: "border-amber-500/40 text-amber-400",
+  signed: "border-teal/40 text-teal-glow",
+  declined: "border-red-500/40 text-red-400",
+  voided: "border-border text-muted-foreground",
+};
+
+const CONTRACT_TYPE_LABEL: Record<Contract["type"], string> = {
+  psa: "Purchase Agreement",
+  assignment: "Assignment",
+};
+
+/** One contract in the list: badge + terms + status-specific controls (send / copy link / download / void). */
+function ContractRow({
+  contract: c,
+  send,
+  voidC,
+}: {
+  contract: Contract;
+  send: ReturnType<typeof useMutation<typeof api.contractData.sendContract>>;
+  voidC: ReturnType<typeof useMutation<typeof api.contractData.voidContract>>;
+}) {
+  const convex = useConvex();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmVoid, setConfirmVoid] = useState(false);
+  const nonTerminal = c.status === "draft" || c.status === "sent";
+
+  const doSend = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await send({ contractId: c._id });
+    } catch (e) {
+      setErr(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!c.publicToken) return;
+    const link = `${window.location.origin}/sign/${c.publicToken}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      setErr(describeError(e).message);
+    }
+  };
+
+  const download = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const url = await convex.query(api.contractData.getSignedUrl, { contractId: c._id });
+      if (url) window.open(url, "_blank");
+    } catch (e) {
+      setErr(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doVoid = async () => {
+    if (!confirmVoid) {
+      setConfirmVoid(true);
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await voidC({ contractId: c._id });
+    } catch (e) {
+      setErr(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1 border-b border-border/50 py-2 last:border-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="font-medium text-foreground">{CONTRACT_TYPE_LABEL[c.type]}</span>
+        <span className={cn("rounded-md border px-1.5 py-0.5 text-xs font-medium", CONTRACT_STATUS_CHIP[c.status])}>
+          {c.status}
+        </span>
+        {c.type === "psa" && (
+          <span className="text-xs text-muted-foreground">price {fmtMoney(c.terms.price)}</span>
+        )}
+        {c.type === "assignment" && (
+          <span className="text-xs text-muted-foreground">fee {fmtMoney(c.terms.assignmentFee)}</span>
+        )}
+        <span className="text-xs text-muted-foreground">{c.terms.propertyAddress}</span>
+      </div>
+
+      {c.status === "sent" && (
+        <div className="text-xs text-muted-foreground">
+          awaiting signature · expires {fmtDate(c.expiresAt ?? 0)}
+        </div>
+      )}
+      {c.status === "signed" && (
+        <div className="text-xs text-muted-foreground">
+          Signed by {c.acceptedByName} on {fmtDate(c.acceptedAt ?? 0)}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {c.status === "draft" && (
+          <button
+            onClick={doSend}
+            disabled={busy}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-teal/40 px-2.5 text-sm text-teal-glow transition-colors hover:bg-teal/10 disabled:opacity-40"
+          >
+            <Send className="h-3.5 w-3.5" /> Send
+          </button>
+        )}
+        {c.status === "sent" && (
+          <button
+            onClick={copyLink}
+            disabled={!c.publicToken}
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+          >
+            <Copy className="h-3.5 w-3.5" /> {copied ? "Copied!" : "Copy signing link"}
+          </button>
+        )}
+        {c.status === "signed" && (
+          <button
+            onClick={download}
+            disabled={busy}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-teal/40 px-2.5 text-sm text-teal-glow transition-colors hover:bg-teal/10 disabled:opacity-40"
+          >
+            <Download className="h-3.5 w-3.5" /> Download signed PDF
+          </button>
+        )}
+        {nonTerminal && (
+          <button
+            onClick={doVoid}
+            disabled={busy}
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-40"
+          >
+            <Ban className="h-3.5 w-3.5" /> {confirmVoid ? "Confirm void" : "Void"}
+          </button>
+        )}
+      </div>
+      {err && <div className="text-xs text-amber-400">{err}</div>}
+    </div>
+  );
+}
+
+/** Contracts panel: generate a PSA/Assignment, then track + act on each contract by status. */
+function LeadContracts({ prclid }: { prclid: string }) {
+  const contracts = useQuery(api.contractData.contractsForParcel, { prclid });
+  const create = useMutation(api.contractData.createContract);
+  const send = useMutation(api.contractData.sendContract);
+  const voidC = useMutation(api.contractData.voidContract);
+
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState<string | null>(null);
+
+  const generate = async (type: "psa" | "assignment") => {
+    setCreating(true);
+    setCreateErr(null);
+    try {
+      await create({ prclid, type });
+    } catch (e) {
+      setCreateErr(describeError(e).message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t border-border/50 px-4 py-3">
+      <div className="text-sm font-bold text-foreground">Contracts</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => generate("psa")}
+          disabled={creating}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-teal/40 px-2.5 text-sm text-teal-glow transition-colors hover:bg-teal/10 disabled:opacity-40"
+        >
+          <FileText className="h-3.5 w-3.5" /> Generate PSA
+        </button>
+        <button
+          onClick={() => generate("assignment")}
+          disabled={creating}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-teal/40 px-2.5 text-sm text-teal-glow transition-colors hover:bg-teal/10 disabled:opacity-40"
+        >
+          <FileText className="h-3.5 w-3.5" /> Generate Assignment
+        </button>
+      </div>
+      {createErr && <div className="text-xs text-amber-400">{createErr}</div>}
+
+      {contracts === undefined ? (
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : contracts.length === 0 ? (
+        <div className="text-sm text-muted-foreground">No contracts yet.</div>
+      ) : (
+        <div>
+          {contracts.map((c) => (
+            <ContractRow key={c._id} contract={c} send={send} voidC={voidC} />
+          ))}
+        </div>
+      )}
+
+      <div className="text-xs text-muted-foreground">Generated documents are not legal advice.</div>
+    </div>
+  );
+}
+
 function UnmatchedFilings() {
   const [open, setOpen] = useState(false);
   const rows = useQuery(api.signalData.unmatchedSignals);
@@ -1049,6 +1268,7 @@ export function LeadsPage() {
                           <SignalTimeline lead={l} />
                           <LeadEquity key={`eq-${l.prclid}`} lead={l} />
                           <LeadOffers key={`of-${l.prclid}`} prclid={l.prclid} />
+                          <LeadContracts key={`ct-${l.prclid}`} prclid={l.prclid} />
                           <LeadWorkflow key={l.prclid} lead={l} buyers={buyers} />
                           <LeadFollowUps lead={l} followUps={followUpsByParcel.get(l.prclid) ?? []} />
                         </td>
