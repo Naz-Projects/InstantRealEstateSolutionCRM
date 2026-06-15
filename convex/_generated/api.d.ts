@@ -9,6 +9,7 @@
  */
 
 import type * as compsActions from "../compsActions.js";
+import type * as contractActions from "../contractActions.js";
 import type * as contractData from "../contractData.js";
 import type * as crons from "../crons.js";
 import type * as equityActions from "../equityActions.js";
@@ -45,6 +46,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   compsActions: typeof compsActions;
+  contractActions: typeof contractActions;
   contractData: typeof contractData;
   crons: typeof crons;
   equityActions: typeof equityActions;

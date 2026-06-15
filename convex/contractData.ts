@@ -1,5 +1,6 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { requireUser } from "./helpers";
 import { getAuthUser } from "./lib/getAuthUser";
@@ -117,6 +118,9 @@ export const sendContract = mutation({
       ...(signerEmail !== undefined ? { signerEmail } : {}),
       updatedAt: now,
     });
+    if (signerEmail) {
+      await ctx.scheduler.runAfter(0, internal.contractActions.emailSigningRequest, { contractId });
+    }
     return { token };
   },
 });
@@ -214,6 +218,7 @@ export const acceptContract = mutation({
       signedFilename: sanitizeFilename(`${c.type}-${c.signerName}-signed.pdf`),
       updatedAt: now,
     });
+    await ctx.scheduler.runAfter(0, internal.contractActions.emailSignedCopy, { contractId: c._id });
     return { alreadySigned: false as const };
   },
 });
