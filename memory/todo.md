@@ -68,14 +68,14 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [~] **P5 contacts + skip-trace (Tracerfy) — BUILT OFFLINE on branch `feat/p5-contacts-skiptrace` (not merged).** READY TO
   MERGE; blocked only on the user loading the Tracerfy key + ~$10. (Full details in that branch's `memory/todo.md`.) Do NOT
   merge before the key (user decision). Spec `2026-06-12-contacts-skiptrace-design.md`.
-- [~] **P6 offers + contracts e-sign — BUILT on branch `feat/p6-offers-contracts` (14 commits, NOT merged). READY TO MERGE.**
-  197 tests, build clean, strictly additive. Spec `docs/superpowers/specs/2026-06-14-offers-contracts-esign-design.md`; plan
-  `docs/superpowers/plans/2026-06-14-offers-contracts-esign.md`. Offer-negotiation thread per lead + e-sign for BOTH the
+- [x] **P6 offers + contracts e-sign — SHIPPED TO PROD (2026-06-21).** Merged ff → `main` `ba03150`, pushed (CF deploys
+  backend+frontend on push). 197 tests, build clean, strictly additive. Spec `docs/superpowers/specs/2026-06-14-offers-contracts-esign-design.md`;
+  plan `docs/superpowers/plans/2026-06-14-offers-contracts-esign.md`. Offer-negotiation thread per lead + e-sign for BOTH the
   seller PSA and the buyer Assignment (template-generated `@react-pdf/renderer`), a fully serverless public token-gated
   `/sign/$token` portal (`signature_pad`, typed+drawn, Convex `_storage`), `LeadOffers` + `LeadContracts` panels. Copy-link
   delivery (no external dep); optional key-gated Resend email. Legal: templates are attorney-review starting points.
-  - [ ] **MERGE decision (user):** P6 has NO external blocker (copy-link works without any key) → can merge to main +
-    deploy now. (Unlike P5, which waits on the Tracerfy key.)
+  - [ ] **CONFIRM the Cloudflare Workers build went GREEN** after the push (stale prod `CONVEX_DEPLOY_KEY` in CF env = silent
+    401 = old bundle). If P6 features missing on prod, fix the CF key + re-run the build.
   - [ ] **Manual click-through (user, never clicked live):** offer→accept→Generate PSA→Send→copy `/sign/<token>`→open
     logged-out→review→sign typed+drawn→signed PDF downloads + status flips; Assignment from an assigned buyer; decline/void/expiry.
   - [ ] **OPTIONAL email:** set `RESEND_API_KEY`/`RESEND_FROM`/`PORTAL_BASE_URL` (+`RESEND_TO`) on Convex to enable auto-email
@@ -85,6 +85,16 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     comment in LeadsPage · `acceptContract` orphans the uploaded blob on a duplicate (two-tab) submit (benign Convex storage leak).
   - [ ] **MERGE-ORDER hazard (P5 + P6 both add tables to schema.ts):** the SECOND branch to merge MUST regenerate
     `convex/_generated` against the merged tree + `npm run build` (never hand-merge `api.*`). Reconcile the divergent memory docs too.
+- [ ] **★ P7 — VISION CONDITION SCORING (NEXT PHASE, not started).** A new funnel-only `signalEvents` source: score a flagged
+  lead's physical condition from imagery (Google Street View Static → LLM-vision → 0–100 condition-distress score + flags),
+  stacking in the existing recency×stack scoring. ~$1/1k houses; NEVER run against the 203k spine. Research:
+  `memory/lead-engine-enrichment-and-vision.md` (T4 / "Satellite/aerial computer-vision"); roadmap
+  `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` (P7). LLM = a cheap Claude vision model (read the
+  `claude-api` skill first); `ANTHROPIC_API_KEY` + `OPENROUTER_API_KEY` both in `.env.local`. DIY-first (Street View + LLM),
+  upgrade to Cape Analytics/Nearmap later. Flow: brainstorm → spec → plan → subagent-driven TDD → finish-branch
+  (`feat/p7-vision-condition` off main). Mirror `equityActions` (per-lead + capped batch, funnel-only) + `codeCases`/`signal*`
+  (signalEvents source) + the `LeadEquity`/`LeadContacts` panel. Pure parser+scoring+schema are offline-TDD-able now (build
+  offline like P5; live scoring needs the key/budget). Open design Qs in `memory/next-session-prompt.md` (P7 section).
 - [ ] **Probe `Structure_Details.zip`** (NCC hub bulk daily download — building attributes; also `Owners.zip`, `Parcels_GDB.zip`)
   for year-built/size fields the REST spine lacks. Free bulk enrichment. (Equity verdict: NO free bulk assessed-value roll exists —
   values stay funnel-only via Zillow/comps or the per-parcel county page.)

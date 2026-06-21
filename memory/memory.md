@@ -66,6 +66,25 @@ balances via `lookupParcel`, cap 50, staggered), equity buckets/multipliers in `
 dev; prod backend deployed manually. Built per the **standing user directive: all implementation via Opus 4.8
 subagents** (auto-memory `implementation-via-opus-subagents`). Next: P5 (DNC/TCPA first) → P6 → P7 → P8.
 
+**P6 OFFERS + CONTRACTS E-SIGN SHIPPED (2026-06-21, `ba03150` → prod, ff-merged + pushed).** Offer/counter thread per lead
+(`offers` table, `src/scraper/offers.ts`, `convex/offerData.ts`, `LeadOffers` panel) + e-sign for BOTH the seller **PSA** and
+buyer **Assignment** — template-generated PDFs (`@react-pdf/renderer`, `ContractPDF.tsx`), a **fully serverless** public
+token-gated **`/sign/$token`** portal (`signature_pad` typed+drawn, ESIGN consent + forensic trail, Convex `_storage`),
+`contracts` table + `convex/contractData.ts` (team-auth fns + PUBLIC token-gated portal fns; `tokenLookup` hardened against
+the optional-indexed-field auth-bypass), `LeadContracts` panel (generate/send/copy-link/download/void). Delivery =
+**copy-link first** (no external dep); optional key-gated **Resend** email (`convex/contractActions.ts`, no-op without
+`RESEND_API_KEY`). Storage = Convex built-in (no R2). **No DocuSign/Documenso/server** — mirrors the BlueRock CRM pattern.
+Legal: generated templates are attorney-review STARTING POINTS ("not legal advice"). 197 tests; strictly additive. Spec/plan
+`docs/superpowers/{specs,plans}/2026-06-14-offers-contracts-esign*`. (User: confirm CF build green + click-through on prod.)
+
+**P5 CONTACTS + SKIP-TRACE (Tracerfy) — BUILT, HELD on branch `feat/p5-contacts-skiptrace` (NOT merged).** Ready to merge;
+blocked ONLY on the user loading the **Tracerfy key + ~$10**. Then merge (it's the 2nd schema branch → regen `_generated`)
++ live trace. Held deliberately so no key-less erroring `Skip trace` button hits prod. Pure `src/scraper/skipTrace.ts`
+(parser + DNC/litigator/quiet-hours compliance + phone canonicalize), `contacts`/`contactAttempts` tables, `contactData.ts`
+(+ patch-only `markContactError` so a failed/miss re-trace never wipes compliance flags), `contactActions.skipTraceLead`
+(key-gated), `LeadContacts` panel. Spec/plan `docs/superpowers/{specs,plans}/2026-06-12-contacts-skiptrace*` /
+`2026-06-13-contacts-skiptrace.md`. **NEXT BUILD = P7 vision condition scoring** (see `memory/next-session-prompt.md`).
+
 ## What this is
 A CRM for **Instant Real Estate Solution (IRES)** — a Delaware / New Castle County (NCC) real-estate
 **wholesaling, flipping, and buy-and-rent** business. The CRM's headline feature is one-click automations:

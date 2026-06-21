@@ -2,7 +2,67 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★★★★ START HERE — 2026-06-14 (latest; two feature branches in flight, NEITHER merged)
+## ★★★★★ START HERE — 2026-06-21 (P6 SHIPPED to prod · P5 held · **P7 is the NEXT thing to build**)
+
+### Current state
+- **LIVE ON PROD** (`main` @ `ba03150`, pushed → Cloudflare deploys backend+frontend): the full wholesaling pipeline
+  P1–P4 (spine · signals · scored `/leads` + Kanban + follow-ups · equity gate) **PLUS P6 — Offers + Contracts e-sign**
+  (offer/counter thread, seller PSA + buyer Assignment, public token-gated `/sign/$token` portal, copy-link delivery,
+  optional key-gated Resend). 197 tests. ⚠ **CONFIRM the Cloudflare Workers build went GREEN** (stale prod
+  `CONVEX_DEPLOY_KEY` in CF env = silent 401 = old bundle still served; recurring gotcha). If P6 features don't show on
+  https://crm.instantrealestatesolution.com, re-run the CF build after fixing the key.
+- **P5 — Contacts + Skip-trace (Tracerfy): BUILT, HELD on branch `feat/p5-contacts-skiptrace` (9 commits, ready to merge).**
+  Blocked ONLY on the user loading the **Tracerfy key + ~$10** (`TRACERFY_API_KEY` on Convex dev+prod). Then: merge → it's
+  the **SECOND** schema branch to merge, so regenerate `convex/_generated` against the merged tree + `npm run build` (never
+  hand-merge `api.*`) → deploy → run ONE live trace to verify. Do NOT merge before the key (no key-less erroring button in prod).
+  Spec `docs/superpowers/specs/2026-06-12-contacts-skiptrace-design.md`, plan `…/plans/2026-06-13-contacts-skiptrace.md`.
+- **Standing directive (unchanged):** ALL implementation via **Opus 4.8 subagents** (`model:"opus"`); the main loop only
+  orchestrates (spec/plan/dispatch/review/git/deploy). Build flow per phase: using-superpowers → **brainstorming** → spec →
+  **writing-plans** → **subagent-driven-development** (per-task spec+quality review) → **finishing-a-development-branch**.
+
+### ★ NEXT ACTION — build **P7: Vision condition scoring** (a new `signalEvents` source, funnel-only)
+**What it is** (roadmap `docs/superpowers/specs/2026-06-11-wholesaling-pipeline-crm.md` → P7; research
+`memory/lead-engine-enrichment-and-vision.md` → "Satellite/aerial computer-vision condition signals" + the T4 tier):
+score a flagged lead's physical condition from imagery and attach it as another distress signal that STACKS in the
+existing score. ~**$1 per 1,000 houses** with cheap LLM-vision. **Funnel-only** — run ONLY on leads someone enriches,
+NEVER the 203k spine (same discipline as the P4 equity gate / P5 skip-trace).
+
+**Recommended approach (DIY-first, per the research):** pull **Google Street View Static** front-of-house imagery (we
+already have the Maps key — `VITE_GOOGLE_MAPS_API_KEY` / `GOOGLE_GEOCODING_API_KEY`, Street View Static enabled) →
+run an **LLM vision model** to score condition distress (overgrown grass, junk/debris, tarped/damaged roof, boarded
+windows, distressed exterior) → a **0–100 condition-distress score** + flags → store as a `signalEvents` row
+(open-vocabulary `type:"condition"` / `category:"physical"`; mirrors `codeCases.ts` → `signals`). Later upgrade path =
+Cape Analytics/Nearmap (enterprise aerial CV) if volume/accuracy demand it. (Aerial/Solar/NAIP roof imagery is a
+possible add-on — decide in the brainstorm.)
+
+**LLM choice:** this is an LLM-shaped task with a Claude model → **read the `claude-api` skill BEFORE building** (model
+ids, vision, batch, pricing). Default to a cheap, fast **Claude** vision model (Haiku tier) for batch scoring; the project
+has `ANTHROPIC_API_KEY` AND `OPENROUTER_API_KEY` in `.env.local` (OpenRouter already used for Legal Notices). Decide
+direct-Anthropic vs OpenRouter in the brainstorm.
+
+**Open design questions to settle in brainstorming (do NOT assume — the user picks):**
+1. Imagery: Street View front-of-house only, or also aerial/roof (Google Solar / free NAIP)?
+2. Model + transport: Claude Haiku via Anthropic direct vs via OpenRouter; batch vs per-call.
+3. Trigger: per-lead button + capped batch (mirror `equityActions.enrichEquity`/`enrichBatch`, staggered) — confirm cap.
+4. Scoring integration: does the condition score feed `SCORE_CONFIG` as a multiplier (like equity) or just show as a
+   stacked signal/flag? (Lean: a new `signalEvents` source so it stacks via the existing recency×stack scoring, PLUS an
+   optional condition multiplier — decide.)
+5. Data model: a `signalEvents` row (open vocabulary) vs a `parcelEquity`-style funnel table for the raw score + image
+   ref. (Lean: emit a `signalEvents` row keyed to prclid; store the image URL + raw model output in its `payload`.)
+6. Cost gate: it's a PAID LLM call → cap per click + funnel-only + surface `lastError` (mirror equity). Live scoring needs
+   the key/budget — but the PURE parser + scoring logic + schema are offline-TDD-able NOW (build offline, like P5).
+
+**Mirror these existing patterns:** `convex/equityActions.ts` (per-lead + capped staggered batch, funnel-only, `lastError`,
+`AbortSignal.timeout(30s)`), `src/scraper/codeCases.ts` + `convex/signal*` (a signalEvents source + watermark), the
+`LeadEquity`/`LeadContacts` expanded-row panel (`src/web/LeadsPage.tsx`). Pure logic in `src/scraper/` (TDD), Convex split
+V8 `*Data.ts` / `"use node"` `*Actions.ts`. Branch off `main`: `feat/p7-vision-condition`.
+
+**Merge-order reminder:** P5 (and P7, and any branch) all add tables to `schema.ts` → whichever merges after the first
+regenerates `convex/_generated` against the merged tree + `npm run build`. Memory docs also diverge per branch → reconcile.
+
+### Later (after P7): P8 disposition (buyer-match lead⋈buyers; the blast-email half + P3 outreach/alerts = the END bucket, Resend) · mobile UI pass · the P6/P5 prod click-throughs + cosmetic backlog nits (see `todo.md`).
+
+## (superseded 2026-06-21) START HERE — 2026-06-14 (P5 + P6 branch state at build time)
 
 > NOTE: this note lives on branch `feat/p6-offers-contracts`. The P5 memory updates (lessons + todo + a
 > next-session block) live on branch `feat/p5-contacts-skiptrace`. Both branch off `main`; when each merges,
