@@ -419,6 +419,23 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_prclid", ["prclid"]),
 
+  // P7 vision condition scoring — funnel-only, separate from the spine (the CDC never
+  // touches it), mirrors parcelEquity. Written ONLY by conditionActions.scoreCondition.
+  // ISOLATED: not read by /leads or scoring. Spec: 2026-06-21-vision-condition-scoring-design.md.
+  parcelCondition: defineTable({
+    prclid: v.string(),
+    score: v.optional(v.number()), // 0–100 distress (higher = worse)
+    flags: v.optional(v.array(v.string())),
+    reason: v.optional(v.string()),
+    model: v.optional(v.string()), // which model scored it
+    imageStorageId: v.optional(v.id("_storage")), // the exact Street View image scored
+    hasImagery: v.optional(v.boolean()), // false ⇒ no Street View coverage (not an error)
+    rawResponse: v.optional(v.string()), // capped raw model output (debug/eval)
+    scoredAt: v.optional(v.number()),
+    lastError: v.optional(v.string()), // last failure, visible — never silent
+    updatedAt: v.number(),
+  }).index("by_prclid", ["prclid"]),
+
   // P6 offers — negotiation thread to the OWNER, prclid-keyed (funnel-only, mirrors parcelEquity).
   // Status transitions guarded by src/scraper/offers.ts. Spec: 2026-06-14-offers-contracts-esign-design.md.
   offers: defineTable({
