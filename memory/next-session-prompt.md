@@ -2,7 +2,29 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★★★★★ START HERE — 2026-06-21 (P6 SHIPPED to prod · P5 held · **P7 is the NEXT thing to build**)
+## ★★★★★ START HERE — 2026-06-21 (later) — P7 v1 (vision condition) BUILT → **PR OPEN** (not merged)
+
+**P7 v1 — Vision Condition Scoring (ISOLATED test page): BUILT, reviewed clean, PR open from `feat/p7-vision-condition` (NOT merged).**
+Per the user's decision, kept ISOLATED — a standalone `/condition` page scores the **top-15 leads'** exterior condition from a
+Street View front-of-house photo via a cheap vision model, so the user can EVALUATE accuracy BEFORE wiring it into `/leads`. NO
+`SCORE_CONFIG` multiplier, NO signalEvents, NO batch, NO cron — strictly additive (zero change to /leads/scoring).
+- **Model:** `google/gemini-2.5-flash` via OpenRouter (env-swappable `CONDITION_LLM_MODEL` → `z-ai/glm-4.6v`,
+  `qwen/qwen3-vl-32b-instruct` for A/B). Research verdict: at a few houses at a time cost is negligible (~$0.18–1.40/1k) →
+  pick on vision reliability. ⚠ the user's "GLM 5.2" is TEXT-ONLY (use GLM-4.6V); DeepSeek has NO usable vision model.
+- **Build:** pure `src/scraper/conditionScore.ts` (prompt/rubric + Street View URLs + tolerant parser, 15 tests),
+  `parcelCondition` table + `convex/conditionData.ts`, `convex/conditionActions.ts` (`scoreCondition`: coverage check →
+  Street View image → Convex `_storage` → OpenRouter vision → store; auth-gated, base64 keeps the Maps key server-side,
+  30s aborts, `lastError`), `/condition` page (`src/web/ConditionTest.tsx`). 212 tests, build clean. Spec/plan
+  `docs/superpowers/{specs,plans}/2026-06-21-vision-condition-scoring*`.
+- **NEXT ACTIONS:** (1) MERGE decision — the PR has NO external blocker (default model needs only `OPENROUTER_API_KEY`,
+  which Legal Notices already uses, + `GOOGLE_GEOCODING_API_KEY`, already set). On merge it's the **2nd schema branch vs P5**
+  → whichever merges 2nd regenerates `convex/_generated` + `npm run build`. (2) Live smoke (deferred):
+  `npx convex run conditionActions:scoreCondition '{"prclid":"<real lead>"}'` → `{status:"ok",score,flags}`; a no-coverage
+  address → `{status:"no_imagery"}`. (3) USER click-through `/condition`: score a lead → image+score+flags+reason+model;
+  judge accuracy, then design the `/leads` integration (signalEvents source and/or condition multiplier — separate spec).
+- **Standing directive unchanged:** all implementation via Opus 4.8 subagents.
+
+## (superseded 2026-06-21 later) START HERE — 2026-06-21 (P6 SHIPPED to prod · P5 held · **P7 is the NEXT thing to build**)
 
 ### Current state
 - **LIVE ON PROD** (`main` @ `ba03150`, pushed → Cloudflare deploys backend+frontend): the full wholesaling pipeline

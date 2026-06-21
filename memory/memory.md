@@ -83,7 +83,19 @@ blocked ONLY on the user loading the **Tracerfy key + ~$10**. Then merge (it's t
 (parser + DNC/litigator/quiet-hours compliance + phone canonicalize), `contacts`/`contactAttempts` tables, `contactData.ts`
 (+ patch-only `markContactError` so a failed/miss re-trace never wipes compliance flags), `contactActions.skipTraceLead`
 (key-gated), `LeadContacts` panel. Spec/plan `docs/superpowers/{specs,plans}/2026-06-12-contacts-skiptrace*` /
-`2026-06-13-contacts-skiptrace.md`. **NEXT BUILD = P7 vision condition scoring** (see `memory/next-session-prompt.md`).
+`2026-06-13-contacts-skiptrace.md`.
+
+**P7 v1 VISION CONDITION SCORING (ISOLATED test page) — BUILT, PR OPEN on `feat/p7-vision-condition` (2026-06-21, NOT merged).**
+Per the user's decision, kept ISOLATED for accuracy evaluation before any `/leads` integration: a standalone `/condition`
+page scores the **top-15 leads'** exterior condition (0–100 distress + flags) from a Street View front-of-house photo via a
+cheap vision LLM. Funnel-only, per-lead button only (NO batch/cron/multiplier/signalEvents yet). Model = **`google/gemini-2.5-flash`
+via OpenRouter** (env-swappable `CONDITION_LLM_MODEL` → `z-ai/glm-4.6v`/`qwen/qwen3-vl-32b-instruct` for A/B; research: cost is
+negligible at this volume, "GLM 5.2" is text-only, DeepSeek has no vision). Pure `src/scraper/conditionScore.ts` (rubric +
+Street View URLs + tolerant parser, 15 tests), `parcelCondition` table + `convex/conditionData.ts`, `convex/conditionActions.ts`
+(`scoreCondition`: Street View coverage check → image → Convex `_storage` → OpenRouter vision → store; auth-gated, base64 keeps
+the Maps key server-side, 30s aborts, `lastError`), `src/web/ConditionTest.tsx`. **Strictly additive** (zero change to /leads/
+scoring; reviewed clean, 0 Critical/Important). 212 tests. Spec/plan `docs/superpowers/{specs,plans}/2026-06-21-vision-condition-scoring*`.
+Pending: merge (2nd schema branch vs P5 → regen `_generated`) + live smoke + user click-through → then design the `/leads` integration.
 
 ## What this is
 A CRM for **Instant Real Estate Solution (IRES)** — a Delaware / New Castle County (NCC) real-estate
