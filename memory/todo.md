@@ -85,13 +85,14 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
     comment in LeadsPage · `acceptContract` orphans the uploaded blob on a duplicate (two-tab) submit (benign Convex storage leak).
   - [ ] **MERGE-ORDER hazard (P5 + P6 both add tables to schema.ts):** the SECOND branch to merge MUST regenerate
     `convex/_generated` against the merged tree + `npm run build` (never hand-merge `api.*`). Reconcile the divergent memory docs too.
-- [x] **★ P7 v1 — VISION CONDITION SCORING (ISOLATED test page) — BUILT, PR open `feat/p7-vision-condition`, NOT merged.**
+- [x] **★ P7 v1 — VISION CONDITION SCORING (ISOLATED test page) — SHIPPED TO PROD (2026-06-21, `e03c402`).**
   Standalone `/condition` page scores the top-15 leads' exterior condition (0–100 distress + flags) from a Street View photo
   via **Gemini 2.5 Flash** (OpenRouter, env-swappable `CONDITION_LLM_MODEL`). NO /leads integration yet (user wants to evaluate
   accuracy first); funnel-only, per-lead button only. Pure `conditionScore.ts` (15 tests) + `parcelCondition` table +
   `conditionData.ts` + `conditionActions.scoreCondition` + `ConditionTest.tsx`. 212 tests, build clean, reviewed clean.
-  Spec/plan `docs/superpowers/{specs,plans}/2026-06-21-vision-condition-scoring*`. Pending: merge (2nd schema branch vs P5 →
-  regen `_generated`) + live smoke + user click-through, then design the /leads integration. Research: "GLM 5.2" is text-only
+  Spec/plan `docs/superpowers/{specs,plans}/2026-06-21-vision-condition-scoring*`. Merged ff → main + prod backend deployed
+  (parcelCondition added) + OPENROUTER/geocoding keys set on dev+prod; branch deleted. Pending: confirm CF build green + USER
+  click-through `/condition` (auth-gated → NO CLI smoke), then design the /leads integration. Research: "GLM 5.2" is text-only
   (use GLM-4.6V); DeepSeek has no vision; cost negligible at this volume → chose on vision reliability.
 - [ ] **P7 → /leads integration (FUTURE PHASE, after the user evaluates v1):** a funnel-only `signalEvents` source: score a flagged
   lead's physical condition from imagery (Google Street View Static → LLM-vision → 0–100 condition-distress score + flags),

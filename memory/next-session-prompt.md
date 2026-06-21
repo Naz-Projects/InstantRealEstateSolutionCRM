@@ -2,9 +2,11 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★★★★★ START HERE — 2026-06-21 (later) — P7 v1 (vision condition) BUILT → **PR OPEN** (not merged)
+## ★★★★★ START HERE — 2026-06-21 (later) — P7 v1 (vision condition) **MERGED + DEPLOYED to prod**
 
-**P7 v1 — Vision Condition Scoring (ISOLATED test page): BUILT, reviewed clean, PR open from `feat/p7-vision-condition` (NOT merged).**
+**P7 v1 — Vision Condition Scoring (ISOLATED test page): SHIPPED to prod (2026-06-21).** Merged ff → `main` `e03c402`, pushed
+(CF deploys frontend); prod backend deployed manually (`parcelCondition.by_prclid` added, functions live on `pastel-crocodile-994`);
+`OPENROUTER_API_KEY` + `GOOGLE_GEOCODING_API_KEY` set on dev+prod; feature branch deleted. Reviewed clean (0 Critical/Important).
 Per the user's decision, kept ISOLATED — a standalone `/condition` page scores the **top-15 leads'** exterior condition from a
 Street View front-of-house photo via a cheap vision model, so the user can EVALUATE accuracy BEFORE wiring it into `/leads`. NO
 `SCORE_CONFIG` multiplier, NO signalEvents, NO batch, NO cron — strictly additive (zero change to /leads/scoring).
@@ -16,12 +18,14 @@ Street View front-of-house photo via a cheap vision model, so the user can EVALU
   Street View image → Convex `_storage` → OpenRouter vision → store; auth-gated, base64 keeps the Maps key server-side,
   30s aborts, `lastError`), `/condition` page (`src/web/ConditionTest.tsx`). 212 tests, build clean. Spec/plan
   `docs/superpowers/{specs,plans}/2026-06-21-vision-condition-scoring*`.
-- **NEXT ACTIONS:** (1) MERGE decision — the PR has NO external blocker (default model needs only `OPENROUTER_API_KEY`,
-  which Legal Notices already uses, + `GOOGLE_GEOCODING_API_KEY`, already set). On merge it's the **2nd schema branch vs P5**
-  → whichever merges 2nd regenerates `convex/_generated` + `npm run build`. (2) Live smoke (deferred):
-  `npx convex run conditionActions:scoreCondition '{"prclid":"<real lead>"}'` → `{status:"ok",score,flags}`; a no-coverage
-  address → `{status:"no_imagery"}`. (3) USER click-through `/condition`: score a lead → image+score+flags+reason+model;
-  judge accuracy, then design the `/leads` integration (signalEvents source and/or condition multiplier — separate spec).
+- **NEXT ACTIONS (USER):** (1) ⚠ confirm the **Cloudflare Workers build went GREEN** (stale prod `CONVEX_DEPLOY_KEY` in CF env =
+  silent 401 = old bundle; if `/condition` is missing on prod, fix the CF key + re-run the build). (2) **Click-through `/condition`**
+  (signed in): "Score condition" on a few leads → image + 0–100 score + flags + reason + model; judge accuracy. NOTE: the action is
+  auth-gated and has NO internal variant, so there is **no headless CLI smoke** — verify in the running app. (3) Once accuracy is
+  trusted, design the `/leads` integration (a `signalEvents` "condition" source and/or a `SCORE_CONFIG` condition multiplier —
+  separate spec). (4) A/B models by setting `CONDITION_LLM_MODEL` on Convex (`z-ai/glm-4.6v` / `qwen/qwen3-vl-32b-instruct`) + re-score.
+- **Merge-order note:** P5 (`feat/p5-contacts-skiptrace`) is still unmerged + also adds a schema table → when it merges it MUST
+  regenerate `convex/_generated` against the merged tree + `npm run build` (never hand-merge `api.*`).
 - **Standing directive unchanged:** all implementation via Opus 4.8 subagents.
 
 ## (superseded 2026-06-21 later) START HERE — 2026-06-21 (P6 SHIPPED to prod · P5 held · **P7 is the NEXT thing to build**)
