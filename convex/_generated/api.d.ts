@@ -9,6 +9,7 @@
  */
 
 import type * as compsActions from "../compsActions.js";
+import type * as conditionActions from "../conditionActions.js";
 import type * as conditionData from "../conditionData.js";
 import type * as contractActions from "../contractActions.js";
 import type * as contractData from "../contractData.js";
@@ -47,6 +48,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   compsActions: typeof compsActions;
+  conditionActions: typeof conditionActions;
   conditionData: typeof conditionData;
   contractActions: typeof contractActions;
   contractData: typeof contractData;
