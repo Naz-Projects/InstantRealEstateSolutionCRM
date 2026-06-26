@@ -109,3 +109,23 @@ export function buildStreetViewMetadataUrl(address: string, key: string): string
   const params = new URLSearchParams({ location: address, source: "outdoor", key });
   return `https://maps.googleapis.com/maps/api/streetview/metadata?${params.toString()}`;
 }
+
+export type StreetViewCoverage =
+  | { kind: "ok" }
+  | { kind: "no_imagery" }
+  | { kind: "error"; message: string };
+
+/** Classify a Street View metadata response. "OK" = coverage exists; "ZERO_RESULTS"/
+ *  "NOT_FOUND" = genuinely no panorama for this address; ANY other status
+ *  (REQUEST_DENIED, OVER_QUERY_LIMIT, INVALID_REQUEST, …) is a hard config/quota
+ *  error we surface instead of silently treating as "no coverage". */
+export function classifyStreetViewMetadata(meta: {
+  status?: string;
+  error_message?: string;
+}): StreetViewCoverage {
+  const status = meta?.status;
+  if (status === "OK") return { kind: "ok" };
+  if (status === "ZERO_RESULTS" || status === "NOT_FOUND") return { kind: "no_imagery" };
+  const detail = meta?.error_message ? `: ${meta.error_message}` : "";
+  return { kind: "error", message: `Street View metadata ${status ?? "unknown"}${detail}` };
+}

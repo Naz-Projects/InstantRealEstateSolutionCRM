@@ -10,6 +10,7 @@ import {
   buildConditionPrompt,
   buildStreetViewImageUrl,
   buildStreetViewMetadataUrl,
+  classifyStreetViewMetadata,
   parseConditionResponse,
 } from "../src/scraper/conditionScore";
 
@@ -40,8 +41,9 @@ async function doScore(ctx: ActionCtx, prclid: string): Promise<ScoreResult> {
     const metaRes = await fetch(buildStreetViewMetadataUrl(address, mapsKey), {
       signal: AbortSignal.timeout(30_000),
     });
-    const meta = (await metaRes.json()) as { status?: string };
-    if (meta.status !== "OK") {
+    const meta = (await metaRes.json()) as { status?: string; error_message?: string };
+    const coverage = classifyStreetViewMetadata(meta);
+    if (coverage.kind === "no_imagery") {
       await ctx.runMutation(internal.conditionData.storeCondition, {
         prclid,
         hasImagery: false,
@@ -50,6 +52,13 @@ async function doScore(ctx: ActionCtx, prclid: string): Promise<ScoreResult> {
         lastError: null,
       });
       return { status: "no_imagery" };
+    }
+    if (coverage.kind === "error") {
+      await ctx.runMutation(internal.conditionData.storeCondition, {
+        prclid,
+        lastError: coverage.message,
+      });
+      return { status: "error", error: coverage.message };
     }
   } catch (e) {
     const msg = `Street View metadata: ${(e as Error).message}`;

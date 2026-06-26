@@ -5,6 +5,7 @@ import {
   CONDITION_SYSTEM_PROMPT,
   buildStreetViewImageUrl,
   buildStreetViewMetadataUrl,
+  classifyStreetViewMetadata,
   CONDITION_MODEL,
   CONDITION_FLAGS,
 } from "../src/scraper/conditionScore";
@@ -89,5 +90,38 @@ describe("street view urls", () => {
 describe("model config", () => {
   it("defaults to gemini 2.5 flash when CONDITION_LLM_MODEL is unset", () => {
     expect(CONDITION_MODEL).toBe("google/gemini-2.5-flash");
+  });
+});
+
+describe("classifyStreetViewMetadata", () => {
+  it("treats OK as coverage", () => {
+    expect(classifyStreetViewMetadata({ status: "OK" })).toEqual({ kind: "ok" });
+  });
+  it("treats ZERO_RESULTS as genuinely no imagery", () => {
+    expect(classifyStreetViewMetadata({ status: "ZERO_RESULTS" })).toEqual({ kind: "no_imagery" });
+  });
+  it("treats NOT_FOUND as genuinely no imagery", () => {
+    expect(classifyStreetViewMetadata({ status: "NOT_FOUND" })).toEqual({ kind: "no_imagery" });
+  });
+  it("surfaces REQUEST_DENIED as a hard error with the api message", () => {
+    const r = classifyStreetViewMetadata({
+      status: "REQUEST_DENIED",
+      error_message: "This API is not activated on your API project.",
+    });
+    expect(r.kind).toBe("error");
+    if (r.kind === "error") {
+      expect(r.message).toContain("REQUEST_DENIED");
+      expect(r.message).toContain("not activated");
+    }
+  });
+  it("surfaces OVER_QUERY_LIMIT as a hard error", () => {
+    const r = classifyStreetViewMetadata({ status: "OVER_QUERY_LIMIT" });
+    expect(r.kind).toBe("error");
+    if (r.kind === "error") expect(r.message).toContain("OVER_QUERY_LIMIT");
+  });
+  it("surfaces a missing status as an unknown error", () => {
+    const r = classifyStreetViewMetadata({});
+    expect(r.kind).toBe("error");
+    if (r.kind === "error") expect(r.message).toContain("unknown");
   });
 });
