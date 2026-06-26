@@ -66,7 +66,8 @@ export const createContract = mutation({
       if (!offer) throw new ConvexError({ code: "NO_ACCEPTED_OFFER", message: "Accept an offer before generating a PSA" });
       ({ terms, signerName, signerRole } = buildPsaTerms(
         { propertyAddress, ownerName: p.ownerName },
-        { amount: offer.amount, earnestMoney: offer.earnestMoney, closingDate: offer.closingDate, inspectionDays: offer.inspectionDays },
+        // Agreed price = the counter when the offer was accepted on a counter.
+        { amount: offer.counterAmount ?? offer.amount, earnestMoney: offer.earnestMoney, closingDate: offer.closingDate, inspectionDays: offer.inspectionDays },
         BUYER_ENTITY,
       ));
     } else {

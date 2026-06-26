@@ -19,13 +19,28 @@ export const ERROR_CODES = new Set([
   "NO PARCEL", "NO STATE", "BAD ADDRESS",
 ]);
 
-/** Parse a money/number string ("$45,527.14", "47600") to a number, or null if missing/error. */
+/**
+ * Parse a money/number string ("$45,527.14", "47600", "$1.2M", "$350K") to a
+ * number, or null if missing/error. Expands a trailing K/M suffix (Zillow search
+ * cards store "$1.2M" — stripping only $,whitespace would yield 1.2). A unit word
+ * after the number is tolerated ("1,234 sqft" → 1234), but a SECOND number (a
+ * range like "$100,000-$120,000") or other garbage returns null instead of a
+ * silently-wrong value.
+ */
 export function parseMoney(s: string | undefined | null): number | null {
   if (s === undefined || s === null) return null;
   const trimmed = s.trim();
   if (!trimmed || ERROR_CODES.has(trimmed)) return null;
-  const n = parseFloat(trimmed.replace(/[$,\s]/g, ""));
-  return Number.isFinite(n) ? n : null;
+  // Leading numeric token (optional $, commas, decimals) + optional K/M suffix.
+  const m = trimmed.match(/^\$?\s*([\d,]+(?:\.\d+)?)\s*([MKmk])?/);
+  if (!m) return null;
+  // Anything numeric AFTER the matched token means this isn't a single value
+  // (a range / two numbers) — reject rather than return the first number.
+  if (/\d/.test(trimmed.slice(m[0].length))) return null;
+  const n = parseFloat(m[1].replace(/,/g, ""));
+  if (!Number.isFinite(n)) return null;
+  const suffix = m[2]?.toUpperCase();
+  return suffix === "M" ? n * 1_000_000 : suffix === "K" ? n * 1_000 : n;
 }
 
 export type CushionTier = "good" | "ok" | "thin" | "verify" | "bad" | "unknown";

@@ -146,7 +146,7 @@ export const scoreCondition = action({
   args: { prclid: v.string() },
   handler: async (ctx, { prclid }): Promise<ScoreResult> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
+    if (!me || !me.isActive) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
     return await doScore(ctx, prclid);
   },
 });

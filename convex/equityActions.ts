@@ -150,7 +150,7 @@ export const enrichEquity = action({
   args: { prclid: v.string() },
   handler: async (ctx, { prclid }): Promise<EnrichResult> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
+    if (!me || !me.isActive) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
     return await doEnrich(ctx, prclid);
   },
 });
@@ -160,7 +160,7 @@ export const enrichBatch = action({
   args: { prclids: v.array(v.string()) },
   handler: async (ctx, { prclids }): Promise<{ scheduled: number }> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
+    if (!me || !me.isActive) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
     if (prclids.length === 0) return { scheduled: 0 };
     if (prclids.length > BATCH_CAP) {
       throw new ConvexError({

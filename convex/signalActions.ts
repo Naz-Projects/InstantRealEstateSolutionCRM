@@ -14,7 +14,9 @@ import {
   formatCourtDate,
   extractDefendants,
   matchDefendantToOwners,
+  selectAutoAttachMatch,
   type CourtPartyRow,
+  type OwnerMatch,
 } from "../src/scraper/courtConnect";
 import type { SignalEventInput } from "../src/scraper/signals";
 
@@ -179,16 +181,19 @@ export const syncForeclosures = internalAction({
     const events: SignalEventInput[] = [];
     for (const [caseId, row] of byCase) {
       const defendants = extractDefendants(row.caption);
-      const parcelMatches = new Map<string, "exact" | "strong" | "weak">();
+      const allMatches: OwnerMatch[] = [];
+      const ownerByPrclid = new Map<string, string>();
       for (const defendant of defendants) {
         const candidates = await ctx.runQuery(internal.signalData.ownerCandidates, {
           name: defendant,
         });
-        for (const m of matchDefendantToOwners(defendant, candidates)) {
-          const prev = parcelMatches.get(m.prclid);
-          if (!prev || prev === "weak") parcelMatches.set(m.prclid, m.confidence);
-        }
+        for (const c of candidates) ownerByPrclid.set(c.prclid, c.ownerName);
+        allMatches.push(...matchDefendantToOwners(defendant, candidates));
       }
+      // Only auto-attach (→ scored, mailable lead) on a UNIQUE exact match; every
+      // looser/ambiguous case becomes an unmatched row for human review — the
+      // foreclosure is never lost, but the wrong owner is never auto-mailed.
+      const autoPrclid = selectAutoAttachMatch(allMatches);
       const base = {
         category: "financial" as const,
         type: "pre-foreclosure",
@@ -202,19 +207,35 @@ export const syncForeclosures = internalAction({
           defendants,
         },
       };
-      if (parcelMatches.size === 0) {
-        unmatched++;
-        events.push({ ...base, prclid: "", externalKey: `fc:${caseId}` });
-      } else {
+      if (autoPrclid) {
         matched++;
-        for (const [prclid, confidence] of parcelMatches) {
-          events.push({
-            ...base,
-            prclid,
-            externalKey: `fc:${caseId}:${prclid}`,
-            matchConfidence: confidence,
+        events.push({
+          ...base,
+          prclid: autoPrclid,
+          externalKey: `fc:${caseId}:${autoPrclid}`,
+          matchConfidence: "exact",
+        });
+      } else {
+        unmatched++;
+        // Carry the (non-unique/loose) candidate owners into the review payload so a
+        // human can resolve the filing — distinct by parcel, with confidence + name.
+        const seen = new Set<string>();
+        const candidates: Array<{ prclid: string; ownerName: string; confidence: string }> = [];
+        for (const m of allMatches) {
+          if (seen.has(m.prclid)) continue;
+          seen.add(m.prclid);
+          candidates.push({
+            prclid: m.prclid,
+            ownerName: ownerByPrclid.get(m.prclid) ?? "",
+            confidence: m.confidence,
           });
         }
+        events.push({
+          ...base,
+          prclid: "",
+          externalKey: `fc:${caseId}`,
+          payload: { ...base.payload, candidates },
+        });
       }
     }
 

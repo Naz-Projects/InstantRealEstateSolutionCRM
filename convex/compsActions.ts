@@ -36,7 +36,7 @@ export const pullComps = action({
   args: { id: v.id("flipAnalyses") },
   handler: async (ctx, { id }): Promise<PullResult> => {
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
-    if (!me) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
+    if (!me || !me.isActive) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
 
     const a = await ctx.runQuery(internal.flipData.getAnalysisInternal, { id });
     if (!a) throw new Error("Analysis not found");

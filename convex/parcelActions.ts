@@ -177,6 +177,12 @@ export const seedSpine = internalAction({
         done: done || capped,
       };
     } catch (e) {
+      // Surface a spine-seed failure on the Admin → Error Log (a weekly cron has no
+      // UI); keep the parcelSync.error write below for the resumable-progress row.
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: `seedSpine failed: ${String((e as Error).message).slice(0, 300)}`,
+        context: "parcelActions.seedSpine",
+      });
       if (id) {
         await ctx.runMutation(internal.parcelData.finishSync, {
           syncId: id,
@@ -271,6 +277,12 @@ export const syncSpine = internalAction({
       }
       return { syncId: id, cursor: rangeEnd, scanned: sourceKeys.length, newCount, vanishedCount, done };
     } catch (e) {
+      // Surface a spine-sync (CDC) failure on the Admin → Error Log (weekly cron,
+      // no UI); the parcelSync.error write below stays for the progress row.
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: `syncSpine failed: ${String((e as Error).message).slice(0, 300)}`,
+        context: "parcelActions.syncSpine",
+      });
       if (id) {
         await ctx.runMutation(internal.parcelData.finishSync, {
           syncId: id,

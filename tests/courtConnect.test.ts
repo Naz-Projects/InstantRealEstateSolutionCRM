@@ -10,6 +10,7 @@ import {
   extractDefendants,
   normalizeOwnerName,
   matchDefendantToOwners,
+  selectAutoAttachMatch,
 } from "../src/scraper/courtConnect";
 
 // Live party-search page captured 2026-06-11 (last_name=bank, 12-MAY..11-JUN-2026).
@@ -141,6 +142,38 @@ describe("normalizeOwnerName / matchDefendantToOwners", () => {
 
   it("ignores corporate suffixes and single-token defendants", () => {
     expect(matchDefendantToOwners("LLC", [{ prclid: "6", ownerName: "LLC" }])).toEqual([]);
+  });
+});
+
+describe("selectAutoAttachMatch", () => {
+  it("auto-attaches ONLY a unique exact match", () => {
+    expect(selectAutoAttachMatch([{ prclid: "1", confidence: "exact" }])).toBe("1");
+  });
+  it("returns null when two exact matches point to different parcels (ambiguous)", () => {
+    expect(
+      selectAutoAttachMatch([
+        { prclid: "1", confidence: "exact" },
+        { prclid: "2", confidence: "exact" },
+      ]),
+    ).toBeNull();
+  });
+  it("collapses duplicate exact matches on the SAME parcel to that one prclid", () => {
+    // joint owners on one parcel — still unambiguous, safe to attach
+    expect(
+      selectAutoAttachMatch([
+        { prclid: "9", confidence: "exact" },
+        { prclid: "9", confidence: "exact" },
+      ]),
+    ).toBe("9");
+  });
+  it("never auto-attaches a strong-only match", () => {
+    expect(selectAutoAttachMatch([{ prclid: "3", confidence: "strong" }])).toBeNull();
+  });
+  it("never auto-attaches a weak-only match (the wrong-owner footgun)", () => {
+    expect(selectAutoAttachMatch([{ prclid: "4", confidence: "weak" }])).toBeNull();
+  });
+  it("returns null for no matches", () => {
+    expect(selectAutoAttachMatch([])).toBeNull();
   });
 });
 

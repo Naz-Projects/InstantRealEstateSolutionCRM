@@ -37,4 +37,16 @@ describe("summarizeOffers", () => {
   it("empty → nulls", () => {
     expect(summarizeOffers([])).toEqual({ latest: null, activeCount: 0, acceptedOffer: null, acceptedPrice: null });
   });
+  it("uses the counterAmount as the agreed price when an accepted offer was countered", () => {
+    const offers = [
+      mk({ amount: 90000, status: "accepted", counterAmount: 102000, createdAt: 5 }),
+    ];
+    const s = summarizeOffers(offers);
+    expect(s.acceptedOffer!.amount).toBe(90000);
+    expect(s.acceptedPrice).toBe(102000); // the agreed price is the counter, not the pre-counter amount
+  });
+  it("falls back to amount when an accepted offer has no counterAmount", () => {
+    const s = summarizeOffers([mk({ amount: 88000, status: "accepted", createdAt: 5 })]);
+    expect(s.acceptedPrice).toBe(88000);
+  });
 });

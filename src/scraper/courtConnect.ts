@@ -205,3 +205,20 @@ export function matchDefendantToOwners(
   const rank = { exact: 0, strong: 1, weak: 2 } as const;
   return matches.sort((a, b) => rank[a.confidence] - rank[b.confidence]);
 }
+
+/**
+ * Decide whether a foreclosure case's defendant→owner matches are SAFE to
+ * auto-attach as a scored pre-foreclosure lead (which gets mailed). Conservative:
+ * returns a prclid ONLY when the matches resolve to a SINGLE parcel via an
+ * 'exact' (full token-set) match. Returns null for anything ambiguous — multiple
+ * distinct exact parcels, strong-only, weak-only (the surname + first-initial
+ * footgun, e.g. "DAVID IVES" ⇒ "IVES MARGARET D"), or no matches — so the filing
+ * is held for human review instead of mailing the wrong owner. Duplicate exact
+ * matches on the same parcel (joint owners) collapse to that one prclid.
+ */
+export function selectAutoAttachMatch(matches: OwnerMatch[]): string | null {
+  const exactPrclids = new Set(
+    matches.filter((m) => m.confidence === "exact").map((m) => m.prclid),
+  );
+  return exactPrclids.size === 1 ? [...exactPrclids][0] : null;
+}

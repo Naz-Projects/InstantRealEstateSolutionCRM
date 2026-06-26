@@ -23,7 +23,12 @@ const HEADERS = [
 ];
 
 const cell = (v: string | number): string => {
-  const s = String(v);
+  let s = String(v);
+  // Neutralize spreadsheet formula injection: Excel/Sheets execute a cell that
+  // starts with = + - @ (or a tab/CR). Owner names come from public county records
+  // an adversary can influence (e.g. an LLC literally named "=HYPERLINK(...)"), so
+  // prefix such cells with a literal apostrophe before the normal quote-escaping.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
