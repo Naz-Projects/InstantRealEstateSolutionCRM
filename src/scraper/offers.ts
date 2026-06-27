@@ -38,5 +38,10 @@ export function summarizeOffers(offers: OfferLike[]): {
   const latest = sorted[0] ?? null;
   const activeCount = offers.filter((o) => o.status === "pending" || o.status === "countered").length;
   const acceptedOffer = sorted.find((o) => o.status === "accepted") ?? null;
-  return { latest, activeCount, acceptedOffer, acceptedPrice: acceptedOffer?.amount ?? null };
+  // The agreed price is the counter when the deal was accepted ON a counter; the
+  // original amount otherwise. A PSA built from this must use the counter price.
+  const acceptedPrice = acceptedOffer
+    ? acceptedOffer.counterAmount ?? acceptedOffer.amount
+    : null;
+  return { latest, activeCount, acceptedOffer, acceptedPrice };
 }

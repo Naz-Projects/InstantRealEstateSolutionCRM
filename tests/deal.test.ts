@@ -13,6 +13,23 @@ describe("parseMoney", () => {
     expect(parseMoney("")).toBeNull();
     expect(parseMoney(undefined)).toBeNull();
   });
+  it("expands K/M suffixes Zillow uses on search cards", () => {
+    expect(parseMoney("$1.2M")).toBe(1_200_000);
+    expect(parseMoney("$350K")).toBe(350_000);
+    expect(parseMoney("$1,234.56")).toBeCloseTo(1234.56);
+    expect(parseMoney("47600")).toBe(47600);
+  });
+  it("returns null for a range / malformed string instead of a wrong number", () => {
+    expect(parseMoney("$100,000-$120,000")).toBeNull();
+    expect(parseMoney("100000-120000")).toBeNull();
+    expect(parseMoney("abc")).toBeNull();
+    expect(parseMoney("$1.2.3")).toBeNull();
+  });
+  it("still parses a number followed by a unit word (e.g. sqft)", () => {
+    // deal.ts parseMoney is reused to parse "1,234 sqft" → 1234; a unit suffix is fine,
+    // a second NUMBER (a range) is not.
+    expect(parseMoney("1,234 sqft")).toBe(1234);
+  });
 });
 
 describe("computeDeal", () => {
@@ -90,6 +107,22 @@ describe("computeDeal", () => {
     expect(d.flags).toContain("senior-lien-risk");
     expect(d.cushion).toBe(380000); // raw cushion is huge...
     expect(d.tier).toBe("verify"); // ...but it must NOT rank as a confident "good" deal
+  });
+
+  it("values a $1.2M zestimate stored with a trailing M correctly (not $1.20 → tier 'bad')", () => {
+    // Zillow search cards store "$1.2M"; parseMoney must expand it to 1,200,000.
+    const d = computeDeal({
+      saleType: "MTG",
+      zestimate: "$1.2M",
+      principal: "$300,000",
+      countyBalanceDue: "$0.00",
+      schoolBalanceDue: "$0.00",
+      sewerBalanceDue: "$0.00",
+    });
+    expect(d.zestimate).toBe(1_200_000);
+    expect(d.costToClear).toBe(300_000);
+    expect(d.cushion).toBe(900_000);
+    expect(d.tier).toBe("good"); // NOT "bad" (which a 1.2 zestimate would have produced)
   });
 
   it("downgrades a JUDG sale to 'verify' even with a large cushion", () => {

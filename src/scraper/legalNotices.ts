@@ -86,6 +86,46 @@ Document Text:
 ${pdfText}`;
 }
 
+/**
+ * Tolerant parse of the LLM's estate-listings reply into an array of raw field
+ * objects. Mirrors conditionScore.parseConditionResponse: strips ```json fences,
+ * grabs the first JSON value (an [...] array, or a single {...} object wrapped as a
+ * one-element array), JSON.parses inside try/catch, guards Array.isArray, and
+ * returns [] on ANY failure — NEVER throws, so one malformed/prose-wrapped/
+ * truncated reply can't abort the whole legal-notices sync.
+ */
+export function parseLegalListingsResponse(text: string): Array<Record<string, string>> {
+  const cleaned = (text ?? "")
+    .replace(/```json\n?/gi, "")
+    .replace(/```\n?/g, "")
+    .trim();
+  const arrStart = cleaned.indexOf("[");
+  const objStart = cleaned.indexOf("{");
+  // Whichever structural bracket appears first wins (an array value, or a single
+  // object we wrap). This avoids grabbing a "[" that lives inside an object string.
+  let candidate: string | null = null;
+  let wrap = false;
+  if (arrStart !== -1 && (objStart === -1 || arrStart < objStart)) {
+    const end = cleaned.lastIndexOf("]");
+    if (end > arrStart) candidate = cleaned.slice(arrStart, end + 1);
+  } else if (objStart !== -1) {
+    const end = cleaned.lastIndexOf("}");
+    if (end > objStart) {
+      candidate = cleaned.slice(objStart, end + 1);
+      wrap = true;
+    }
+  }
+  if (candidate === null) return [];
+  try {
+    const parsed = JSON.parse(candidate);
+    const arr = wrap ? [parsed] : parsed;
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((x) => x && typeof x === "object") as Array<Record<string, string>>;
+  } catch {
+    return [];
+  }
+}
+
 /** Extract estate listings from PDF text using an LLM via OpenRouter. */
 export async function extractLegalListings(
   pdfText: string,
@@ -120,17 +160,8 @@ export async function extractLegalListings(
   }
 
   const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  let content = json.choices?.[0]?.message?.content ?? "";
-  content = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-  let parsed: Array<Record<string, string>>;
-  try {
-    parsed = JSON.parse(content);
-  } catch (e) {
-    throw new Error(
-      `Failed to parse LLM JSON: ${(e as Error).message}\nRaw: ${content.slice(0, 500)}`,
-    );
-  }
+  const content = json.choices?.[0]?.message?.content ?? "";
+  const parsed = parseLegalListingsResponse(content);
 
   return parsed.map((l) => ({
     weekDate,

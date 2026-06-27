@@ -59,6 +59,27 @@ describe("buildMailCsv", () => {
     expect(lines[2].endsWith(",,")).toBe(true);
   });
 
+  it("neutralizes spreadsheet formula-injection in owner names (leading = + - @)", () => {
+    const evil = { ...lead, ownerName: "=HYPERLINK(http://evil)" };
+    const csv = buildMailCsv([evil]);
+    expect(csv).toContain("'=HYPERLINK(http://evil)");
+
+    expect(buildMailCsv([{ ...lead, ownerName: "+1" }])).toContain("'+1");
+    expect(buildMailCsv([{ ...lead, ownerName: "-1" }])).toContain("'-1");
+    expect(buildMailCsv([{ ...lead, ownerName: "@x" }])).toContain("'@x");
+  });
+
+  it("prefixes AND quotes a formula cell that also contains a comma/quote", () => {
+    const csv = buildMailCsv([{ ...lead, ownerName: '=cmd("a","b")' }]);
+    expect(csv).toContain('"\'=cmd(""a"",""b"")"');
+  });
+
+  it("leaves a normal owner name untouched (no spurious apostrophe)", () => {
+    const csv = buildMailCsv([{ ...lead, ownerName: "BELFON BERTRAND" }]);
+    expect(csv).toContain("BELFON BERTRAND");
+    expect(csv).not.toContain("'BELFON");
+  });
+
   it("renders zero value/equity as 0, not blank", () => {
     const csv = buildMailCsv([
       {
