@@ -2,6 +2,29 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
+## ★★★★★★ START HERE — 2026-06-27 — P7 v2 (condition-batch SKILL) **MERGED to main + prod backend deployed**
+**What shipped (`main` @ `556b05a`, pushed → CF deploys frontend; prod backend deployed manually):** a `condition-batch`
+Claude-Code **skill** (`.claude/skills/condition-batch/SKILL.md`) you invoke monthly ("score conditions") that drives your
+logged-in **Chrome → Google Maps Street View** for the **top 100 leads**, scores each house with Claude vision (NO paid
+LLM API — replaces per-click Gemini cost), and writes score + flags + **describe-then-score description** + **confidence** +
+the screenshot into `parcelCondition`. `/condition` now shows all of them **worst-distress-first**. The per-click **Gemini
+button stays** as an ad-hoc fallback. Built subagent-driven (Opus 4.8, per directive), TDD, full review + final whole-branch
+review (the one Important finding — skill bypassing the canonical sanitizer — was fixed via `recordConditionScore`). 223 tests.
+Spec/plan: `docs/superpowers/{specs,plans}/2026-06-26-condition-batch-skill*`. Backend (additive): schema +`description`/
+`confidence`/`rubricVersion`; `signalData.topLeadsForScoring` (internal, shared `deriveLeads` helper → matches `/leads`);
+`conditionData.generateConditionUploadUrl` + `recordConditionScore` (parses model JSON through the SAME `parseConditionResponse`
+sanitizer; on bad output stores a visible `lastError`, never a fabricated score); image transport = Convex **upload-URL flow**
+(base64 can't fit a Windows CLI arg; convex.cloud HTTP works).
+- **Backend VERIFIED on prod (read-only):** `npx convex run signalData:topLeadsForScoring '{"count":5}'` → 5 real leads w/ addresses.
+- **NEXT ACTIONS (USER / live smoke = Task 8, needs YOUR Chrome):** (1) confirm the **CF Workers build went GREEN** (stale prod
+  `CONVEX_DEPLOY_KEY` in CF env = silent 401 = old frontend bundle). (2) **Run the `condition-batch` skill on 5–10 houses first**
+  (invoke it with a small count): verify Chrome captures the right houses, scores are sensible vs eyeballing, rows land with
+  image+description+confidence, `/condition` renders worst-first. Then the full 100. (3) **OPEN DESIGN Q:** `/condition` shows the
+  current **top-100** (a previously-scored house that drops below rank 100 stops showing — data not lost); confirm that's wanted
+  vs "show every scored house ever." (4) The isolated worktree `.claude/worktrees/condition-batch` is KEPT for the live smoke.
+- **Note:** a concurrent `command-center` session held the shared main tree during this build → we worked in an isolated worktree
+  and ff'd `main` by ref (no checkout) so as not to disrupt it. When `feat/command-center` merges, reconcile the divergent memory docs.
+
 ## ★★★★★ START HERE — 2026-06-21 (later) — P7 v1 (vision condition) **MERGED + DEPLOYED to prod**
 
 **P7 v1 — Vision Condition Scoring (ISOLATED test page): SHIPPED to prod (2026-06-21).** Merged ff → `main` `e03c402`, pushed
