@@ -499,6 +499,75 @@ export default defineSchema({
     .index("by_prclid", ["prclid"])
     .index("by_token", ["publicToken"]),
 
+  // "Potential" — the curated deals pipeline: houses the team is ACTIVELY working
+  // (door-knocking / cold-calling), promoted by hand from Leads / Sheriff / Legal.
+  // Strictly additive — the /leads, Sheriff, and Legal pipelines are untouched.
+  // De-duplicated by `dedupeKey`. Stage list mirrors src/scraper/potentialPipeline.ts.
+  // Spec: docs/superpowers/specs/2026-06-26-potential-deals-pipeline-design.md.
+  potentialDeals: defineTable({
+    prclid: v.optional(v.string()), // present when promoted from a lead (or a sheriff row w/ a parcel)
+    dedupeKey: v.string(), // prclid if known, else normalizeAddress(address); upsert target
+    source: v.object({
+      kind: v.union(
+        v.literal("lead"),
+        v.literal("sheriff"),
+        v.literal("legal"),
+        v.literal("manual"),
+      ),
+      refId: v.optional(v.string()), // source row _id (string) or prclid — back-link only
+    }),
+    // snapshot at promotion (display + so a promoted deal survives source edits/deletes)
+    address: v.string(),
+    ownerName: v.optional(v.string()),
+    propCity: v.optional(v.string()),
+    propZip: v.optional(v.string()),
+    beds: v.optional(v.string()),
+    baths: v.optional(v.string()),
+    sqft: v.optional(v.number()),
+    value: v.optional(v.number()), // as-is value snapshot
+    equity: v.optional(v.number()),
+    score: v.optional(v.number()), // lead score snapshot (if from a lead)
+    topSignals: v.optional(v.array(v.string())), // signal type strings snapshot (if from a lead)
+    // manual contact (no skip-trace)
+    contactName: v.optional(v.string()),
+    contactPhone: v.optional(v.string()),
+    contactEmail: v.optional(v.string()),
+    // pipeline
+    stage: v.union(
+      v.literal("to_work"),
+      v.literal("contacted"),
+      v.literal("negotiating"),
+      v.literal("under_contract"),
+      v.literal("closed"),
+      v.literal("dead"),
+    ),
+    notes: v.optional(v.string()),
+    nextFollowUpAt: v.optional(v.number()), // ms — drives the card "next:" + overdue badge
+    nextFollowUpNote: v.optional(v.string()),
+    createdByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_stage", ["stage"]),
+
+  // The touch log for a potential deal — one row per logged contact attempt / note.
+  dealActivities: defineTable({
+    dealId: v.id("potentialDeals"),
+    type: v.union(
+      v.literal("call"),
+      v.literal("door_knock"),
+      v.literal("text"),
+      v.literal("email"),
+      v.literal("note"),
+    ),
+    outcome: v.optional(v.string()), // free text; UI offers chips (no answer / left VM / interested / …)
+    note: v.optional(v.string()),
+    occurredAt: v.number(), // when the touch happened (default now, editable)
+    createdByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_deal", ["dealId"]),
+
   // Captured application errors surfaced on the Admin → Error Log page. Written
   // best-effort by the client ErrorBoundary (crashes), page catch-blocks (handled
   // failures), and autonomous backend actions (cron). Admins triage + resolve.

@@ -21,10 +21,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PropertyMap, type MapPoint } from "./PropertyMap";
 import { ScrapeProgress } from "./ScrapeProgress";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MoveToPotentialButton } from "./PotentialPage";
 import { reportHandledError } from "./lib/errorReporting";
+import { parseZestimate } from "../scraper/equity";
 const ERROR_VALUES = new Set([
   "PENDING", "NOT FOUND", "SCRAPE FAILED", "NO ADDRESS", "WRONG STATE", "NO PARCEL", "NO STATE", "BAD ADDRESS",
 ]);
+
+// Drop sentinel/error values when building a snapshot for the Potential pipeline.
+function snapStr(s: string | undefined): string | undefined {
+  if (!s) return undefined;
+  return ERROR_VALUES.has(s) ? undefined : s;
+}
+
+// Parse a scraped sqft string ("1,234 sqft") to a number, or undefined.
+function parseSqftNum(s: string | undefined): number | undefined {
+  if (!s || ERROR_VALUES.has(s)) return undefined;
+  const n = Number(s.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
 
 function PageHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
   return (
@@ -563,6 +578,7 @@ export function SheriffSales() {
                           <th className="px-3 py-2 font-medium">Zillow</th>
                           <th className="px-3 py-2 font-medium">Map</th>
                           <th className="px-3 py-2 font-medium">Deal</th>
+                          <th className="px-3 py-2 font-medium">Potential</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -600,6 +616,20 @@ export function SheriffSales() {
                               <DealSelect
                                 value={l.dealStatus as DealStage}
                                 onChange={(s) => setDeal({ listingId: l._id as Id<"sheriffListings">, dealStatus: s })}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <MoveToPotentialButton
+                                args={{
+                                  source: { kind: "sheriff", refId: l._id },
+                                  prclid: snapStr(l.parcel),
+                                  address: l.address,
+                                  ownerName: snapStr(l.ownerName),
+                                  beds: snapStr(l.beds),
+                                  baths: snapStr(l.baths),
+                                  sqft: parseSqftNum(l.sqft),
+                                  value: parseZestimate(l.zestimate) ?? undefined,
+                                }}
                               />
                             </td>
                           </tr>
@@ -836,6 +866,7 @@ export function LegalNotices() {
                           <th className="px-3 py-2 font-medium">Zillow</th>
                           <th className="px-3 py-2 font-medium">Map</th>
                           <th className="px-3 py-2 font-medium">Deal</th>
+                          <th className="px-3 py-2 font-medium">Potential</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -865,6 +896,19 @@ export function LegalNotices() {
                               <DealSelect
                                 value={n.dealStatus as DealStage}
                                 onChange={(s) => setDeal({ noticeId: n._id as Id<"legalNotices">, dealStatus: s })}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <MoveToPotentialButton
+                                args={{
+                                  source: { kind: "legal", refId: n._id },
+                                  address: n.address,
+                                  ownerName: snapStr(n.ownerName),
+                                  beds: snapStr(n.beds),
+                                  baths: snapStr(n.baths),
+                                  sqft: parseSqftNum(n.sqft),
+                                  value: parseZestimate(n.zestimate) ?? undefined,
+                                }}
                               />
                             </td>
                           </tr>
