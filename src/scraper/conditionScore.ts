@@ -14,6 +14,13 @@ export const CONDITION_MODEL_ALTERNATIVES = [
   "qwen/qwen3-vl-32b-instruct",
 ] as const;
 
+// Bump when the rubric materially changes so stale-version rows can be re-scored.
+export const RUBRIC_VERSION = 2;
+
+export const CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
+export type Confidence = (typeof CONFIDENCE_LEVELS)[number];
+const KNOWN_CONFIDENCE = new Set<string>(CONFIDENCE_LEVELS);
+
 // Closed flag vocabulary — the model may only return flags from this set.
 export const CONDITION_FLAGS = [
   "overgrown_vegetation",
@@ -28,7 +35,9 @@ export type ConditionFlag = (typeof CONDITION_FLAGS)[number];
 export interface ConditionScore {
   score: number; // 0–100, clamped (higher = more distressed)
   flags: string[]; // subset of CONDITION_FLAGS
-  reason: string;
+  reason: string; // kept for back-compat with v1 rows
+  description: string; // evidence-grounded narrative (v2)
+  confidence: "" | Confidence; // "" = model gave none / invalid
 }
 
 export const CONDITION_SYSTEM_PROMPT =
@@ -37,23 +46,24 @@ export const CONDITION_SYSTEM_PROMPT =
   "objectively and conservatively. You report only what is clearly visible.";
 
 export function buildConditionPrompt(): string {
-  return `Assess the EXTERIOR physical condition / distress of the house in this Street View photo.
+  return `You are assessing the EXTERIOR physical condition / distress of the house in this Street View photo for a real-estate wholesaling team. Accuracy matters more than completeness — DO NOT invent damage.
 
-Return ONLY a JSON object (no markdown fences, no extra text) with exactly these fields:
-- "score": an integer 0-100 distress score using this rubric:
-    0-20  = well-kept (tidy yard, sound roof/siding/windows, no distress)
-    21-50 = minor wear (some peeling paint / worn but maintained)
-    51-75 = visible distress (overgrown yard, debris, damaged siding/roof, disrepair)
-    76-100 = severe distress / likely vacant (boarded windows, tarped/collapsing roof, heavy junk, derelict)
-- "flags": an array containing ONLY clearly-visible items, from this exact set:
-    "overgrown_vegetation", "junk_debris", "boarded_or_broken_windows",
-    "roof_damage_or_tarp", "distressed_exterior", "vacant_appearance"
-  Use [] if none clearly apply.
-- "reason": one short sentence (<= 200 chars) citing what you see.
+Work in this order, then return ONLY a JSON object (no markdown fences, no extra text) with exactly these fields:
+
+1. "description": 1-3 sentences describing what is CLEARLY VISIBLE on the house and lot (structure type, roof, siding/paint, windows, yard, debris). Cite only what you can actually see. If the view is obstructed, shadowed, the wrong building, under construction, or not a house, SAY SO here.
+2. "flags": an array containing ONLY clearly-visible items you described above, from this exact set:
+   "overgrown_vegetation", "junk_debris", "boarded_or_broken_windows",
+   "roof_damage_or_tarp", "distressed_exterior", "vacant_appearance"
+   Use [] if none clearly apply. Never add a flag you did not describe.
+3. "score": an integer 0-100 distress score justified by the description:
+     0-20  = well-kept (tidy yard, sound roof/siding/windows, no distress)
+     21-50 = minor wear (some peeling paint / worn but maintained)
+     51-75 = visible distress (overgrown yard, debris, damaged siding/roof, disrepair)
+     76-100 = severe distress / likely vacant (boarded windows, tarped/collapsing roof, heavy junk, derelict)
+4. "confidence": "low", "medium", or "high" — your confidence the photo clearly shows the target house's current condition. Use "low" if the view is obstructed, shadowed, ambiguous, possibly the wrong house, or stale-looking.
 
 Rules:
-- Judge ONLY what is clearly visible. Do NOT invent damage.
-- If the photo is unclear, obstructed, shadowed, or not a house, score conservatively (low) and say so in "reason".
+- Judge ONLY what is clearly visible. When unsure, score conservatively (low) and set confidence "low".
 - Shadows, wet pavement, parked cars, and seasonal bare trees are NOT distress.`;
 }
 
@@ -88,7 +98,10 @@ export function parseConditionResponse(raw: string): ConditionScore {
     ? obj.flags.map(String).filter((f) => KNOWN_FLAGS.has(f))
     : [];
   const reason = typeof obj.reason === "string" ? obj.reason.slice(0, 300) : "";
-  return { score: clampScore(obj.score), flags: [...new Set(flags)], reason };
+  const description = typeof obj.description === "string" ? obj.description.slice(0, 1000) : "";
+  const confRaw = typeof obj.confidence === "string" ? obj.confidence.toLowerCase() : "";
+  const confidence = KNOWN_CONFIDENCE.has(confRaw) ? (confRaw as Confidence) : "";
+  return { score: clampScore(obj.score), flags: [...new Set(flags)], reason, description, confidence };
 }
 
 /** Google Street View Static image URL for a situs address. */

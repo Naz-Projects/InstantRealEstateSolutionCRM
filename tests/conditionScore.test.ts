@@ -8,6 +8,8 @@ import {
   classifyStreetViewMetadata,
   CONDITION_MODEL,
   CONDITION_FLAGS,
+  RUBRIC_VERSION,
+  CONFIDENCE_LEVELS,
 } from "../src/scraper/conditionScore";
 
 describe("parseConditionResponse", () => {
@@ -90,6 +92,37 @@ describe("street view urls", () => {
 describe("model config", () => {
   it("defaults to gemini 2.5 flash when CONDITION_LLM_MODEL is unset", () => {
     expect(CONDITION_MODEL).toBe("google/gemini-2.5-flash");
+  });
+});
+
+describe("rubric v2 parse", () => {
+  it("RUBRIC_VERSION is 2 and confidence levels are the closed set", () => {
+    expect(RUBRIC_VERSION).toBe(2);
+    expect([...CONFIDENCE_LEVELS]).toEqual(["low", "medium", "high"]);
+  });
+  it("parses description and confidence", () => {
+    const r = parseConditionResponse(
+      '{"description":"Two-story home, peeling paint on trim, lawn overgrown.","flags":["overgrown_vegetation"],"score":58,"confidence":"high"}',
+    );
+    expect(r.score).toBe(58);
+    expect(r.flags).toEqual(["overgrown_vegetation"]);
+    expect(r.description).toBe("Two-story home, peeling paint on trim, lawn overgrown.");
+    expect(r.confidence).toBe("high");
+  });
+  it("drops an out-of-set confidence to empty string", () => {
+    const r = parseConditionResponse('{"description":"x","flags":[],"score":10,"confidence":"maybe"}');
+    expect(r.confidence).toBe("");
+  });
+  it("defaults missing description/confidence", () => {
+    const r = parseConditionResponse('{"flags":[],"score":10}');
+    expect(r.description).toBe("");
+    expect(r.confidence).toBe("");
+  });
+  it("the prompt asks for describe-then-score with description + confidence", () => {
+    const p = buildConditionPrompt();
+    expect(p).toMatch(/describe/i);
+    expect(p).toContain('"description"');
+    expect(p).toContain('"confidence"');
   });
 });
 
