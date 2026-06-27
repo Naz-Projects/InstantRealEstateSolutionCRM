@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MoveToPotentialButton } from "./PotentialPage";
 import { describeError } from "./lib/errorReporting";
 
 type Lead = FunctionReturnType<typeof api.signalData.leads>[number];
@@ -324,6 +325,21 @@ function LeadWorkflow({ lead, buyers }: { lead: Lead; buyers: Buyer[] }) {
       >
         <Calculator className="h-3.5 w-3.5" /> Analyze flip
       </Link>
+      <MoveToPotentialButton
+        args={{
+          source: { kind: "lead", refId: lead.prclid },
+          prclid: lead.prclid,
+          address: fullAddress,
+          ownerName: lead.ownerName,
+          propCity: lead.propCity,
+          propZip: lead.propZip,
+          value: lead.value,
+          equity: lead.equity ?? undefined,
+          score: lead.score,
+          topSignals: [...new Set(lead.signals.map((s) => s.type))],
+        }}
+        className="h-9 px-3 text-sm"
+      />
     </div>
   );
 }
