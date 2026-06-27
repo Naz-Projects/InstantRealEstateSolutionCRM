@@ -26,7 +26,7 @@ function fmtTime(ms: number | null): string {
 }
 
 export function ConditionTest() {
-  const leads = useQuery(api.signalData.leads, { limit: 15 });
+  const leads = useQuery(api.signalData.leads, { limit: 100 });
   const prclids = (leads ?? []).map((l) => l.prclid);
   const conditions = useQuery(
     api.conditionData.conditionForPrclids,
@@ -38,6 +38,15 @@ export function ConditionTest() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const condByPrclid = new Map((conditions ?? []).map((c) => [c.prclid, c]));
+
+  const rows = [...(leads ?? [])].sort((a, b) => {
+    const ca = condByPrclid.get(a.prclid)?.score ?? null;
+    const cb = condByPrclid.get(b.prclid)?.score ?? null;
+    if (ca != null && cb != null) return cb - ca; // both scored: worst distress first
+    if (ca != null) return -1; // scored before unscored
+    if (cb != null) return 1;
+    return b.score - a.score; // both unscored: by lead score
+  });
 
   async function handleScore(prclid: string) {
     setBusy((b) => ({ ...b, [prclid]: true }));
@@ -60,10 +69,11 @@ export function ConditionTest() {
           Vision Condition (test)
         </h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Top {prclids.length || 15} leads by score. Click "Score condition" to pull the Street View
-          front-of-house photo and run a vision model on it. Condition scores are an estimate from a
-          single, possibly-stale photo — for triage only, not ground truth. (This page is isolated;
-          scores do not yet affect lead ranking.)
+          Top 100 leads, worst condition distress first. Scores may come from the monthly Chrome
+          batch or the per-lead "Score condition" button, which pulls the Street View front-of-house
+          photo and runs a vision model on it. Condition scores are an estimate from a single,
+          possibly-stale photo — for triage only, not ground truth. (This page is isolated; scores do
+          not yet affect lead ranking.)
         </p>
       </div>
 
@@ -73,7 +83,7 @@ export function ConditionTest() {
       )}
 
       <div className="space-y-4">
-        {(leads ?? []).map((lead) => {
+        {rows.map((lead) => {
           const c = condByPrclid.get(lead.prclid);
           const isBusy = busy[lead.prclid];
           const err = errors[lead.prclid] || c?.lastError;
@@ -131,7 +141,26 @@ export function ConditionTest() {
                   </div>
                 )}
 
-                {c?.reason && <p className="text-sm text-muted-foreground">{c.reason}</p>}
+                {c?.description ? (
+                  <p className="text-sm text-muted-foreground">{c.description}</p>
+                ) : c?.reason ? (
+                  <p className="text-sm text-muted-foreground">{c.reason}</p>
+                ) : null}
+
+                {c?.confidence && (
+                  <span
+                    className={cn(
+                      "inline-block rounded-md border px-2 py-0.5 text-[11px] font-medium",
+                      c.confidence === "low"
+                        ? "border-red-500/40 bg-red-500/10 text-red-400"
+                        : c.confidence === "high"
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                          : "border-border bg-muted/40 text-muted-foreground",
+                    )}
+                  >
+                    confidence: {c.confidence}
+                  </span>
+                )}
 
                 {err && (
                   <p className="flex items-center gap-1.5 text-xs text-red-400">
