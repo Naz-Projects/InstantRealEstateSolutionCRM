@@ -16,14 +16,26 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-06-26-condition-batch-skill*`. B
 sanitizer; on bad output stores a visible `lastError`, never a fabricated score); image transport = Convex **upload-URL flow**
 (base64 can't fit a Windows CLI arg; convex.cloud HTTP works).
 - **Backend VERIFIED on prod (read-only):** `npx convex run signalData:topLeadsForScoring '{"count":5}'` → 5 real leads w/ addresses.
-- **NEXT ACTIONS (USER / live smoke = Task 8, needs YOUR Chrome):** (1) confirm the **CF Workers build went GREEN** (stale prod
-  `CONVEX_DEPLOY_KEY` in CF env = silent 401 = old frontend bundle). (2) **Run the `condition-batch` skill on 5–10 houses first**
-  (invoke it with a small count): verify Chrome captures the right houses, scores are sensible vs eyeballing, rows land with
-  image+description+confidence, `/condition` renders worst-first. Then the full 100. (3) **OPEN DESIGN Q:** `/condition` shows the
-  current **top-100** (a previously-scored house that drops below rank 100 stops showing — data not lost); confirm that's wanted
-  vs "show every scored house ever." (4) The isolated worktree `.claude/worktrees/condition-batch` is KEPT for the live smoke.
-- **Note:** a concurrent `command-center` session held the shared main tree during this build → we worked in an isolated worktree
-  and ff'd `main` by ref (no checkout) so as not to disrupt it. When `feat/command-center` merges, reconcile the divergent memory docs.
+- **★ DONE 2026-06-27 — FULL TOP-100 RUN COMPLETE on prod.** Ran the `condition-batch` skill end-to-end: a live 7-house Chrome
+  smoke (accurate; scores matched eyeball + cross-validated vs the Gemini button) then the full 100 via **parallel Claude-vision
+  subagents** on the Street View images. **86 scored · 14 no-coverage (honest, 0 fabricated) · 15 flagged · 0 write errors**;
+  worst = 904 Wildel Ave 56 (junk_debris), 30 S Dupont 55 + 218 W 35th 55 (overgrown), 345 Single Ave 50, 211 W 20th 50.
+  **$0 LLM cost** (Claude did the vision, no Gemini). All `/condition` rows now `model="claude-opus-4-8 (chrome)"` (overwrote the
+  earlier Gemini rows). Finding: top-100-by-lead-score is mostly well-kept LLC/apartment property — only ~6 houses ≥45; the
+  pass correctly surfaces the genuinely distressed handful.
+- **The skill is REUSABLE monthly** — user invokes **"score conditions"** / "I have 100 more houses, score them on Google
+  condition." `.claude/skills/condition-batch/SKILL.md` now documents the PROVEN batch method: pull top N (`topLeadsForScoring`)
+  → curl Street View images to `scratch/<prclid>.jpg` (gray <9 KB placeholder = no-coverage) → `split` into ~12-house slices →
+  one background **opus** subagent per slice (Read image → score with the verbatim rubric → upload via `generateConditionUploadUrl`
+  → `recordConditionScore`) → aggregate. Clear `scratch/condition-done.log` for a fresh run. Interactive-Chrome path kept for spot-checks.
+- **OPEN DESIGN Q (deferred by user, "fine for now"):** `/condition` shows the current top-100 worst-first; a previously-scored
+  house that later drops below rank 100 stops showing (its row is kept). Future options: **/leads score integration** (condition
+  as a `SCORE_CONFIG` multiplier or stacked `signalEvents` source — own spec) · optional **monthly scheduling** (cron/cloud agent).
+- **Git/concurrency:** a `command-center` session merged its own work (dashboard cockpit, curated-deals pipeline, hardening) into
+  `main` concurrently — **coexists cleanly** (my condition feature survived their merges; `origin/main` now `f0fe389`). We built in an
+  isolated worktree `.claude/worktrees/condition-batch`; landed commits on `main` by **ff-by-ref while uncontended**, and once
+  another worktree had `main` checked out, by `git rebase origin/main` + `git push origin HEAD:main` (a REMOTE ff — doesn't touch
+  the other worktree's local checkout). Prod backend deployed manually each cutover; CF deploys frontend on push.
 
 ## ★★★★★ START HERE — 2026-06-21 (later) — P7 v1 (vision condition) **MERGED + DEPLOYED to prod**
 
