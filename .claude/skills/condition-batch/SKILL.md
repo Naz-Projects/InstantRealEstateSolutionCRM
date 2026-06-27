@@ -19,7 +19,8 @@ Run this monthly. It scores the **top N leads** (default 100) by driving the use
 ## 2. For each lead, SERIALLY (one Chrome, one focus):
 1. Navigate Chrome to Google Maps Street View for `address` (e.g. `https://www.google.com/maps/place/<url-encoded address>`, then enter Street View / pegman). Confirm the on-screen address/area matches the target; if it clearly doesn't, set confidence "low".
 2. If Maps shows NO Street View coverage → the upload + scoring is SKIPPED; instead record it as no-coverage (mark `hasImagery:false` via a `storeCondition` run — see 5 — so it isn't silently dropped) and move on. **Never guess a score with no image.**
-3. Screenshot the front of the house to `scratch/<prclid>.jpg` (capture at ~480px to keep the upload small).
+3. Capture a Street View screenshot of the front of the house and SAVE the bytes to `scratch/<prclid>.png` (step 5b reads this file). **If the screenshot tool can't write to disk,** fall back to fetching the equivalent Street View Static image straight to disk — Claude still scored the live Chrome view; this is the STORED thumbnail only (free under the Maps credit):
+   `key=$(grep ^VITE_GOOGLE_MAPS_API_KEY= .env.local | cut -d= -f2-); curl -sS -G "https://maps.googleapis.com/maps/api/streetview" --data-urlencode "location=<address>" --data "size=640x640&fov=80&source=outdoor&key=$key" -o scratch/<prclid>.jpg`
 4. SCORE the screenshot with THIS rubric (kept byte-for-byte in sync with `src/scraper/conditionScore.ts` `buildConditionPrompt`, RUBRIC_VERSION 2) — describe what is clearly visible FIRST, then flags (only what you described, from the closed set), then a 0-100 score, then confidence. **DO NOT invent damage**; when unsure, score low + confidence low. The exact rubric the model must follow:
 
    ```text
@@ -45,12 +46,15 @@ Run this monthly. It scores the **top N leads** (default 100) by driving the use
    ```
 
    - To keep the main context lean, dispatch a per-house scoring subagent that READS `scratch/<prclid>.jpg` and returns the JSON; if subagents cannot reach the screenshot file, score inline.
-5. Write it via the upload-URL flow (base64 can't fit a CLI arg; convex.cloud HTTP works):
-   a. `url=$(npx convex run conditionData:generateConditionUploadUrl '{}')` — the CLI prints the upload URL string (strip surrounding quotes/whitespace).
-   b. `resp=$(curl -sS -X POST "$url" -H "Content-Type: image/jpeg" --data-binary @scratch/<prclid>.jpg)` → JSON `{"storageId":"<id>"}`; extract `<id>` (e.g. `node -e "process.stdout.write(JSON.parse(process.argv[1]).storageId)" "$resp"`).
-   c. `npx convex run conditionData:storeCondition '{"prclid":"<prclid>","score":<n>,"flags":[...],"description":"...","confidence":"<low|medium|high>","rubricVersion":2,"model":"claude-opus-4-8 (chrome)","imageStorageId":"<id>","hasImagery":true,"scoredAt":<ms>,"lastError":null}'` — small payload, fits the CLI. (`scoredAt` = current epoch ms, e.g. `$(($(date +%s)*1000))`.)
-
-   For a no-coverage house, skip the upload and call `storeCondition` with `{"prclid":"<prclid>","hasImagery":false,"model":"claude-opus-4-8 (chrome)","scoredAt":<ms>,"lastError":null}` (no score) so it's recorded, not silently dropped.
+5. Write it via the upload-URL flow (base64 can't fit a CLI arg; convex.cloud HTTP works). Let `F` = the saved file (`scratch/<prclid>.png` or the `.jpg` fallback) and `CT` = its content type (`image/png` or `image/jpeg`):
+   a. `url=$(npx convex run conditionData:generateConditionUploadUrl '{}' | tr -d '"[:space:]')` — strips the CLI's surrounding quotes/whitespace, leaving the bare upload URL.
+   b. `resp=$(curl -sS -X POST "$url" -H "Content-Type: $CT" --data-binary @"$F")` → JSON `{"storageId":"<id>"}`; `id=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).storageId)" "$resp")`.
+   c. Build the payload with `node` so a `'`/`"`/newline in the description can't break the shell or JSON, then write it:
+      ```bash
+      payload=$(node -e 'const a=process.argv.slice(1);console.log(JSON.stringify({prclid:a[0],score:+a[1],flags:JSON.parse(a[2]),description:a[3],confidence:a[4],rubricVersion:2,model:"claude-opus-4-8 (chrome)",imageStorageId:a[5],hasImagery:true,scoredAt:Date.now(),lastError:null}))' "<prclid>" "<score>" '<flags-json-array>' "<description>" "<low|medium|high>" "$id")
+      npx convex run conditionData:storeCondition "$payload"
+      ```
+   For a no-coverage house, skip the upload and call `storeCondition` with `'{"prclid":"<prclid>","hasImagery":false,"model":"claude-opus-4-8 (chrome)","scoredAt":<ms>,"lastError":null}'` (no score) so it's recorded, not silently dropped (`<ms>` = `$(($(date +%s)*1000))`).
 6. Append the prclid to the resume log (`scratch/condition-done.log`).
 
 ## 3. Handle friction
