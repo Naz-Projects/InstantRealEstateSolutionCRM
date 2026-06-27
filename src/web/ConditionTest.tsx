@@ -69,7 +69,7 @@ export function ConditionTest() {
           Vision Condition (test)
         </h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Top 100 leads, worst condition distress first. Scores may come from the monthly Chrome
+          Top {rows.length} leads, worst condition distress first. Scores may come from the monthly Chrome
           batch or the per-lead "Score condition" button, which pulls the Street View front-of-house
           photo and runs a vision model on it. Condition scores are an estimate from a single,
           possibly-stale photo — for triage only, not ground truth. (This page is isolated; scores do

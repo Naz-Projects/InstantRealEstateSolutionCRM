@@ -8,7 +8,7 @@ description: Score the top N leads' exterior condition by looking at each house 
 Run this monthly. It scores the **top N leads** (default 100) by driving the user's logged-in Chrome to each house's Google Maps Street View, looking at it with the SAME rubric the code uses, and writing the result to Convex. No paid LLM API — Claude does the vision.
 
 ## 0. Preconditions
-- Confirm the backend is deployed (the `description`/`confidence`/`rubricVersion` fields + `topLeadsForScoring` + `storeCondition` + `generateConditionUploadUrl` must be live on the target deployment).
+- Confirm the backend is deployed (the `description`/`confidence`/`rubricVersion` fields + `topLeadsForScoring` + `recordConditionScore` + `storeCondition` + `generateConditionUploadUrl` must be live on the target deployment).
 - Target = PROD by default: `export CONVEX_DEPLOY_KEY="$(grep ^CONVEX_DEPLOY_KEY_PROD= .env.local | cut -d= -f2-)"`.
 - Load claude-in-chrome tools and call `tabs_context_mcp` first; create a fresh tab for the run.
 - Make a scratch dir for screenshots + the resume log: `mkdir -p scratch`.
@@ -45,14 +45,16 @@ Run this monthly. It scores the **top N leads** (default 100) by driving the use
    - Shadows, wet pavement, parked cars, and seasonal bare trees are NOT distress.
    ```
 
+   - This rubric is copied verbatim from `buildConditionPrompt()`; if you edit it, update `src/scraper/conditionScore.ts` and bump `RUBRIC_VERSION` so stale-version rows can be re-scored.
    - To keep the main context lean, dispatch a per-house scoring subagent that READS `scratch/<prclid>.jpg` and returns the JSON; if subagents cannot reach the screenshot file, score inline.
 5. Write it via the upload-URL flow (base64 can't fit a CLI arg; convex.cloud HTTP works). Let `F` = the saved file (`scratch/<prclid>.png` or the `.jpg` fallback) and `CT` = its content type (`image/png` or `image/jpeg`):
    a. `url=$(npx convex run conditionData:generateConditionUploadUrl '{}' | tr -d '"[:space:]')` — strips the CLI's surrounding quotes/whitespace, leaving the bare upload URL.
    b. `resp=$(curl -sS -X POST "$url" -H "Content-Type: $CT" --data-binary @"$F")` → JSON `{"storageId":"<id>"}`; `id=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).storageId)" "$resp")`.
-   c. Build the payload with `node` so a `'`/`"`/newline in the description can't break the shell or JSON, then write it:
+   c. Forward the scorer's RAW JSON output (the server runs it through the canonical `parseConditionResponse` sanitizer — clamps the score, filters flags to the closed set, validates confidence — so the skill never writes unsanitized data). Build the payload with `node` so a `'`/`"`/newline in the JSON can't break the shell, then write it:
       ```bash
-      payload=$(node -e 'const a=process.argv.slice(1);console.log(JSON.stringify({prclid:a[0],score:+a[1],flags:JSON.parse(a[2]),description:a[3],confidence:a[4],rubricVersion:2,model:"claude-opus-4-8 (chrome)",imageStorageId:a[5],hasImagery:true,scoredAt:Date.now(),lastError:null}))' "<prclid>" "<score>" '<flags-json-array>' "<description>" "<low|medium|high>" "$id")
-      npx convex run conditionData:storeCondition "$payload"
+      # `raw` = the scorer's exact JSON output, e.g. {"description":"...","flags":[...],"score":58,"confidence":"high"}
+      payload=$(node -e 'const a=process.argv.slice(1);console.log(JSON.stringify({prclid:a[0],rawJson:a[1],imageStorageId:a[2],model:"claude-opus-4-8 (chrome)"}))' "<prclid>" "$raw" "$id")
+      npx convex run conditionData:recordConditionScore "$payload"
       ```
    For a no-coverage house, skip the upload and call `storeCondition` with `'{"prclid":"<prclid>","hasImagery":false,"model":"claude-opus-4-8 (chrome)","scoredAt":<ms>,"lastError":null}'` (no score) so it's recorded, not silently dropped (`<ms>` = `$(($(date +%s)*1000))`).
 6. Append the prclid to the resume log (`scratch/condition-done.log`).

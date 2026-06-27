@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { query, internalQuery, internalMutation } from "./_generated/server";
+import { Doc } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
+import { parseConditionResponse, RUBRIC_VERSION } from "../src/scraper/conditionScore";
 
 // P7 vision condition scoring — V8 data layer for the /condition test page.
 // Funnel-only; ISOLATED from /leads scoring.
@@ -49,6 +51,56 @@ export const storeCondition = internalMutation({
     } else {
       await ctx.db.insert("parcelCondition", { prclid, ...patch });
     }
+  },
+});
+
+// The condition-batch skill POSTs the RAW model JSON here; we run it through the
+// SAME canonical parser as the Gemini path (clamps score 0-100, filters flags to
+// the closed set, validates confidence) so the skill cannot write unsanitized data.
+// On unparseable output we store a visible lastError instead of a fabricated score.
+export const recordConditionScore = internalMutation({
+  args: {
+    prclid: v.string(),
+    rawJson: v.string(),
+    imageStorageId: v.optional(v.id("_storage")),
+    model: v.string(),
+  },
+  handler: async (ctx, { prclid, rawJson, imageStorageId, model }) => {
+    const now = Date.now();
+    let patch: Omit<Doc<"parcelCondition">, "_id" | "_creationTime" | "prclid">;
+    try {
+      const p = parseConditionResponse(rawJson);
+      patch = {
+        score: p.score,
+        flags: p.flags,
+        reason: p.reason,
+        description: p.description,
+        confidence: p.confidence || undefined,
+        rubricVersion: RUBRIC_VERSION,
+        model,
+        imageStorageId,
+        hasImagery: true,
+        rawResponse: rawJson.slice(0, 2000),
+        scoredAt: now,
+        lastError: undefined,
+        updatedAt: now,
+      };
+    } catch (e) {
+      patch = {
+        model,
+        imageStorageId,
+        hasImagery: true,
+        lastError: (e as Error).message,
+        scoredAt: now,
+        updatedAt: now,
+      };
+    }
+    const existing = await ctx.db
+      .query("parcelCondition")
+      .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
+      .first();
+    if (existing) await ctx.db.patch(existing._id, patch);
+    else await ctx.db.insert("parcelCondition", { prclid, ...patch });
   },
 });
 
