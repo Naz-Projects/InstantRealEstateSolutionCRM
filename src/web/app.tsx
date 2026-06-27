@@ -24,7 +24,25 @@ const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", com
 const sheriffRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sheriff", component: SheriffSales });
 const legalRoute = createRoute({ getParentRoute: () => rootRoute, path: "/legal", component: LegalNotices });
 const adminRoute = createRoute({ getParentRoute: () => rootRoute, path: "/admin", component: AdminPage });
-const flipRoute = createRoute({ getParentRoute: () => rootRoute, path: "/flip", component: FlipAnalyzer });
+// Typed search params for the lead → flip handoff: address + known value/sqft so
+// the analyzer can prefill ARV/sqft without re-pulling comps.
+type FlipSearch = { address?: string; value?: number; sqft?: number };
+const flipRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/flip",
+  component: FlipAnalyzer,
+  validateSearch: (search: Record<string, unknown>): FlipSearch => {
+    const numOrUndef = (v: unknown) => {
+      const n = Number(v);
+      return v != null && v !== "" && Number.isFinite(n) ? n : undefined;
+    };
+    return {
+      address: typeof search.address === "string" ? search.address : undefined,
+      value: numOrUndef(search.value),
+      sqft: numOrUndef(search.sqft),
+    };
+  },
+});
 const propertiesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/properties", component: Properties });
 const propertyDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/properties/$id", component: PropertyDetail });
 const parcelsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/parcels", component: ParcelSearch });
