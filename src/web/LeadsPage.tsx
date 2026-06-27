@@ -22,13 +22,16 @@ import {
   Send,
   Copy,
   Ban,
+  MapPin,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { buildMailCsv } from "./lib/mailCsv";
 import { LEAD_STAGES, STAGE_LABELS, isLeadStage, followUpState } from "../scraper/wholesalePipeline";
+import { buyerFitsLead } from "../scraper/commandCenter";
 import { summarizeOffers, canTransition, OFFER_STATUSES, type OfferStatus } from "../scraper/offers";
 import {
   Select,
@@ -237,6 +240,15 @@ function LeadWorkflow({ lead, buyers }: { lead: Lead; buyers: Buyer[] }) {
   const fullAddress = `${lead.situsStreet}, ${lead.propCity} DE ${lead.propZip}`;
   const showDisposition = ["marketing", "assigned", "closed"].includes(lead.stage);
 
+  // Disposition aid (G6): rank buyers that fit this lead's area/price first.
+  const rankedBuyers = useMemo(
+    () =>
+      buyers
+        .map((b) => ({ b, fits: buyerFitsLead(b, lead) }))
+        .sort((a, z) => Number(z.fits) - Number(a.fits)),
+    [buyers, lead],
+  );
+
   const saveNotes = async () => {
     setSaving(true);
     try {
@@ -279,9 +291,16 @@ function LeadWorkflow({ lead, buyers }: { lead: Lead; buyers: Buyer[] }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">No buyer</SelectItem>
-              {buyers.map((b) => (
+              {rankedBuyers.map(({ b, fits }) => (
                 <SelectItem key={b._id} value={b._id}>
-                  {b.name}
+                  <span className="flex items-center gap-1.5">
+                    {b.name}
+                    {fits && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-teal-glow">
+                        <MapPin className="h-3 w-3" /> fits area
+                      </span>
+                    )}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -298,12 +317,13 @@ function LeadWorkflow({ lead, buyers }: { lead: Lead; buyers: Buyer[] }) {
           />
         </div>
       )}
-      <a
-        href={`/flip?address=${encodeURIComponent(fullAddress)}`}
+      <Link
+        to="/flip"
+        search={{ address: fullAddress, value: lead.value }}
         className="inline-flex h-9 items-center gap-1.5 rounded-md border border-teal/40 px-3 text-sm text-teal-glow transition-colors hover:bg-teal/10"
       >
         <Calculator className="h-3.5 w-3.5" /> Analyze flip
-      </a>
+      </Link>
     </div>
   );
 }
@@ -623,7 +643,6 @@ function LeadOffers({ prclid }: { prclid: string }) {
               >
                 <Check className="h-3.5 w-3.5" /> Move to under_contract
               </button>
-              {/* P6 Task C3 adds a "Generate purchase agreement" button here */}
               {moveErr && <div className="text-xs text-amber-400">{moveErr}</div>}
             </div>
           )}
@@ -1180,7 +1199,7 @@ export function LeadsPage() {
             }}
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase text-muted-foreground">

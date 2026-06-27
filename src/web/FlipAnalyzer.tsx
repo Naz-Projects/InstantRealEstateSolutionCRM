@@ -159,10 +159,23 @@ export function FlipAnalyzer() {
 
   const [selectedId, setSelectedId] = useState<Id<"flipAnalyses"> | null>(null);
   const [pick, setPick] = useState("");        // "sheriff:<id>" | "legal:<id>"
-  const [manualAddr, setManualAddr] = useState(
-    // Seamless handoff from /leads ("Analyze flip"): pre-fill the manual address.
-    () => new URLSearchParams(window.location.search).get("address") ?? "",
-  );
+  // Seamless handoff from /leads ("Analyze flip"): pre-fill the manual address AND
+  // carry the known value (zestimate) + sqft so the editor can prefill ARV/sqft
+  // without re-pulling comps. Read from window.location.search (same mechanism the
+  // address prefill already used; TanStack updates it on SPA navigation).
+  const handoff = useMemo(() => {
+    const p = new URLSearchParams(window.location.search);
+    const num = (k: string) => {
+      const v = p.get(k);
+      const n = Number(v);
+      return v && Number.isFinite(n) ? n : undefined;
+    };
+    return { address: p.get("address") ?? "", value: num("value"), sqft: num("sqft") };
+  }, []);
+  const [manualAddr, setManualAddr] = useState(() => handoff.address);
+  const [prefill, setPrefill] = useState<
+    { id: Id<"flipAnalyses">; arv?: number; sqft?: number } | null
+  >(null);
 
   const selected = analyses?.find((a) => a._id === selectedId) ?? null;
 
@@ -179,6 +192,10 @@ export function FlipAnalyzer() {
   const addManual = async () => {
     if (!manualAddr.trim()) return;
     const newId = await createManual({ address: manualAddr.trim() });
+    // Carry the lead handoff's value/sqft into the new analysis's editor.
+    if (handoff.value != null || handoff.sqft != null) {
+      setPrefill({ id: newId as Id<"flipAnalyses">, arv: handoff.value, sqft: handoff.sqft });
+    }
     setManualAddr("");
     setSelectedId(newId as Id<"flipAnalyses">);
   };
@@ -308,13 +325,25 @@ export function FlipAnalyzer() {
         </div>
 
         {/* Editor */}
-        {selected && <AnalysisEditor key={selected._id} analysis={selected} />}
+        {selected && (
+          <AnalysisEditor
+            key={selected._id}
+            analysis={selected}
+            prefill={prefill && prefill.id === selected._id ? prefill : undefined}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-function AnalysisEditor({ analysis }: { analysis: Analysis }) {
+function AnalysisEditor({
+  analysis,
+  prefill,
+}: {
+  analysis: Analysis;
+  prefill?: { arv?: number; sqft?: number };
+}) {
   const update = useMutation(api.flipData.updateAnalysis);
   const pullComps = useAction(api.compsActions.pullComps);
   const [pulling, setPulling] = useState(false);
@@ -327,8 +356,8 @@ function AnalysisEditor({ analysis }: { analysis: Analysis }) {
       setPulling(false);
     }
   };
-  const [sqft, setSqft] = useState(analysis.sqft?.toString() ?? "");
-  const [arv, setArv] = useState(analysis.arv?.toString() ?? "");
+  const [sqft, setSqft] = useState(analysis.sqft?.toString() ?? prefill?.sqft?.toString() ?? "");
+  const [arv, setArv] = useState(analysis.arv?.toString() ?? prefill?.arv?.toString() ?? "");
   const [purchase, setPurchase] = useState(analysis.purchasePrice?.toString() ?? "");
   const [tier, setTier] = useState<RehabTier>(analysis.rehabTier);
   const [perSqft, setPerSqft] = useState(analysis.rehabPerSqft.toString());

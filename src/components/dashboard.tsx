@@ -34,7 +34,7 @@ import type { LucideIcon } from "lucide-react";
 import { DEAL_STAGES, STAGE_LABEL } from "../web/dealStages";
 import { formatInteger } from "@/components/formater";
 import { MarketWidgets } from "@/components/market-widgets";
-import { FunnelWidget } from "@/components/funnel-widget";
+import { CommandCenter } from "@/components/command-center";
 
 type Stats = NonNullable<FunctionReturnType<typeof api.runs.dashboardStats>>;
 type Runs = FunctionReturnType<typeof api.runs.listRuns>;
@@ -269,58 +269,69 @@ export function Dashboard() {
 					Dashboard
 				</h1>
 				<p className="text-muted-foreground text-sm">
-					Your wholesaling pipeline at a glance
+					What to work today — your best leads, what's due, and what's new
 				</p>
 			</div>
 
-			<FunnelWidget />
+			<CommandCenter />
 
 			<MarketWidgets />
 
-			{stats === undefined || runs === undefined ? (
-				<DashboardSkeleton />
-			) : (
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-					<StatCard
-						footnote={`${formatInteger(
-							stats.sheriffByStage.reviewing +
-								stats.sheriffByStage.contacted +
-								stats.sheriffByStage.offer,
-						)} active in pipeline`}
-						icon={Gavel}
-						label="Sheriff Listings"
-						value={stats.sheriffTotal}
-					/>
-					<StatCard
-						footnote={`${formatInteger(
-							stats.legalByStage.reviewing +
-								stats.legalByStage.contacted +
-								stats.legalByStage.offer,
-						)} active in pipeline`}
-						icon={Scale}
-						label="Legal Notices"
-						value={stats.legalTotal}
-					/>
-					<StatCard
-						footnote="across both sources"
-						icon={PhoneCall}
-						label="Contacted"
-						value={
-							stats.sheriffByStage.contacted + stats.legalByStage.contacted
-						}
-					/>
-					<StatCard
-						footnote="active offers"
-						icon={HandCoins}
-						label="Offers Made"
-						value={stats.sheriffByStage.offer + stats.legalByStage.offer}
-					/>
-
-					<PipelineChart stats={stats} />
-					<SourceChart stats={stats} />
-					<RecentRuns runs={runs} />
+			<section className="flex flex-col gap-4">
+				<div className="border-t border-border pt-5">
+					<h2 className="flex items-center gap-2 font-semibold text-foreground text-lg tracking-tight">
+						<Gavel className="size-4 text-muted-foreground" /> Scrapers — Sheriff &amp; Legal
+					</h2>
+					<p className="text-muted-foreground text-sm">
+						Legacy county-data automations and their run history
+					</p>
 				</div>
-			)}
+
+				{stats === undefined || runs === undefined ? (
+					<DashboardSkeleton />
+				) : (
+					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+						<StatCard
+							footnote={`${formatInteger(
+								stats.sheriffByStage.reviewing +
+									stats.sheriffByStage.contacted +
+									stats.sheriffByStage.offer,
+							)} active in pipeline`}
+							icon={Gavel}
+							label="Sheriff Listings"
+							value={stats.sheriffTotal}
+						/>
+						<StatCard
+							footnote={`${formatInteger(
+								stats.legalByStage.reviewing +
+									stats.legalByStage.contacted +
+									stats.legalByStage.offer,
+							)} active in pipeline`}
+							icon={Scale}
+							label="Legal Notices"
+							value={stats.legalTotal}
+						/>
+						<StatCard
+							footnote="across both sources"
+							icon={PhoneCall}
+							label="Contacted"
+							value={
+								stats.sheriffByStage.contacted + stats.legalByStage.contacted
+							}
+						/>
+						<StatCard
+							footnote="active offers"
+							icon={HandCoins}
+							label="Offers Made"
+							value={stats.sheriffByStage.offer + stats.legalByStage.offer}
+						/>
+
+						<PipelineChart stats={stats} />
+						<SourceChart stats={stats} />
+						<RecentRuns runs={runs} />
+					</div>
+				)}
+			</section>
 		</div>
 	);
 }
