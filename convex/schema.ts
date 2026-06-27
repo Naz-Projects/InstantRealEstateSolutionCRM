@@ -427,6 +427,9 @@ export default defineSchema({
     score: v.optional(v.number()), // 0–100 distress (higher = worse)
     flags: v.optional(v.array(v.string())),
     reason: v.optional(v.string()),
+    description: v.optional(v.string()), // longer evidence-grounded narrative (v2 rubric)
+    confidence: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+    rubricVersion: v.optional(v.number()), // which rubric produced this row (v2 = 2)
     model: v.optional(v.string()), // which model scored it
     imageStorageId: v.optional(v.id("_storage")), // the exact Street View image scored
     hasImagery: v.optional(v.boolean()), // false ⇒ no Street View coverage (not an error)
