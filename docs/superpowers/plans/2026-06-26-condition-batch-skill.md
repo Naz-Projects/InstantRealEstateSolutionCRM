@@ -332,7 +332,9 @@ git commit -m "feat(p7v2): topLeadsForScoring internalQuery (shared deriveLeads 
 
 ---
 
-## Task 5: Write action — `storeConditionBatch` (image → _storage → upsert) + Gemini path carries the new fields
+## Task 5: Write path — upload-URL transport + Gemini path carries the new fields
+
+> **⚠ TRANSPORT CORRECTION (2026-06-26, resolved by spike):** `npx convex run` only takes inline JSON args (no file/stdin) and the Windows arg limit is ~32 KB, so base64-image-in-CLI-arg is impossible (even a 400px downscale ~73 KB exceeds it). BUT the sandbox CAN HTTP-POST to convex.cloud (verified `HTTP 200`), and `ctx.storage.generateUploadUrl()` is already used in the repo (`contractData.ts:185`). **New transport = the standard Convex upload-URL flow:** add `conditionData.generateConditionUploadUrl` (internalMutation → `ctx.storage.generateUploadUrl()`); the skill POSTs the screenshot bytes to that URL → gets a `storageId` → calls the EXISTING `conditionData.storeCondition` (Task 3) with `imageStorageId` + the metadata (all small, fits the CLI). The base64 node action `storeConditionBatch` is NOT built. The only `conditionActions.ts` change in this task is the Gemini-path field wiring.
 
 **Files:**
 - Modify: `convex/conditionActions.ts`
