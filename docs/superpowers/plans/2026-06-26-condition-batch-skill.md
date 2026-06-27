@@ -459,9 +459,11 @@ Run this monthly. It scores the **top N leads** (default 100) by driving the use
 3. Screenshot the front of the house to `scratch/<prclid>.jpg` (capture at ~480px to keep the upload small).
 4. SCORE the screenshot with THIS rubric (kept in sync with `src/scraper/conditionScore.ts` `buildConditionPrompt`, RUBRIC_VERSION 2) — describe what is clearly visible FIRST, then flags (only what you described, from the closed set), then a 0-100 score, then confidence. DO NOT invent damage; when unsure, score low + confidence low. (Paste the full rubric text here verbatim from buildConditionPrompt so the skill is self-contained.)
    - To keep the main context lean, dispatch a per-house scoring subagent that READS `scratch/<prclid>.jpg` and returns the JSON; if subagents cannot reach the screenshot file, score inline.
-5. Write it: base64 the screenshot and call
-   `npx convex run conditionActions:storeConditionBatch "$(cat payload.json)"`
-   with `{prclid, score, flags, description, confidence, rubricVersion:2, model:"claude-opus-4-8 (chrome)", imageBase64}` (use the transport confirmed in the plan's Task 5).
+5. Write it via the upload-URL flow (base64 can't fit a CLI arg; convex.cloud HTTP works):
+   a. `url=$(npx convex run conditionData:generateConditionUploadUrl '{}')` — the CLI prints the upload URL string (strip surrounding quotes/whitespace).
+   b. `resp=$(curl -sS -X POST "$url" -H "Content-Type: image/jpeg" --data-binary @scratch/<prclid>.jpg)` → JSON `{"storageId":"<id>"}`; extract `<id>` (e.g. `node -e "process.stdout.write(JSON.parse(process.argv[1]).storageId)" "$resp"`).
+   c. `npx convex run conditionData:storeCondition '{"prclid":"<prclid>","score":<n>,"flags":[...],"description":"...","confidence":"<low|medium|high>","rubricVersion":2,"model":"claude-opus-4-8 (chrome)","imageStorageId":"<id>","hasImagery":true,"scoredAt":<ms>,"lastError":null}'` — small payload, fits the CLI. (`scoredAt` = current epoch ms, e.g. `$(($(date +%s)*1000))`.)
+   For a no-coverage house, skip the upload and call `storeCondition` with `{"prclid","hasImagery":false,"model":"claude-opus-4-8 (chrome)","scoredAt":<ms>,"lastError":null}` (no score) so it's recorded, not silently dropped.
 6. Append prclid to the resume log.
 
 ## 3. Handle friction
