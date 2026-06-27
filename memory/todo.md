@@ -229,8 +229,10 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   - [ ] **Manually smoke-test `/properties` on prod** (add manual flip + rental; seed from a Sheriff listing;
     confirm photo appears or placeholder+paste works; add expense & income ledger entries; mark a flip sold →
     profit/ROI; delete) — unit-tested + reviewed + render-screenshotted, but never clicked through live.
-  - [ ] **Confirm prod `GOOGLE_GEOCODING_API_KEY` has Street View Static enabled** (pending key-rotation punch-list
-    item) — until then, off-market property photos fall back to the placeholder (paste-URL still works).
+  - [x] **Street View Static API ENABLED on the Maps-key project (2026-06-26).** It had never been enabled (only Geocoding
+    was) — this is what broke P7 `/condition` (metadata → REQUEST_DENIED "not activated", silently shown as "No coverage").
+    Now verified end-to-end on the live key (metadata OK + real JPEGs + Gemini score). Also unblocks the off-market
+    property-photo Street View fallback. Gotcha: a key's "Selected APIs" restriction list ≠ the project's "Enabled APIs".
   - [x] **Auto-fill Zillow facts on add (2026-06-04)** — the photo scrape (`scrapePropertyImage`) now also pulls
     **beds/baths/sqft/zestimate** from the *same* page it already fetches (no extra Firecrawl call) via new pure
     `pickZillowFacts(md, rawHtml)` (gated on the `-DE-` homedetails match; +5 tests). New `properties.zestimate`
