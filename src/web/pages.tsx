@@ -629,6 +629,10 @@ export function SheriffSales() {
                                   baths: snapStr(l.baths),
                                   sqft: parseSqftNum(l.sqft),
                                   value: parseZestimate(l.zestimate) ?? undefined,
+                                  cushion: l.deal.cushion ?? undefined,
+                                  cushionTier: l.deal.tier,
+                                  lat: l.lat,
+                                  lng: l.lng,
                                 }}
                               />
                             </td>
@@ -908,6 +912,8 @@ export function LegalNotices() {
                                   baths: snapStr(n.baths),
                                   sqft: parseSqftNum(n.sqft),
                                   value: parseZestimate(n.zestimate) ?? undefined,
+                                  lat: n.lat,
+                                  lng: n.lng,
                                 }}
                               />
                             </td>

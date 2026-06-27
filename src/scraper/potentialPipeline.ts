@@ -110,3 +110,59 @@ export function nextActionLabel(at: number, now: number): string {
   if (diff === 1) return "Tomorrow";
   return new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
+/**
+ * Google Street View Static API image URL for a card thumbnail. Pure (takes the
+ * key as a param) — the component passes import.meta.env.VITE_GOOGLE_MAPS_API_KEY.
+ * The static API geocodes the address, so no coords are needed. Default size fits
+ * the board card; pass a larger size for the drawer.
+ */
+export function streetViewStaticUrl({
+  location,
+  key,
+  size,
+}: {
+  location: string;
+  key: string;
+  size?: string;
+}): string {
+  return `https://maps.googleapis.com/maps/api/streetview?size=${size ?? "320x140"}&location=${encodeURIComponent(location)}&key=${key}`;
+}
+
+/**
+ * A "open Street View" deep link. With finite coords, a panorama link at that
+ * exact point; otherwise a Maps search by address (Google drops you on the
+ * nearest panorama).
+ */
+export function streetViewLink({
+  lat,
+  lng,
+  address,
+}: {
+  lat?: number | null;
+  lng?: number | null;
+  address: string;
+}): string {
+  if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
+    return `https://www.google.com/maps?q=&layer=c&cbll=${lat},${lng}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+/**
+ * Tailwind chip classes for a sheriff-cushion tier (from deal.ts: good/ok/thin/
+ * verify/bad/unknown). Mirrors the dark-theme palette used elsewhere.
+ */
+export function cushionTierColor(tier: string): string {
+  switch (tier) {
+    case "good":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
+    case "ok":
+      return "border-teal/40 bg-teal/10 text-teal-glow";
+    case "thin":
+    case "verify":
+      return "border-amber-500/40 bg-amber-500/10 text-amber-400";
+    default:
+      return "border-border bg-muted/40 text-muted-foreground";
+  }
+}
