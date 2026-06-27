@@ -26,6 +26,9 @@ export const storeCondition = internalMutation({
     score: v.optional(v.number()),
     flags: v.optional(v.array(v.string())),
     reason: v.optional(v.string()),
+    description: v.optional(v.string()),
+    confidence: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+    rubricVersion: v.optional(v.number()),
     model: v.optional(v.string()),
     imageStorageId: v.optional(v.id("_storage")),
     hasImagery: v.optional(v.boolean()),
@@ -59,6 +62,8 @@ export const conditionForPrclids = query({
       score: number | null;
       flags: string[];
       reason: string;
+      description: string;
+      confidence: string;
       model: string | null;
       hasImagery: boolean | null;
       scoredAt: number | null;
@@ -77,6 +82,8 @@ export const conditionForPrclids = query({
         score: row.score ?? null,
         flags: row.flags ?? [],
         reason: row.reason ?? "",
+        description: row.description ?? "",
+        confidence: row.confidence ?? "",
         model: row.model ?? null,
         hasImagery: row.hasImagery ?? null,
         scoredAt: row.scoredAt ?? null,
