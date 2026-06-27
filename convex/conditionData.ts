@@ -52,6 +52,16 @@ export const storeCondition = internalMutation({
   },
 });
 
+// The condition-batch skill POSTs the Street View screenshot bytes to this URL,
+// gets a storageId, then calls storeCondition with imageStorageId. (CLI args are
+// too small for base64; the upload-URL flow carries the bytes over HTTP.)
+export const generateConditionUploadUrl = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 // Condition rows for a set of prclids, each with a resolved image URL for display.
 export const conditionForPrclids = query({
   args: { prclids: v.array(v.string()) },

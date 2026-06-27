@@ -1,5 +1,5 @@
 "use node";
-import { action, internalAction } from "./_generated/server";
+import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v, ConvexError } from "convex/values";
 import type { ActionCtx } from "./_generated/server";
@@ -152,37 +152,5 @@ export const scoreCondition = action({
     const me = await ctx.runQuery(internal.users.getCallerInternal, {});
     if (!me) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
     return await doScore(ctx, prclid);
-  },
-});
-
-// Batch-skill ingest: decode a screenshot, store it in _storage, upsert the row.
-export const storeConditionBatch = internalAction({
-  args: {
-    prclid: v.string(),
-    score: v.number(),
-    flags: v.array(v.string()),
-    description: v.string(),
-    confidence: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
-    rubricVersion: v.optional(v.number()),
-    model: v.string(),
-    imageBase64: v.string(),
-  },
-  handler: async (ctx, a): Promise<{ ok: true }> => {
-    const bytes = Buffer.from(a.imageBase64, "base64");
-    const imageStorageId = await ctx.storage.store(new Blob([bytes], { type: "image/jpeg" }));
-    await ctx.runMutation(internal.conditionData.storeCondition, {
-      prclid: a.prclid,
-      score: a.score,
-      flags: a.flags,
-      description: a.description,
-      confidence: a.confidence,
-      rubricVersion: a.rubricVersion ?? RUBRIC_VERSION,
-      model: a.model,
-      imageStorageId,
-      hasImagery: true,
-      scoredAt: Date.now(),
-      lastError: null,
-    });
-    return { ok: true };
   },
 });
