@@ -1011,6 +1011,23 @@ function LeadBoard({
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                    <MoveToPotentialButton
+                      args={{
+                        source: { kind: "lead", refId: l.prclid },
+                        prclid: l.prclid,
+                        address: `${l.situsStreet}, ${l.propCity} DE ${l.propZip}`,
+                        ownerName: l.ownerName,
+                        propCity: l.propCity,
+                        propZip: l.propZip,
+                        value: l.value,
+                        equity: l.equity ?? undefined,
+                        score: l.score,
+                        topSignals: [...new Set(l.signals.map((s) => s.type))],
+                      }}
+                      className="h-8 px-2 text-xs"
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -1227,6 +1244,7 @@ export function LeadsPage() {
                   <th className="px-4 py-2.5 font-medium">Signals</th>
                   <th className="px-4 py-2.5 font-medium">Stage</th>
                   <th className="px-4 py-2.5 font-medium">Latest</th>
+                  <th className="px-4 py-2.5 font-medium">Pipeline</th>
                 </tr>
               </thead>
               <tbody>
@@ -1296,10 +1314,27 @@ export function LeadsPage() {
                       <td className="px-4 py-2.5 text-xs text-muted-foreground">
                         {fmtDate(l.signals[0]?.observedDate ?? 0)}
                       </td>
+                      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <MoveToPotentialButton
+                          args={{
+                            source: { kind: "lead", refId: l.prclid },
+                            prclid: l.prclid,
+                            address: `${l.situsStreet}, ${l.propCity} DE ${l.propZip}`,
+                            ownerName: l.ownerName,
+                            propCity: l.propCity,
+                            propZip: l.propZip,
+                            value: l.value,
+                            equity: l.equity ?? undefined,
+                            score: l.score,
+                            topSignals: [...new Set(l.signals.map((s) => s.type))],
+                          }}
+                          className="h-8 px-2 text-xs"
+                        />
+                      </td>
                     </tr>
                     {expanded === l.prclid && (
                       <tr className="border-b border-border/50 bg-muted/30">
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <SignalTimeline lead={l} />
                           <LeadEquity key={`eq-${l.prclid}`} lead={l} />
                           <LeadOffers key={`of-${l.prclid}`} prclid={l.prclid} />

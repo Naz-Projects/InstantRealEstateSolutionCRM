@@ -17,6 +17,9 @@ import {
   MessageSquare,
   StickyNote,
   X,
+  Gavel,
+  Scale,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
@@ -33,6 +36,9 @@ import {
   OUTCOME_SUGGESTIONS,
   nextActionLabel,
   dealDedupeKey,
+  streetViewStaticUrl,
+  streetViewLink,
+  cushionTierColor,
   type ActivityType,
 } from "../scraper/potentialPipeline";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -89,6 +95,23 @@ function NextActionBadge({ at }: { at?: number }) {
   );
 }
 
+const SOURCE_META: Record<Deal["source"]["kind"], { Icon: LucideIcon; label: string }> = {
+  sheriff: { Icon: Gavel, label: "Sheriff" },
+  legal: { Icon: Scale, label: "Legal" },
+  lead: { Icon: Target, label: "Lead" },
+  manual: { Icon: MapPin, label: "Manual" },
+};
+
+/** Tiny "where this deal came from" badge. */
+function SourceBadge({ kind }: { kind: Deal["source"]["kind"] }) {
+  const { Icon, label } = SOURCE_META[kind] ?? SOURCE_META.manual;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+      <Icon className="h-3 w-3" /> {label}
+    </span>
+  );
+}
+
 function DealCard({
   deal,
   onOpen,
@@ -99,27 +122,66 @@ function DealCard({
   onMove: (id: Id<"potentialDeals">, stage: string) => void;
 }) {
   const cityZip = [deal.propCity, deal.propZip].filter(Boolean).join(" ");
+  // Street View geocodes the full street address; append DE so the right town wins.
+  const svLocation = [deal.address, deal.propCity, deal.propZip, "DE"].filter(Boolean).join(", ");
+  const fullLocation = [deal.address, deal.propCity, deal.propZip].filter(Boolean).join(", ");
+  const sizeLine = [
+    deal.beds ? `${deal.beds} bd` : null,
+    deal.baths ? `${deal.baths} ba` : null,
+    deal.sqft != null ? `${deal.sqft} sf` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const topSignals = deal.topSignals ?? [];
   return (
     <div
       onClick={onOpen}
       className="cursor-pointer rounded-lg border border-border/70 bg-background p-2.5 transition-colors hover:border-teal/40"
     >
-      <div className="flex items-baseline justify-between gap-2">
-        {deal.score != null ? (
-          <span className={cn("text-base font-bold", scoreColor(deal.score))}>{deal.score}</span>
-        ) : (
-          <span className="text-xs text-muted-foreground">{STAGE_LABELS[deal.stage]}</span>
-        )}
+      <img
+        loading="lazy"
+        className="mb-2 h-28 w-full rounded-md border border-border/50 object-cover"
+        src={streetViewStaticUrl({ location: svLocation, key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY })}
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+        alt="Street view"
+      />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {deal.score != null ? (
+            <span className={cn("text-base font-bold leading-none", scoreColor(deal.score))}>{deal.score}</span>
+          ) : null}
+          <SourceBadge kind={deal.source.kind} />
+        </div>
         <NextActionBadge at={deal.nextFollowUpAt} />
       </div>
-      <div className="mt-0.5 truncate text-sm font-medium text-foreground" title={deal.address}>
+      <div className="mt-1 truncate text-sm font-medium text-foreground" title={deal.address}>
         {deal.address || "—"}
       </div>
       {cityZip && <div className="truncate text-xs text-muted-foreground">{cityZip}</div>}
+      {deal.cushion != null && (
+        <div className="mt-1">
+          <span
+            className={cn(
+              "rounded-md border px-1.5 py-0.5 text-xs font-medium",
+              cushionTierColor(deal.cushionTier ?? "unknown"),
+            )}
+          >
+            {fmtMoney(deal.cushion)} cushion
+          </span>
+        </div>
+      )}
       {deal.value != null && (
-        <div className="text-xs text-muted-foreground">
+        <div className="mt-0.5 text-xs text-muted-foreground">
           {fmtMoney(deal.value)}
           {deal.equity != null ? ` · ${fmtMoney(deal.equity)} eq` : ""}
+        </div>
+      )}
+      {sizeLine && <div className="text-xs text-muted-foreground">{sizeLine}</div>}
+      {deal.ownerName && (
+        <div className="truncate text-xs text-muted-foreground" title={deal.ownerName}>
+          {deal.ownerName}
         </div>
       )}
       {(deal.contactName || deal.contactPhone) && (
@@ -129,9 +191,18 @@ function DealCard({
           {deal.contactPhone}
         </div>
       )}
-      <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+      {topSignals.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {topSignals.slice(0, 4).map((s) => (
+            <span key={s} className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         <Select value={deal.stage} onValueChange={(v) => onMove(deal._id, v)}>
-          <SelectTrigger className="h-7 w-full border-border text-xs">
+          <SelectTrigger className="h-7 grow border-border text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -142,6 +213,17 @@ function DealCard({
             ))}
           </SelectContent>
         </Select>
+        <a
+          href={streetViewLink({ lat: deal.lat, lng: deal.lng, address: fullLocation })}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title="Street View"
+          aria-label="Open Street View"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-border text-muted-foreground transition-colors hover:border-teal/40 hover:text-teal-glow"
+        >
+          <MapPin className="h-3.5 w-3.5" />
+        </a>
       </div>
     </div>
   );
@@ -458,6 +540,19 @@ function DealDetail({ dealId, onClose }: { dealId: Id<"potentialDeals">; onClose
         {/* Snapshot facts (read-only) */}
         <div className="space-y-1 rounded-lg border border-border bg-background p-3 text-sm">
           <div className="text-xs font-semibold uppercase text-muted-foreground">Snapshot</div>
+          <img
+            loading="lazy"
+            className="mb-1 h-40 w-full rounded-md border border-border/50 object-cover"
+            src={streetViewStaticUrl({
+              location: [deal.address, deal.propCity, deal.propZip, "DE"].filter(Boolean).join(", "),
+              key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+              size: "600x240",
+            })}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+            alt="Street view"
+          />
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {deal.ownerName && (
               <span className="text-muted-foreground">
@@ -477,6 +572,15 @@ function DealDetail({ dealId, onClose }: { dealId: Id<"potentialDeals">; onClose
             {deal.equity != null && (
               <span className="text-muted-foreground">
                 Equity: <span className="text-foreground">{fmtMoney(deal.equity)}</span>
+              </span>
+            )}
+            {deal.cushion != null && (
+              <span className="text-muted-foreground">
+                Cushion:{" "}
+                <span className="text-foreground">
+                  {fmtMoney(deal.cushion)}
+                  {deal.cushionTier ? ` · ${deal.cushionTier}` : ""}
+                </span>
               </span>
             )}
             {(deal.beds || deal.baths || deal.sqft != null) && (
@@ -643,6 +747,10 @@ export type PromoteArgs = {
   sqft?: number;
   value?: number;
   equity?: number;
+  cushion?: number;
+  cushionTier?: string;
+  lat?: number;
+  lng?: number;
   score?: number;
   topSignals?: string[];
 };

@@ -529,6 +529,10 @@ export default defineSchema({
     sqft: v.optional(v.number()),
     value: v.optional(v.number()), // as-is value snapshot
     equity: v.optional(v.number()),
+    cushion: v.optional(v.number()), // sheriff cushion snapshot (if from a sheriff row)
+    cushionTier: v.optional(v.string()), // sheriff cushion tier (good/ok/thin/verify/bad/unknown)
+    lat: v.optional(v.number()), // coords snapshot → "open Street View" pin
+    lng: v.optional(v.number()),
     score: v.optional(v.number()), // lead score snapshot (if from a lead)
     topSignals: v.optional(v.array(v.string())), // signal type strings snapshot (if from a lead)
     // manual contact (no skip-trace)

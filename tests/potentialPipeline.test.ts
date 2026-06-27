@@ -11,6 +11,9 @@ import {
   isActivityType,
   OUTCOME_SUGGESTIONS,
   nextActionLabel,
+  streetViewStaticUrl,
+  streetViewLink,
+  cushionTierColor,
 } from "../src/scraper/potentialPipeline";
 
 describe("potential pipeline stages", () => {
@@ -135,5 +138,57 @@ describe("nextActionLabel", () => {
     const label = nextActionLabel(now + 10 * DAY, now);
     expect(label).toBeTruthy();
     expect(["Overdue", "Today", "Tomorrow"]).not.toContain(label);
+  });
+});
+
+describe("streetViewStaticUrl", () => {
+  it("builds the Street View Static endpoint with the encoded location, size default, and key", () => {
+    const url = streetViewStaticUrl({
+      location: "123 Main St, Wilmington, DE",
+      key: "KEY123",
+    });
+    expect(url).toContain("https://maps.googleapis.com/maps/api/streetview");
+    expect(url).toContain("size=320x140"); // default size
+    expect(url).toContain(`location=${encodeURIComponent("123 Main St, Wilmington, DE")}`);
+    expect(url).toContain("key=KEY123");
+  });
+
+  it("honors a custom size", () => {
+    const url = streetViewStaticUrl({ location: "x", key: "K", size: "600x240" });
+    expect(url).toContain("size=600x240");
+    expect(url).not.toContain("size=320x140");
+  });
+});
+
+describe("streetViewLink", () => {
+  it("returns a Street View deep link when lat/lng are finite", () => {
+    const url = streetViewLink({ lat: 39.7459, lng: -75.5466, address: "123 Main St" });
+    expect(url).toBe("https://www.google.com/maps?q=&layer=c&cbll=39.7459,-75.5466");
+  });
+
+  it("falls back to a Maps address search when coords are missing", () => {
+    expect(streetViewLink({ address: "123 Main St, Newark DE" })).toBe(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("123 Main St, Newark DE")}`,
+    );
+  });
+
+  it("falls back when coords are non-finite (NaN/undefined)", () => {
+    expect(streetViewLink({ lat: NaN, lng: -75.5, address: "addr" })).toContain("/maps/search/");
+    expect(streetViewLink({ lat: 39.7, lng: undefined, address: "addr" })).toContain("/maps/search/");
+  });
+});
+
+describe("cushionTierColor", () => {
+  it("maps tiers to distinct tone classes", () => {
+    expect(cushionTierColor("good")).toContain("emerald");
+    expect(cushionTierColor("ok")).toContain("teal");
+    expect(cushionTierColor("thin")).toContain("amber");
+    expect(cushionTierColor("verify")).toContain("amber");
+  });
+
+  it("uses a muted tone for bad/unknown", () => {
+    expect(cushionTierColor("bad")).toContain("muted");
+    expect(cushionTierColor("unknown")).toContain("muted");
+    expect(cushionTierColor("anything-else")).toContain("muted");
   });
 });
