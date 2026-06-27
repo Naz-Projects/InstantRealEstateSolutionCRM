@@ -4,6 +4,7 @@
 **Status:** Design approved (brainstorming) → pending spec review → plan
 **Supersedes nothing** — strictly additive to P7 v1 (`/condition`, `parcelCondition`, the Gemini button all stay).
 **Prior art:** `docs/superpowers/specs/2026-06-21-vision-condition-scoring-design.md` (v1, the live Gemini-per-click page).
+**As-built (2026-06-27):** two refinements landed during implementation — (1) the page reuses the existing `leads` + `conditionForPrclids` queries (top-100, sorted by condition score) instead of a separate `scoredConditions` query; (2) the image transport is the Convex **upload-URL flow** (`conditionData.generateConditionUploadUrl` → POST bytes → `conditionData.recordConditionScore`, which runs the model JSON through the canonical `parseConditionResponse` sanitizer) — NOT the base64 `storeConditionBatch` action sketched in §7 (base64 can't fit a Windows CLI arg). References to `storeConditionBatch`/`scoredConditions` below are superseded.
 
 ## 1. Problem & goal
 
