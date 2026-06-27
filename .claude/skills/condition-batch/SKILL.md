@@ -1,66 +1,97 @@
 ---
 name: condition-batch
-description: Score the top N leads' exterior condition by looking at each house in Google Maps Street View via Chrome (Claude vision, no paid API) and writing score + flags + description + confidence + screenshot into Convex. Use when the user says "score conditions", "run condition scoring", "condition batch", or wants the monthly house-condition pass.
+description: Score the top N leads' exterior condition by looking at each house's Google Street View with Claude vision (NO paid LLM API) and writing score + flags + description + confidence + image into Convex. Use when the user says "score conditions", "run condition scoring", "condition batch", "score these houses on Google condition", "I have 100 more houses score them", or wants the monthly house-condition pass.
 ---
 
 # Condition Batch Scoring
 
-Run this monthly. It scores the **top N leads** (default 100) by driving the user's logged-in Chrome to each house's Google Maps Street View, looking at it with the SAME rubric the code uses, and writing the result to Convex. No paid LLM API — Claude does the vision.
+Run on demand (~monthly). Scores the **top N leads** (default 100) by reading each house's Google Street View with **Claude vision** and writing the result to Convex. No Gemini, no paid LLM API — Claude is the scorer; Street View images are free under the Maps credit. The `/condition` page shows the results worst-distress-first. The per-click Gemini button on that page stays as an ad-hoc fallback.
+
+PROVEN method (used for the 2026-06-27 full-100 run, 0 errors): pull leads → download Street View images → fan out parallel Claude-vision subagents that score + write. This keeps the run fast and the main context lean. (For just one or a few houses, you can instead drive Chrome interactively — see "Interactive alternative" at the bottom.)
 
 ## 0. Preconditions
-- Confirm the backend is deployed (the `description`/`confidence`/`rubricVersion` fields + `topLeadsForScoring` + `recordConditionScore` + `storeCondition` + `generateConditionUploadUrl` must be live on the target deployment).
-- Target = PROD by default: `export CONVEX_DEPLOY_KEY="$(grep ^CONVEX_DEPLOY_KEY_PROD= .env.local | cut -d= -f2-)"`.
-- Load claude-in-chrome tools and call `tabs_context_mcp` first; create a fresh tab for the run.
-- Make a scratch dir for screenshots + the resume log: `mkdir -p scratch`.
+- Backend must be live on the target deployment: the `parcelCondition` fields `description`/`confidence`/`rubricVersion`, plus `signalData:topLeadsForScoring`, `conditionData:generateConditionUploadUrl`, `conditionData:recordConditionScore`, `conditionData:storeCondition`.
+- Target = PROD by default: `export CONVEX_DEPLOY_KEY="$(grep ^CONVEX_DEPLOY_KEY_PROD= .env.local | cut -d= -f2-)"` (set this in EVERY bash block — shell env does not persist).
+- `mkdir -p scratch`.
+- **Fresh run:** clear the resume log so it re-scores the current top N: `: > scratch/condition-done.log`. (The log only prevents re-work after a mid-run interruption; re-scoring is an upsert by prclid, so a fresh monthly run should start clean.)
 
-## 1. Pull the work list
-`npx convex run signalData:topLeadsForScoring '{"count":100}'` → a JSON array of `{prclid, address, leadScore, ownerName}`. Keep a resume log of prclids completed this run (e.g. `scratch/condition-done.log`, one prclid per line) so a mid-run interruption resumes without rescoring — **skip any prclid already in the log.**
+## 1. Pull the work list + download images
+```bash
+cd <repo-or-worktree-root>
+export CONVEX_DEPLOY_KEY="$(grep ^CONVEX_DEPLOY_KEY_PROD= .env.local | cut -d= -f2-)"
+key="$(grep ^VITE_GOOGLE_MAPS_API_KEY= .env.local | cut -d= -f2-)"
+npx convex run signalData:topLeadsForScoring '{"count":100}' 2>/dev/null > scratch/leads.json   # {prclid, address, leadScore, ownerName}[]
+node -e 'const L=require("./scratch/leads.json");const fs=require("fs");const done=new Set(fs.existsSync("scratch/condition-done.log")?fs.readFileSync("scratch/condition-done.log","utf8").split(/\s+/).filter(Boolean):[]);fs.writeFileSync("scratch/todo.tsv",L.filter(l=>!done.has(l.prclid)).map(l=>l.prclid+"\t"+l.address).join("\n")+"\n");'
+while IFS=$'\t' read -r p a; do [ -z "$p" ] && continue; curl -sS -G "https://maps.googleapis.com/maps/api/streetview" --data-urlencode "location=$a" --data "size=640x640&fov=80&source=outdoor&key=$key" -o "scratch/$p.jpg"; done < scratch/todo.tsv
+split -d -l 12 scratch/todo.tsv scratch/slice-   # → scratch/slice-00 .. slice-NN (~12 houses each)
+```
+A ~8.8 KB image is Google's flat-gray "Sorry, we have no imagery here" placeholder = NO COVERAGE.
 
-## 2. For each lead, SERIALLY (one Chrome, one focus):
-1. Navigate Chrome to Google Maps Street View for `address` (e.g. `https://www.google.com/maps/place/<url-encoded address>`, then enter Street View / pegman). Confirm the on-screen address/area matches the target; if it clearly doesn't, set confidence "low".
-2. If Maps shows NO Street View coverage → the upload + scoring is SKIPPED; instead record it as no-coverage (mark `hasImagery:false` via a `storeCondition` run — see 5 — so it isn't silently dropped) and move on. **Never guess a score with no image.**
-3. Capture a Street View screenshot of the front of the house and SAVE the bytes to `scratch/<prclid>.png` (step 5b reads this file). **If the screenshot tool can't write to disk,** fall back to fetching the equivalent Street View Static image straight to disk — Claude still scored the live Chrome view; this is the STORED thumbnail only (free under the Maps credit):
-   `key=$(grep ^VITE_GOOGLE_MAPS_API_KEY= .env.local | cut -d= -f2-); curl -sS -G "https://maps.googleapis.com/maps/api/streetview" --data-urlencode "location=<address>" --data "size=640x640&fov=80&source=outdoor&key=$key" -o scratch/<prclid>.jpg`
-4. SCORE the screenshot with THIS rubric (kept byte-for-byte in sync with `src/scraper/conditionScore.ts` `buildConditionPrompt`, RUBRIC_VERSION 2) — describe what is clearly visible FIRST, then flags (only what you described, from the closed set), then a 0-100 score, then confidence. **DO NOT invent damage**; when unsure, score low + confidence low. The exact rubric the model must follow:
+## 2. Fan out parallel Claude-vision scoring subagents (one per slice)
+Dispatch ONE background subagent (model `opus`) per `scratch/slice-*` file. Give each the slice path + this exact job. Each subagent, for EACH `<prclid><TAB><address>` line (image already at `scratch/<prclid>.jpg`):
+1. **Read** `scratch/<prclid>.jpg` (vision).
+2. **No-coverage:** if it's the flat-gray "no imagery" placeholder → run the no-coverage write (§4), no score, move on. NEVER invent a score.
+3. Else **score** with THE RUBRIC (§3) and **Write** the raw JSON to `scratch/raw-<prclid>.json` (shape: `{"description":"...","flags":[...],"score":<0-100 int>,"confidence":"low|medium|high"}`).
+4. **Score write** (§4) — uploads the image + records via the server-side sanitizer.
+5. Append the prclid to `scratch/condition-done.log`.
+Subagents run in parallel (~4 min each for 12 houses). Tell each to return a concise summary (scored / no-coverage counts + `prclid score confidence [topflag]` + any write errors).
 
-   ```text
-   You are assessing the EXTERIOR physical condition / distress of the house in this Street View photo for a real-estate wholesaling team. Accuracy matters more than completeness — DO NOT invent damage.
+## 3. THE RUBRIC (apply EXACTLY — verbatim from `src/scraper/conditionScore.ts` `buildConditionPrompt`, RUBRIC_VERSION 2)
+```text
+You are assessing the EXTERIOR physical condition / distress of the house in this Street View photo for a real-estate wholesaling team. Accuracy matters more than completeness — DO NOT invent damage.
 
-   Work in this order, then return ONLY a JSON object (no markdown fences, no extra text) with exactly these fields:
+Work in this order, then return ONLY a JSON object (no markdown fences, no extra text) with exactly these fields:
 
-   1. "description": 1-3 sentences describing what is CLEARLY VISIBLE on the house and lot (structure type, roof, siding/paint, windows, yard, debris). Cite only what you can actually see. If the view is obstructed, shadowed, the wrong building, under construction, or not a house, SAY SO here.
-   2. "flags": an array containing ONLY clearly-visible items you described above, from this exact set:
-      "overgrown_vegetation", "junk_debris", "boarded_or_broken_windows",
-      "roof_damage_or_tarp", "distressed_exterior", "vacant_appearance"
-      Use [] if none clearly apply. Never add a flag you did not describe.
-   3. "score": an integer 0-100 distress score justified by the description:
-        0-20  = well-kept (tidy yard, sound roof/siding/windows, no distress)
-        21-50 = minor wear (some peeling paint / worn but maintained)
-        51-75 = visible distress (overgrown yard, debris, damaged siding/roof, disrepair)
-        76-100 = severe distress / likely vacant (boarded windows, tarped/collapsing roof, heavy junk, derelict)
-   4. "confidence": "low", "medium", or "high" — your confidence the photo clearly shows the target house's current condition. Use "low" if the view is obstructed, shadowed, ambiguous, possibly the wrong house, or stale-looking.
+1. "description": 1-3 sentences describing what is CLEARLY VISIBLE on the house and lot (structure type, roof, siding/paint, windows, yard, debris). Cite only what you can actually see. If the view is obstructed, shadowed, the wrong building, under construction, or not a house, SAY SO here.
+2. "flags": an array containing ONLY clearly-visible items you described above, from this exact set:
+   "overgrown_vegetation", "junk_debris", "boarded_or_broken_windows",
+   "roof_damage_or_tarp", "distressed_exterior", "vacant_appearance"
+   Use [] if none clearly apply. Never add a flag you did not describe.
+3. "score": an integer 0-100 distress score justified by the description:
+     0-20  = well-kept (tidy yard, sound roof/siding/windows, no distress)
+     21-50 = minor wear (some peeling paint / worn but maintained)
+     51-75 = visible distress (overgrown yard, debris, damaged siding/roof, disrepair)
+     76-100 = severe distress / likely vacant (boarded windows, tarped/collapsing roof, heavy junk, derelict)
+4. "confidence": "low", "medium", or "high" — your confidence the photo clearly shows the target house's current condition. Use "low" if the view is obstructed, shadowed, ambiguous, possibly the wrong house, or stale-looking.
 
-   Rules:
-   - Judge ONLY what is clearly visible. When unsure, score conservatively (low) and set confidence "low".
-   - Shadows, wet pavement, parked cars, and seasonal bare trees are NOT distress.
-   ```
+Rules:
+- Judge ONLY what is clearly visible. When unsure, score conservatively (low) and set confidence "low".
+- Shadows, wet pavement, parked cars, and seasonal bare trees are NOT distress.
+```
+- This rubric is copied verbatim from `buildConditionPrompt()`; if you edit it, update `src/scraper/conditionScore.ts` and bump `RUBRIC_VERSION` so stale-version rows can be re-scored.
+- Many top leads are apartment complexes / LLC multi-family — judge the visible buildings; a maintained complex is low distress even if it's not a single house.
 
-   - This rubric is copied verbatim from `buildConditionPrompt()`; if you edit it, update `src/scraper/conditionScore.ts` and bump `RUBRIC_VERSION` so stale-version rows can be re-scored.
-   - To keep the main context lean, dispatch a per-house scoring subagent that READS `scratch/<prclid>.jpg` and returns the JSON; if subagents cannot reach the screenshot file, score inline.
-5. Write it via the upload-URL flow (base64 can't fit a CLI arg; convex.cloud HTTP works). Let `F` = the saved file (`scratch/<prclid>.png` or the `.jpg` fallback) and `CT` = its content type (`image/png` or `image/jpeg`):
-   a. `url=$(npx convex run conditionData:generateConditionUploadUrl '{}' | tr -d '"[:space:]')` — strips the CLI's surrounding quotes/whitespace, leaving the bare upload URL.
-   b. `resp=$(curl -sS -X POST "$url" -H "Content-Type: $CT" --data-binary @"$F")` → JSON `{"storageId":"<id>"}`; `id=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).storageId)" "$resp")`.
-   c. Forward the scorer's RAW JSON output (the server runs it through the canonical `parseConditionResponse` sanitizer — clamps the score, filters flags to the closed set, validates confidence — so the skill never writes unsanitized data). Build the payload with `node` so a `'`/`"`/newline in the JSON can't break the shell, then write it:
-      ```bash
-      # `raw` = the scorer's exact JSON output, e.g. {"description":"...","flags":[...],"score":58,"confidence":"high"}
-      payload=$(node -e 'const a=process.argv.slice(1);console.log(JSON.stringify({prclid:a[0],rawJson:a[1],imageStorageId:a[2],model:"claude-opus-4-8 (chrome)"}))' "<prclid>" "$raw" "$id")
-      npx convex run conditionData:recordConditionScore "$payload"
-      ```
-   For a no-coverage house, skip the upload and call `storeCondition` with `'{"prclid":"<prclid>","hasImagery":false,"model":"claude-opus-4-8 (chrome)","scoredAt":<ms>,"lastError":null}'` (no score) so it's recorded, not silently dropped (`<ms>` = `$(($(date +%s)*1000))`).
-6. Append the prclid to the resume log (`scratch/condition-done.log`).
+## 4. Write commands
+**Score write** (server re-sanitizes the raw JSON via the canonical parser — clamps score, filters flags, validates confidence):
+```bash
+cd <repo-or-worktree-root>
+export CONVEX_DEPLOY_KEY="$(grep ^CONVEX_DEPLOY_KEY_PROD= .env.local | cut -d= -f2-)"
+prclid="<prclid>"
+raw=$(cat "scratch/raw-$prclid.json")
+url=$(npx convex run conditionData:generateConditionUploadUrl '{}' 2>/dev/null | tr -d '"[:space:]')
+id=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).storageId)" "$(curl -sS -X POST "$url" -H "Content-Type: image/jpeg" --data-binary @"scratch/$prclid.jpg")")
+payload=$(node -e 'const a=process.argv.slice(1);console.log(JSON.stringify({prclid:a[0],rawJson:a[1],imageStorageId:a[2],model:"claude-opus-4-8 (chrome)"}))' "$prclid" "$raw" "$id")
+npx convex run conditionData:recordConditionScore "$payload" 2>/dev/null
+echo "$prclid" >> scratch/condition-done.log
+```
+**No-coverage write** (placeholder image — recorded so it isn't silently dropped, with no score):
+```bash
+cd <repo-or-worktree-root>
+export CONVEX_DEPLOY_KEY="$(grep ^CONVEX_DEPLOY_KEY_PROD= .env.local | cut -d= -f2-)"
+ms=$(($(date +%s)*1000))
+npx convex run conditionData:storeCondition '{"prclid":"<prclid>","hasImagery":false,"model":"claude-opus-4-8 (chrome)","scoredAt":'"$ms"',"lastError":null}' 2>/dev/null
+echo "<prclid>" >> scratch/condition-done.log
+```
 
-## 3. Handle friction
-- If Google shows a CAPTCHA/consent wall, **PAUSE** and ask the user to clear it, then resume from the log (the done-prclids are skipped, so no rescoring). **Pace requests** — a short wait between houses to avoid tripping rate limits / CAPTCHAs.
+## 5. Aggregate + report
+- Confirm `sort -u scratch/condition-done.log | wc -l` == N.
+- Pull a prod summary (inline query over `parcelCondition`): total / scored / no-coverage / flagged / confidence mix / worst dozen by score.
+- Report scored vs no-coverage counts and the worst few (the actual distressed leads). **Remind the user that low-confidence rows need a human eyeball** on `/condition` — flag any wrong scores; we tune the rubric + bump RUBRIC_VERSION.
 
-## 4. Summary
-Report: scored / no-coverage / low-confidence / distressed (score ≥ 60) counts, and a list of the worst few (highest scores). **Remind the user that low-confidence rows need human eyeballing** — eyeball the `/condition` page and flag any wrong scores (we tune the rubric + bump RUBRIC_VERSION).
+## "No false information" guardrails (the product requirement — keep them)
+- Describe-then-score (description before flags/score); flags only for what was described; conservative when unsure.
+- Real no-coverage → `hasImagery:false`, never a guessed score. Obstructed/dated/blurred/wrong-building → confidence "low".
+- The server (`recordConditionScore`) re-runs the model JSON through the canonical `parseConditionResponse` sanitizer, so the skill can never write an out-of-range score, an invented flag, or a bad confidence.
+
+## Interactive alternative (a FEW houses / spot-check)
+For one or a handful of houses, you can drive the user's logged-in Chrome instead of the batch: load claude-in-chrome, navigate to the Street View Static image URL (or Google Maps) for the address, screenshot, score with §3, then write with §4. This honors "look through Chrome" but is too slow for the full 100 — use the §2 batch for the monthly run.
