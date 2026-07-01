@@ -1,5 +1,5 @@
 "use node";
-import { internalAction, action } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
@@ -545,7 +545,7 @@ export const sendDigest = internalAction({
  * DEV-ONLY manual trigger (CLI). Inert unless IRES_DEV=1. `maxPages` lets a smoke
  * test run a cheap single page instead of the full 5.
  */
-export const devMonitorScan = action({
+export const devMonitorScan = internalAction({
   args: { maxPages: v.optional(v.number()) },
   handler: async (ctx, { maxPages }): Promise<ScanResult> => {
     if (process.env.IRES_DEV !== "1") {
@@ -575,7 +575,7 @@ export const createFirecrawlMonitor = internalAction({
   handler: async (
     _ctx,
     { siteUrl },
-  ): Promise<{ ok: boolean; id?: string; error?: string }> => {
+  ): Promise<{ ok: boolean; id?: string; warning?: string; error?: string }> => {
     const apiKey = fcKey();
 
     const site = (siteUrl ?? process.env.CONVEX_SITE_URL ?? "").trim().replace(/\/+$/, "");
@@ -622,7 +622,18 @@ export const createFirecrawlMonitor = internalAction({
         return { ok: false, error: (json?.error ?? `Firecrawl ${res.status}`).toString().slice(0, 300) };
       }
       const id = json?.id ?? json?.monitor?.id;
-      return { ok: true, ...(id ? { id } : {}) };
+      return {
+        ok: true,
+        ...(id ? { id } : {}),
+        // An UNSIGNED monitor registers fine but every real webhook delivery then
+        // 401s at convex/http.ts (silent — only the daily cron would still scan).
+        ...(secret
+          ? {}
+          : {
+              warning:
+                "registered WITHOUT a webhook signature secret — set FIRECRAWL_WEBHOOK_SECRET and re-run, or deliveries will 401 (the daily cron still scans).",
+            }),
+      };
     } catch (e) {
       return { ok: false, error: (e instanceof Error ? e.message : String(e)).slice(0, 300) };
     }

@@ -56,12 +56,14 @@ crons.cron(
 );
 
 // Monitor the Web (Zillow NCC) — daily safety net. The Firecrawl webhook is the
-// primary trigger; this runs the same scan if the webhook didn't fire. 01:00 UTC
-// (~8 PM ET). runMonitorScan no-ops on the cron trigger if a complete run
-// already landed within the last 20h, so the two triggers don't double-scan.
+// primary trigger (8 PM ET); this runs the same scan if the webhook didn't fire.
+// 02:00 UTC — deliberately ≥1h after 8 PM ET in BOTH offsets (EDT 8 PM = 00:00
+// UTC, EST 8 PM = 01:00 UTC). 01:00 UTC would COINCIDE with the EST webhook, and
+// the 20h no-op guard only counts complete runs, so they could double-scan. At
+// 02:00 UTC the webhook's complete run reliably pre-empts the cron via that guard.
 crons.cron(
   "monitor daily safety net",
-  "0 1 * * *",
+  "0 2 * * *",
   internal.monitorActions.runMonitorScan,
   { trigger: "cron" },
 );
