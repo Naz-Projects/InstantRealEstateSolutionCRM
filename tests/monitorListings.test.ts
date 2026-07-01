@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { MONITOR, buildSearchUrl } from "../src/scraper/monitorListings";
+import { buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 import { detailFromCache } from "../src/scraper/monitorListings";
+import { conservativeArv, inferRehabTier } from "../src/scraper/monitorListings";
+import type { Comp } from "../src/scraper/comps";
 
 describe("buildSearchUrl", () => {
   it("encodes NCC region + newest + doz + price ceiling", () => {
@@ -92,4 +94,33 @@ describe("detailFromCache", () => {
     expect(detailFromCache({ props: { pageProps: { componentProps: {} } } })).toBeNull();
     expect(detailFromCache(null)).toBeNull();
   });
+});
+
+const mkComp = (soldPrice: number, sqft: number, beds = 4): Comp =>
+  ({ address: "x", soldDate: "MAY 1, 2026", soldPrice, beds, baths: 2, sqft, pricePerSqft: soldPrice / sqft });
+
+describe("conservativeArv", () => {
+  it("caps comps at 1.15x Zestimate when comps are inflated", () => {
+    const comps = [mkComp(700000, 3101), mkComp(720000, 3101), mkComp(740000, 3101)];
+    const r = conservativeArv({ comps, sqft: 3101, beds: 3, zestimate: 311400, homeType: "SINGLE_FAMILY" });
+    expect(r.arv).toBe(Math.round(311400 * 1.15)); // capped
+  });
+  it("uses comps when consistent with Zestimate", () => {
+    const comps = [mkComp(230000, 1100), mkComp(220000, 1100), mkComp(226000, 1100)];
+    const r = conservativeArv({ comps, sqft: 1100, beds: 3, zestimate: 176200, homeType: "SINGLE_FAMILY" });
+    expect(r.source).toBe("comps");
+    expect(r.arv).toBeLessThanOrEqual(Math.round(176200 * 1.15));
+  });
+  it("manufactured -> Zestimate only (comps invalid)", () => {
+    const comps = [mkComp(270000, 1019), mkComp(260000, 1019), mkComp(280000, 1019)];
+    const r = conservativeArv({ comps, sqft: 1019, beds: 2, zestimate: 90000, homeType: "MANUFACTURED" });
+    expect(r.source).toBe("zestimate");
+    expect(r.arv).toBe(90000);
+  });
+});
+describe("inferRehabTier", () => {
+  it("gut on fire/full-reno", () => { expect(inferRehabTier("severe fire and water damage, full rehab, sold AS IS")).toBe("gut"); });
+  it("cosmetic on turnkey", () => { expect(inferRehabTier("totally renovated 2022, shows like new, move-in")).toBe("cosmetic"); });
+  it("moderate on needs-work/investor", () => { expect(inferRehabTier("great investment, needs full renovation, priced to sell, sold as-is")).toBe("gut"); });
+  it("moderate default when unknown", () => { expect(inferRehabTier("charming home near shopping")).toBe("moderate"); });
 });

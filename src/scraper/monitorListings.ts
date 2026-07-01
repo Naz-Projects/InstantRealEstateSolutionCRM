@@ -80,3 +80,29 @@ export function detailFromCache(nextData: any): ListingDetail | null {
     photoUrls: photos,
   };
 }
+
+import { selectComps, suggestArv, type Comp } from "./comps";
+import { estimateRehab } from "./flip";
+export { estimateRehab };
+
+export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds: number | null; zestimate: number | null; homeType?: string; }):
+  { arv: number | null; source: "comps" | "zestimate" | "none"; compsPpsf: number | null; compsCount: number } {
+  const manufactured = (opts.homeType || "").toUpperCase() === "MANUFACTURED";
+  if (manufactured) return { arv: opts.zestimate ?? null, source: opts.zestimate ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
+  const sel = selectComps(opts.comps, { sqft: opts.sqft, beds: opts.beds });
+  const sug = suggestArv(sel, opts.sqft);
+  if (sug.arv == null) return { arv: opts.zestimate ?? null, source: opts.zestimate ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
+  let arv = sug.arv;
+  if (opts.zestimate && arv > opts.zestimate * 1.15) arv = Math.round(opts.zestimate * 1.15); // cap inflated comps
+  return { arv, source: "comps", compsPpsf: sug.pricePerSqft, compsCount: sug.count };
+}
+
+const GUT = /fire|flood|gut|shell|structural|severe|full rehab|full renovation|complete renovation|tear down|needs everything/i;
+const COSMETIC = /updated|renovated|remodel|move.?in|turn.?key|shows like new|refreshed|pride of ownership|new (kitchen|roof|hvac|appliances)/i;
+const MODERATE = /needs? (work|updating|tlc|repairs|renovation)|dated|handyman|investor|value.?add|personal touch|bring your (vision|contractor|imagination)|fixer|sold (strictly )?as.?is|cash only|may not qualify/i;
+export function inferRehabTier(description: string): "cosmetic" | "moderate" | "gut" {
+  const d = description || "";
+  if (GUT.test(d)) return "gut";
+  if (COSMETIC.test(d) && !MODERATE.test(d)) return "cosmetic";
+  return "moderate";
+}
