@@ -2,6 +2,26 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
+## ★★★★★★★ START HERE — 2026-07-01 — "MONITOR THE WEB" (Zillow NCC deal finder) — **BUILT + LIVE-ACCEPTED ON DEV → NEXT: user-approved merge→prod + #1 fast-follow**
+
+**What it is:** the **on-market** counterpart to the off-market `/leads` engine — nightly (8 PM ET) scrape of new NCC Zillow for-sale ≤$500K, multi-exit underwriting (flip/rental/wholesale) + DeepSeek judge + off-market cross-ref, surfaced on `/monitor` + email digest + Promote-to-Potential.
+
+**STATUS: BUILT (all 15 plan tasks) + final whole-branch review (0 Critical) + fixes applied. LIVE-ACCEPTED on dev. NOT merged, NOT on prod.** Branch **`feat/monitor-web-zillow`** in worktree `.claude/worktrees/monitor-web` (head `7fc2648`, base `main`=36b1dcc, 22 commits). **312 tests, build clean.** Design docs + the full task-by-task record (spec+quality reviews, live acceptance, all deferred Minors) are on the branch: `docs/superpowers/{specs,plans,research}/2026-06-30-monitor-web-*` + the ledger `.superpowers/sdd/progress.md`.
+
+**Live acceptance (dev `fearless-donkey-585`, bounded 1-page scans, ~400 Firecrawl credits total):** Firecrawl **v2** scrape (`proxy:"enhanced"`) cleared Zillow; 24 real listings analyzed correctly — top keepers were Wilmington RENTALS (cap 6.1–6.8%, flip -ve), fire-damage 15 Merry Rd correctly PASS, off-market moat fired (216 Mendell → code-violation). Caught+fixed a **$0-price foreclosure "mirage"** bug (`MONITOR.minListPrice:1000`). Dev holds 24 monitor rows; dev `FIRECRAWL_API_KEY` was updated to the new 100k key; the feature is pushed to the dev deployment.
+
+### ★ THE IMMEDIATE NEXT ACTION — user decision on merge→prod
+Merging `feat/monitor-web-zillow` → `main` **auto-deploys to the live CRM** via the Cloudflare build, so it's the user's call. To go to prod:
+1. **Set prod Convex env:** `FIRECRAWL_WEBHOOK_SECRET` (NEW — the webhook HMAC key; also pass it to `createFirecrawlMonitor`); confirm `FIRECRAWL_API_KEY` (the 100k key) + `OPENROUTER_API_KEY`; optional `RESEND_API_KEY`/`RESEND_FROM`/`RESEND_TO`/`PORTAL_BASE_URL`, `MONITOR_LLM_MODEL`.
+2. **One-time prod scan:** `npx convex run monitorActions:runMonitorScan '{"trigger":"manual","maxPages":1}'` (internal, deploy-key; ~200 credits/page).
+3. **Register the Firecrawl Monitor:** `npx convex run monitorActions:createFirecrawlMonitor` (watches the NCC search → prod `<deployment>.convex.site/firecrawl-monitor` webhook + secret). Daily cron `0 2 * * *` is the safety net if the webhook doesn't fire.
+4. **Click through `/monitor` on prod** (auth-gated; promote a card → potentialDeals).
+
+### ★ #1 FAST-FOLLOW (before prod-hardening) + product question + deferred Minors
+- **Off-market house-number guard** (highest-value deferred): `crossRefOffMarket` (`convex/monitorData.ts`) takes `.first()` on the parcel search with NO house-number check → a weak address can attach the WRONG parcel's distress badge ("owner tax-delinquent"). Add a leading-house-number match. Deferred deliberately (it changes the live-accepted matching) → give it a verified pass.
+- **Product question for the user:** no-list-price foreclosure listings are currently DROPPED (the mirage fix). They're distress signals — surface them as a separate flagged "distress, price TBD" section, or leave dropped?
+- Other deferred Minors (cosmetic/low-risk, all in the ledger): dead `firecrawl.ts proxy?` option, scattered bottom-of-file imports in `monitorListings.ts`, `monitorRuns` keeperCount/analyzedCount stay 0, `upsertListing` no-advance on price INCREASE, comps cache zip+TTL, dead `wholesaleSpread`/WHOLESALE chip + `propCity`, mislabeled Task-4 test name. External `firecrawl` skill was refreshed (v2/proxy/webhook/Monitor).
+
 ## ★★★★★★ START HERE — 2026-06-27 — P7 v2 (condition-batch SKILL) **MERGED to main + prod backend deployed**
 **What shipped (`main` @ `556b05a`, pushed → CF deploys frontend; prod backend deployed manually):** a `condition-batch`
 Claude-Code **skill** (`.claude/skills/condition-batch/SKILL.md`) you invoke monthly ("score conditions") that drives your

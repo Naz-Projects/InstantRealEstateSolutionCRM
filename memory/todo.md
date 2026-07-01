@@ -3,6 +3,20 @@
 What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocked on the user.
 (History lives in git; this is the current picture, not a session log.)
 
+## ★ ACTIVE — "Monitor the Web" (Zillow NCC deal finder) — BUILT + LIVE-ACCEPTED ON DEV → merge/prod (user-gated)
+- [x] **Design + live test + 15-task plan** — `docs/superpowers/{specs,plans,research}/2026-06-30-monitor-web-*` (committed on the branch).
+- [x] **BUILT (all 15 tasks, subagent-driven Opus)** on branch `feat/monitor-web-zillow` (worktree, head `7fc2648`). Pure
+  `monitorListings.ts` (parsers + multi-exit math + DeepSeek judge, 23 tests) · `monitorListings`/`monitorRuns` schema ·
+  `monitorData` (requireUser reads + off-market cross-ref) · `monitorScrape` (Firecrawl v2 direct) · `monitorActions`
+  (scan/enrich/judge/digest/createMonitor) · `http.ts` HMAC webhook · daily cron · `/monitor` page · `monitor-web` op skill.
+  Per-task + **final whole-branch review (0 Critical)** + fixes. **312 tests, build clean.**
+- [x] **LIVE-ACCEPTED on dev** (`fearless-donkey-585`): 24 real listings analyzed correctly; caught+fixed the $0-foreclosure mirage.
+- [ ] **Merge → main (= auto prod deploy via CF) — USER-GATED.** Set prod `FIRECRAWL_WEBHOOK_SECRET` (+confirm FIRECRAWL/OPENROUTER
+  keys; optional RESEND_*); one-time prod scan; `createFirecrawlMonitor`; click through `/monitor`. Steps in `next-session-prompt.md` top.
+- [ ] **#1 fast-follow (before prod-hardening):** off-market house-number guard in `crossRefOffMarket` (`.first()` can mis-match).
+- [ ] **Product Q (user):** surface no-list-price foreclosures as a separate flagged section, or keep them dropped (current mirage fix)?
+- [ ] Deferred Minors (cosmetic/low-risk) — see ledger `.superpowers/sdd/progress.md`.
+
 ## ★ ACTIVE — Wholesaling Lead Engine (Phase 0 DONE → Phase 1 NEXT)
 - [x] **Spec written + committed** (`ce11b62`) — `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`.
 - [x] **Distress-signal catalog** — `memory/distress-signals.md` (full menu of "why would they sell?" signals: 4 motivation
