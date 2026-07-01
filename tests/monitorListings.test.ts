@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { MONITOR, buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
+import { detailFromCache } from "../src/scraper/monitorListings";
 
 describe("buildSearchUrl", () => {
   it("encodes NCC region + newest + doz + price ceiling", () => {
@@ -59,5 +60,36 @@ describe("listingsFromSearch", () => {
   });
   it("extractNextData returns null when absent", () => {
     expect(extractNextData("<html>no script</html>")).toBeNull();
+  });
+});
+
+const FAKE_DETAIL = { props: { pageProps: { componentProps: { gdpClientCache: JSON.stringify({
+  'ForSaleFullRenderQuery{"zpid":72882834}': { property: {
+    zpid: 72882834, homeStatus: "FOR_SALE", homeType: "SINGLE_FAMILY", price: 110000,
+    zestimate: null, rentZestimate: null, bedrooms: 4, bathrooms: 2, livingArea: 1770, lotSize: 7405,
+    daysOnZillow: 2, monthlyHoaFee: 5, lastSoldPrice: 99900, dateSoldString: "1998-08-31",
+    isPreforeclosureAuction: false, foreclosureTypes: {},
+    resoFacts: { yearBuilt: 1956 },
+    attributionInfo: { agentName: "Peggy Centrella", brokerName: "Patterson-Schwartz-Hockessin", mlsId: "DENC2106100", agentPhoneNumber: "302-555-1234" },
+    description: "INVESTOR ALERT!!!! ... severe fire and water damage ... full rehab/renovation ... AS IS",
+    priceHistory: [{ date: "2026-06-28", event: "Listed for sale", price: 110000, pricePerSquareFoot: 62 }],
+    responsivePhotos: [{ mixedSources: { jpeg: [{ url: "https://photos.zillowstatic.com/fp/a-cc_ft_960.jpg" }] } }],
+  } } }) } } } };
+
+describe("detailFromCache", () => {
+  it("extracts the property object with normalized fields", () => {
+    const d = detailFromCache(FAKE_DETAIL)!;
+    expect(d.description).toContain("fire and water damage");
+    expect(d.yearBuilt).toBe(1956);
+    expect(d.lastSoldPrice).toBe(99900);
+    expect(d.monthlyHoaFee).toBe(5);
+    expect(d.agentName).toBe("Peggy Centrella");
+    expect(d.mlsId).toBe("DENC2106100");
+    expect(d.priceHistory[0].price).toBe(110000);
+    expect(d.photoUrls[0]).toContain("zillowstatic.com");
+  });
+  it("returns null on a hydration shell (no property)", () => {
+    expect(detailFromCache({ props: { pageProps: { componentProps: {} } } })).toBeNull();
+    expect(detailFromCache(null)).toBeNull();
   });
 });

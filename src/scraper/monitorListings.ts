@@ -51,3 +51,32 @@ export function listingsFromSearch(nextData: any): SearchListing[] {
     };
   });
 }
+
+export interface ListingDetail {
+  description: string; homeType?: string; homeStatus?: string; yearBuilt: number | null;
+  zestimate: number | null; rentZestimate: number | null; lastSoldPrice: number | null; dateSold: string | null;
+  monthlyHoaFee: number | null; foreclosure: boolean; daysOnZillow: number | null; mlsId?: string;
+  agentName?: string; agentPhone?: string; brokerName?: string; lotSize: number | null;
+  priceHistory: { date?: string; event?: string; price?: number; ppsf?: number }[]; photoUrls: string[];
+}
+export function detailFromCache(nextData: any): ListingDetail | null {
+  const cc = nextData?.props?.pageProps?.componentProps?.gdpClientCache;
+  if (!cc) return null;
+  let cache: any; try { cache = JSON.parse(cc); } catch { return null; }
+  const key = Object.keys(cache).find((k) => cache[k] && cache[k].property);
+  if (!key) return null;
+  const p = cache[key].property;
+  const ai = p.attributionInfo ?? {};
+  const photos = (p.responsivePhotos ?? p.originalPhotos ?? [])
+    .map((ph: any) => ph?.mixedSources?.jpeg?.[0]?.url ?? ph?.url).filter(Boolean).slice(0, 8);
+  return {
+    description: p.description ?? "", homeType: p.homeType, homeStatus: p.homeStatus,
+    yearBuilt: p.resoFacts?.yearBuilt ?? null, zestimate: p.zestimate ?? null, rentZestimate: p.rentZestimate ?? null,
+    lastSoldPrice: p.lastSoldPrice ?? null, dateSold: p.dateSoldString ?? null, monthlyHoaFee: p.monthlyHoaFee ?? null,
+    foreclosure: !!(p.isPreforeclosureAuction || (p.foreclosureTypes && Object.values(p.foreclosureTypes).some(Boolean))),
+    daysOnZillow: p.daysOnZillow ?? null, mlsId: ai.mlsId, agentName: ai.agentName,
+    agentPhone: ai.agentPhoneNumber ?? ai.agentPhone, brokerName: ai.brokerName, lotSize: p.lotSize ?? p.lotAreaValue ?? null,
+    priceHistory: (p.priceHistory ?? []).slice(0, 6).map((h: any) => ({ date: h.date, event: h.event, price: h.price, ppsf: h.pricePerSquareFoot })),
+    photoUrls: photos,
+  };
+}
