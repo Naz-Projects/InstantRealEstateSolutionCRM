@@ -1,6 +1,7 @@
 "use node";
 import { internalAction, action } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { scrapeZillowJson, scrapeRedfinMarkdown } from "./monitorScrape";
 import {
@@ -35,6 +36,7 @@ import { parseZip, parseRedfinComps, type Comp } from "../src/scraper/comps";
 type ScanResult = { scanned: number; newCount: number; keeperCount: number };
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const RESEND_URL = "https://api.resend.com/emails";
 const LLM_MODEL = process.env.MONITOR_LLM_MODEL ?? "deepseek/deepseek-v3.2";
 const STAGGER_MS = 3000; // per-listing analyze fan-out (mirror sheriff enrich)
 // Buffer after the last analyzeOne is scheduled before the digest fires. Each
@@ -397,17 +399,133 @@ export const analyzeOne = internalAction({
   },
 });
 
+// ---- digest formatting (pure helpers for sendDigest) ----
+
+type Keeper = Doc<"monitorListings">;
+
+const money = (n: number | null | undefined): string =>
+  n == null ? "n/a" : `$${Math.round(n).toLocaleString("en-US")}`;
+const pct = (n: number | null | undefined): string =>
+  n == null ? "n/a" : `${n.toFixed(1)}%`;
+const esc = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// MAO for a flip exit, cap rate for a rental exit (fall back to whichever the row has).
+function exitDetail(row: Keeper): string {
+  if (row.bestExit === "RENTAL" && row.capRate != null) return `Cap rate ${(row.capRate * 100).toFixed(1)}%`;
+  if (row.flipMao != null) return `MAO ${money(row.flipMao)}`;
+  if (row.capRate != null) return `Cap rate ${(row.capRate * 100).toFixed(1)}%`;
+  return "";
+}
+
+function metricBits(row: Keeper): string[] {
+  return [
+    row.bestExit ? `Best exit: ${row.bestExit}` : "",
+    row.dealScore != null ? `Deal score: ${row.dealScore}` : "",
+    row.spreadPct != null ? `Spread: ${pct(row.spreadPct)}` : "",
+    exitDetail(row),
+  ].filter(Boolean);
+}
+
+function keeperText(row: Keeper, monitorLink: string, i: number): string {
+  const lines = [`${i + 1}. ${row.address} — ${money(row.listPrice)}`, `   ${metricBits(row).join(" · ")}`];
+  if (row.matchedRequirements?.length) lines.push(`   Matched: ${row.matchedRequirements.join(", ")}`);
+  if (row.offMarketSignals?.length) lines.push(`   Off-market signals: ${row.offMarketSignals.join(", ")}`);
+  if (row.aiReason) lines.push(`   Why: ${row.aiReason}`);
+  lines.push(`   Monitor: ${monitorLink}   Zillow: ${row.url}`);
+  return lines.join("\n");
+}
+
+function keeperHtml(row: Keeper, monitorLink: string, i: number): string {
+  const bits = metricBits(row).map(esc).join(" &middot; ");
+  const matched = row.matchedRequirements?.length
+    ? `<div style="color:#555;font-size:13px;margin-top:2px;">Matched: ${esc(row.matchedRequirements.join(", "))}</div>` : "";
+  const offMarket = row.offMarketSignals?.length
+    ? `<div style="color:#8a5a00;font-size:13px;margin-top:2px;">Off-market signals: ${esc(row.offMarketSignals.join(", "))}</div>` : "";
+  const reason = row.aiReason
+    ? `<div style="color:#333;font-size:13px;margin-top:4px;">${esc(row.aiReason)}</div>` : "";
+  return `<div style="border:1px solid #e0e0e0;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+  <div style="font-size:16px;font-weight:600;color:#111;">${i + 1}. ${esc(row.address)}</div>
+  <div style="font-size:15px;color:#111;margin-top:2px;">${esc(money(row.listPrice))}</div>
+  <div style="color:#444;font-size:13px;margin-top:4px;">${bits}</div>
+  ${matched}${offMarket}${reason}
+  <div style="margin-top:8px;">
+    <a href="${esc(monitorLink)}" style="color:#2D9C84;font-weight:600;text-decoration:none;margin-right:14px;">View in Monitor</a>
+    <a href="${esc(row.url)}" style="color:#2D9C84;font-weight:600;text-decoration:none;">Zillow listing</a>
+  </div>
+</div>`;
+}
+
+function buildDigest(keepers: Keeper[], monitorLink: string): { subject: string; text: string; html: string } {
+  const n = keepers.length;
+  const plural = n === 1 ? "" : "s";
+  const subject = `IRES Monitor: ${n} new deal${plural} (Zillow NCC)`;
+  const header = `IRES Monitor — ${n} new deal${plural} (New Castle County), ranked by deal score`;
+  const text = `${header}\n\n${keepers.map((r, i) => keeperText(r, monitorLink, i)).join("\n\n")}\n\nReview all: ${monitorLink}\n`;
+  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+<div style="max-width:640px;margin:0 auto;">
+  <h2 style="color:#111;margin:0 0 4px;">IRES Monitor — ${n} new deal${plural}</h2>
+  <p style="color:#555;font-size:13px;margin:0 0 16px;">New Castle County · ranked by deal score</p>
+  ${keepers.map((r, i) => keeperHtml(r, monitorLink, i)).join("\n")}
+  <p style="color:#888;font-size:12px;margin-top:20px;">Review all in the <a href="${esc(monitorLink)}" style="color:#2D9C84;">Monitor page</a>.</p>
+</div>
+</body></html>`;
+  return { subject, text, html };
+}
+
 /**
- * Email the run's keepers. MINIMAL STUB for now — Task 12 fills in Resend
- * (key-gated, no-op without RESEND_API_KEY). It exists so runMonitorScan's
- * scheduler reference typechecks.
+ * Email the un-emailed keepers as a ranked digest via Resend. Key-gated: with no
+ * RESEND_API_KEY it logs a note and returns {sent:false} (never throws) — the
+ * /monitor page is the in-app review surface, so a missing key/failed send must
+ * not break the run. Stamps emailedAt per row so a keeper is never emailed twice.
+ * Mirrors convex/contractActions.ts. (runId is context only — rows carry no runId,
+ * so "keeper && not-yet-emailed" is the correct set.)
  */
 export const sendDigest = internalAction({
   args: { runId: v.id("monitorRuns") },
-  handler: async (_ctx, _args): Promise<{ sent: boolean }> => {
-    // TODO(Task 12): build the keeper digest (address, list price, comps value,
-    // spread %, matched requirements, reason, links) and send via Resend.
-    return { sent: false };
+  handler: async (ctx, { runId }): Promise<{ sent: boolean }> => {
+    void runId;
+    const key = (process.env.RESEND_API_KEY ?? "").trim();
+    if (!key) {
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: "monitor digest: no RESEND_API_KEY, skipped",
+        context: "monitorActions.sendDigest",
+      });
+      return { sent: false };
+    }
+
+    const keepers = await ctx.runQuery(internal.monitorData.keepersToEmail, {});
+    if (keepers.length === 0) return { sent: false };
+
+    const from = (process.env.RESEND_FROM ?? "").trim();
+    const to = (process.env.RESEND_TO ?? "").trim();
+    const base =
+      (process.env.PORTAL_BASE_URL ?? "").trim() || "https://crm.instantrealestatesolution.com";
+    const monitorLink = `${base}/monitor`;
+    const { subject, text, html } = buildDigest(keepers, monitorLink);
+
+    try {
+      const res = await fetch(RESEND_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to, subject, text, html }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(`Resend ${res.status}: ${t.slice(0, 200)}`);
+      }
+      for (const k of keepers) {
+        await ctx.runMutation(internal.monitorData.markEmailed, { id: k._id });
+      }
+      return { sent: true };
+    } catch (e) {
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: `sendDigest failed: ${(e as Error).message}`,
+        context: "monitorActions.sendDigest",
+      });
+      return { sent: false };
+    }
   },
 });
 

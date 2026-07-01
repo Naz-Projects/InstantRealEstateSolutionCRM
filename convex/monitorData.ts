@@ -262,6 +262,25 @@ export const getListingInternal = internalQuery({
   },
 });
 
+/**
+ * Un-emailed keepers, best deal first (for the scheduled `sendDigest` action,
+ * which has no user identity and so can't call the requireUser-gated
+ * `listKeepers`). Rows carry no runId, so "keeper && emailedAt unset" is the
+ * correct digest set. Capped so a first-run backlog can't send a giant email.
+ */
+export const keepersToEmail = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    const rows = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_keeper", (q) => q.eq("keeper", true))
+      .collect();
+    const unemailed = rows.filter((r) => r.emailedAt === undefined);
+    unemailed.sort((a, b) => (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity));
+    return unemailed.slice(0, limit ?? 50);
+  },
+});
+
 // ---- browser-facing (requireUser-gated) reads for /monitor ----
 
 /** Keepers, best deal on top. Small set — collect + sort by dealScore desc. */
