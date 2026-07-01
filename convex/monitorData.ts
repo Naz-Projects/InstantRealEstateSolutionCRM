@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, internalQuery, internalMutation } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import { requireUser } from "./helpers";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
@@ -297,6 +297,23 @@ export const getListing = query({
   handler: async (ctx, { id }) => {
     await requireUser(ctx);
     return await ctx.db.get(id);
+  },
+});
+
+/**
+ * Public (requireUser-gated) counterpart to the internal `setPromotedDeal`: the
+ * /monitor page calls this right after `potentialData.promoteToPotential` succeeds
+ * to stamp the returned deal id on the listing row, so the card flips to "In
+ * pipeline". Same patch as the internal fn, but callable from the browser.
+ */
+export const markPromoted = mutation({
+  args: {
+    id: v.id("monitorListings"),
+    promotedDealId: v.id("potentialDeals"),
+  },
+  handler: async (ctx, { id, promotedDealId }) => {
+    await requireUser(ctx);
+    await ctx.db.patch(id, { promotedDealId, updatedAt: Date.now() });
   },
 });
 

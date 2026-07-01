@@ -11,6 +11,7 @@ import { LeadsPage } from "./LeadsPage";
 import { PotentialPage } from "./PotentialPage";
 import { BuyersPage } from "./BuyersPage";
 import { ConditionTest } from "./ConditionTest";
+import { MonitorPage } from "./MonitorPage";
 
 function RootLayout() {
   return (
@@ -51,5 +52,6 @@ const leadsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/leads"
 const potentialRoute = createRoute({ getParentRoute: () => rootRoute, path: "/potential", component: PotentialPage });
 const buyersRoute = createRoute({ getParentRoute: () => rootRoute, path: "/buyers", component: BuyersPage });
 const conditionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/condition", component: ConditionTest });
+const monitorRoute = createRoute({ getParentRoute: () => rootRoute, path: "/monitor", component: MonitorPage });
 
-export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, flipRoute, propertiesRoute, propertyDetailRoute, parcelsRoute, leadsRoute, potentialRoute, buyersRoute, conditionRoute, adminRoute]);
+export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, flipRoute, propertiesRoute, propertyDetailRoute, parcelsRoute, leadsRoute, potentialRoute, buyersRoute, conditionRoute, monitorRoute, adminRoute]);
