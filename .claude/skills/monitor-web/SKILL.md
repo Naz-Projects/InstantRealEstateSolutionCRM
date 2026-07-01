@@ -27,7 +27,7 @@ Budget ~150-250 credits/day on the 100k/month key. `maxPages` bounds a manual sc
   `CONFIG` error when `FIRECRAWL_API_KEY` is unset — nothing runs key-less.
 
 ## 1. Create / update the Firecrawl Monitor (one-time setup)
-Registers the daily Monitor with the NCC search URL + the Convex webhook + the signing secret. Idempotent
+Registers the daily Monitor with the NCC search URL + the Convex webhook. Idempotent
 setup — re-run to update. Uses `CONVEX_SITE_URL` if the deployment has it set, else pass `siteUrl`
 (the `*.convex.site` HTTP-actions domain, NOT `*.convex.cloud`).
 
@@ -40,21 +40,23 @@ npx convex run monitorActions:createFirecrawlMonitor '{"siteUrl":"https://<deplo
 ```
 This POSTs `/v2/monitor` with: daily 8 PM `America/New_York` schedule · a `scrape` target on the NCC
 newest-listings search (`buildSearchUrl({})`, `proxy:"enhanced"`) · webhook `<site>/firecrawl-monitor`
-for `monitor.page` + `monitor.check.completed`, signed with `FIRECRAWL_WEBHOOK_SECRET` (the HMAC key
-`convex/http.ts` verifies) · 30-day retention. The DeepSeek layer is our judge, so the Monitor's native
-`goal`/`judge` is NOT used.
+for `monitor.check.completed` only (one delivery per check → one scan) · 30-day retention. Firecrawl signs
+every delivery with the ACCOUNT-level webhook secret (dashboard → Settings → Advanced); the Convex
+deployment's `FIRECRAWL_WEBHOOK_SECRET` must be set to THAT dashboard value or `convex/http.ts` 401s every
+delivery. The DeepSeek layer is our judge, so the Monitor's native `goal`/`judge` is NOT used.
 
 **CLI alternative** (equivalent, from the `firecrawl` skill) — create the Monitor by hand with the same
-NCC search URL, webhook, and secret:
+NCC search URL and webhook:
 ```bash
 firecrawl monitor create \
   --url 'https://www.zillow.com/new-castle-county-de/?searchQueryState=...' \
   --schedule 'daily at 8:00 PM' --timezone 'America/New_York' \
   --proxy enhanced \
-  --webhook 'https://<deployment>.convex.site/firecrawl-monitor' \
-  --webhook-secret "$FIRECRAWL_WEBHOOK_SECRET"
+  --webhook 'https://<deployment>.convex.site/firecrawl-monitor'
 ```
-(Prefer `createFirecrawlMonitor` — it bakes the exact NCC `searchQueryState` and body shape.)
+(The signing secret is NOT a per-monitor flag — Firecrawl signs every delivery with the ACCOUNT-level
+webhook secret from the dashboard → Settings → Advanced. Prefer `createFirecrawlMonitor` — it bakes the
+exact NCC `searchQueryState` and body shape.)
 
 ## 2. Trigger a manual scan
 Runs the SAME scan path the webhook/cron use (scrape → diff → upsert → staggered `analyzeOne` fan-out →
@@ -90,9 +92,9 @@ its `monitorData:latestRun` / `listKeepers` queries are `requireUser`-gated (no 
 - `OPENROUTER_API_KEY` — required for the DeepSeek judge. Without it the judge is skipped and only the
   deterministic keeper gate decides (no fabricated verdict).
 - `MONITOR_LLM_MODEL` — optional, default `deepseek/deepseek-v3.2` (fallback `deepseek/deepseek-chat-v3-0324`).
-- `FIRECRAWL_WEBHOOK_SECRET` — the HMAC-SHA256 signing secret; MUST match the value passed to the Monitor's
-  webhook so `convex/http.ts` accepts the delivery. A missing/mismatched secret → the webhook 401s (the
-  daily cron still covers the scan).
+- `FIRECRAWL_WEBHOOK_SECRET` — the HMAC-SHA256 signing secret; MUST equal the account webhook secret shown
+  in the Firecrawl dashboard → Settings → Advanced (Firecrawl signs every delivery with it, not a per-monitor
+  key). A missing/mismatched secret → every delivery 401s at `convex/http.ts` (the daily cron still scans).
 - `CONVEX_SITE_URL` — optional; the `*.convex.site` webhook host used by `createFirecrawlMonitor` when
   `siteUrl` isn't passed.
 - Digest (optional, key-gated — the page works without them): `RESEND_API_KEY`, `RESEND_FROM`, `RESEND_TO`,

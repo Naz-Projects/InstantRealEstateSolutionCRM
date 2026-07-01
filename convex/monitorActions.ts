@@ -565,9 +565,11 @@ export const devMonitorScan = internalAction({
  * key (`npx convex run monitorActions:createFirecrawlMonitor`), see the monitor-web
  * skill. Key-gated on FIRECRAWL_API_KEY (throws CONFIG when unset). POSTs the
  * `/v2/monitor` body from spec §10: daily 8 PM ET scrape of `buildSearchUrl({})`
- * (`proxy:"enhanced"`) delivering `monitor.page`/`monitor.check.completed` to
- * `<site>/firecrawl-monitor`, signed with FIRECRAWL_WEBHOOK_SECRET (the HMAC key
- * convex/http.ts verifies). The site URL comes from CONVEX_SITE_URL, else the
+ * (`proxy:"enhanced"`) delivering `monitor.check.completed` to
+ * `<site>/firecrawl-monitor` (one delivery per check → one scan). Firecrawl signs
+ * EVERY delivery with the ACCOUNT-level webhook secret (dashboard → Settings →
+ * Advanced), so convex/http.ts's FIRECRAWL_WEBHOOK_SECRET must equal that dashboard
+ * value or deliveries 401. The site URL comes from CONVEX_SITE_URL, else the
  * `{siteUrl}` arg (`https://<deployment>.convex.site`). Returns a tolerant summary;
  * never throws on an HTTP/parse error (returns `{ok:false, error}`).
  */
@@ -601,10 +603,8 @@ export const createFirecrawlMonitor = internalAction({
       ],
       webhook: {
         url: `${site}/firecrawl-monitor`,
-        events: ["monitor.page", "monitor.check.completed"],
+        events: ["monitor.check.completed"],
         headers: {},
-        // The signing secret http.ts checks the X-Firecrawl-Signature HMAC against.
-        ...(secret ? { secret } : {}),
       },
       retentionDays: 30,
     };
@@ -617,23 +617,22 @@ export const createFirecrawlMonitor = internalAction({
         signal: AbortSignal.timeout(30_000),
       });
       const json = (await res.json().catch(() => null)) as
-        | { success?: boolean; id?: string; monitor?: { id?: string }; error?: string }
+        | { success?: boolean; data?: { id?: string }; id?: string; error?: string }
         | null;
       if (!res.ok || json?.success === false) {
         return { ok: false, error: (json?.error ?? `Firecrawl ${res.status}`).toString().slice(0, 300) };
       }
-      const id = json?.id ?? json?.monitor?.id;
+      const id = json?.data?.id ?? json?.id;
       return {
         ok: true,
         ...(id ? { id } : {}),
-        // An UNSIGNED monitor registers fine but every real webhook delivery then
-        // 401s at convex/http.ts (silent — only the daily cron would still scan).
-        ...(secret
-          ? {}
-          : {
-              warning:
-                "registered WITHOUT a webhook signature secret — set FIRECRAWL_WEBHOOK_SECRET and re-run, or deliveries will 401 (the daily cron still scans).",
-            }),
+        // Firecrawl signs every delivery with the ACCOUNT-level webhook secret
+        // (dashboard → Settings → Advanced); convex/http.ts's FIRECRAWL_WEBHOOK_SECRET
+        // must equal it or every delivery 401s (the daily cron still scans). The action
+        // can't read the dashboard value, so it always warns.
+        warning: secret
+          ? "FIRECRAWL_WEBHOOK_SECRET is set — confirm it MATCHES the account webhook secret in the Firecrawl dashboard (Settings → Advanced); a mismatch 401s every delivery (the daily cron still scans)."
+          : "FIRECRAWL_WEBHOOK_SECRET is unset on this deployment — set it to the account webhook secret from the Firecrawl dashboard (Settings → Advanced) or every delivery will 401 (the daily cron still scans).",
       };
     } catch (e) {
       return { ok: false, error: (e instanceof Error ? e.message : String(e)).slice(0, 300) };
