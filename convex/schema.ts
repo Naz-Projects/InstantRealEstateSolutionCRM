@@ -596,4 +596,112 @@ export default defineSchema({
     resolved: v.boolean(),
     createdAt: v.number(),
   }).index("by_resolved", ["resolved"]),
+
+  // "Monitor the Web" (Zillow NCC deal-finder) — one row per discovered listing,
+  // deduped by zpid. Identity + workflow fields are required; ALL analysis /
+  // valuation / exit / decision / off-market fields are optional so a partial
+  // (VERIFY / pending) row still validates. Written by the monitor pipeline.
+  // Spec: docs/superpowers/specs/2026-06-30-monitor-web-zillow-design.md §7 + §6b.
+  monitorListings: defineTable({
+    // identity
+    zpid: v.string(), // Zillow listing id (Redfin: "rf:<id>"|normalized addr) — dedupe key
+    source: v.union(v.literal("zillow"), v.literal("redfin")),
+    url: v.string(), // detail page URL
+    address: v.string(),
+    propCity: v.optional(v.string()),
+    propZip: v.optional(v.string()),
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
+    // listing facts
+    listPrice: v.optional(v.number()),
+    beds: v.optional(v.string()),
+    baths: v.optional(v.string()),
+    sqft: v.optional(v.number()),
+    ppsf: v.optional(v.number()),
+    homeType: v.optional(v.string()), // "House"|"Townhome"|... as scraped
+    yearBuilt: v.optional(v.number()),
+    daysOnZillow: v.optional(v.number()),
+    monthlyHoaFee: v.optional(v.number()),
+    lastSoldPrice: v.optional(v.number()),
+    lastSoldDate: v.optional(v.string()),
+    priceHistory: v.optional(v.array(v.any())),
+    prevListPrice: v.optional(v.number()),
+    description: v.optional(v.string()), // capped
+    photoUrls: v.optional(v.array(v.string())),
+    agentName: v.optional(v.string()),
+    agentPhone: v.optional(v.string()),
+    brokerName: v.optional(v.string()),
+    mlsId: v.optional(v.string()),
+    // valuation + keeper math
+    zestimate: v.optional(v.number()),
+    rentZestimate: v.optional(v.number()),
+    conservativeArv: v.optional(v.number()),
+    arvSource: v.optional(v.string()), // "comps"|"zestimate"|"none"
+    compsPpsf: v.optional(v.number()),
+    compsCount: v.optional(v.number()),
+    spread: v.optional(v.number()),
+    spreadPct: v.optional(v.number()),
+    belowMarket: v.optional(v.boolean()),
+    rehabTier: v.optional(v.string()),
+    rehabEstimate: v.optional(v.number()),
+    // exits (flip + rental + wholesale)
+    flipMao: v.optional(v.number()),
+    flipProfit: v.optional(v.number()),
+    flipMargin: v.optional(v.number()),
+    flipRoi: v.optional(v.number()),
+    roomVsList: v.optional(v.number()),
+    capRate: v.optional(v.number()),
+    cashFlow: v.optional(v.number()),
+    onePctRule: v.optional(v.number()),
+    cashOnCash: v.optional(v.number()),
+    wholesaleSpread: v.optional(v.number()),
+    // decision
+    dealScore: v.optional(v.number()),
+    bestExit: v.optional(v.string()),
+    riskFlags: v.optional(v.array(v.string())),
+    keeper: v.optional(v.boolean()), // belowMarket || aiKeep
+    aiKeep: v.optional(v.boolean()),
+    matchedRequirements: v.optional(v.array(v.string())),
+    aiReason: v.optional(v.string()),
+    aiConditionNotes: v.optional(v.string()),
+    aiConfidence: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+    aiModel: v.optional(v.string()),
+    // off-market match (owner outreach when a promising listing maps to an NCC parcel)
+    offMarketPrclid: v.optional(v.string()),
+    offMarketSignals: v.optional(v.array(v.string())),
+    offMarketBalances: v.optional(v.number()),
+    offMarketConditionScore: v.optional(v.number()),
+    // workflow
+    status: v.union(
+      v.literal("pending"),
+      v.literal("analyzed"),
+      v.literal("failed"),
+      v.literal("skipped"),
+    ),
+    lastError: v.optional(v.string()),
+    promotedDealId: v.optional(v.id("potentialDeals")),
+    emailedAt: v.optional(v.number()),
+    firstSeen: v.number(),
+    lastSeen: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_zpid", ["zpid"])
+    .index("by_keeper", ["keeper"])
+    .index("by_status", ["status"])
+    .index("by_firstSeen", ["firstSeen"]),
+
+  // Observability counter row per monitor run (mirrors parcelSync).
+  monitorRuns: defineTable({
+    trigger: v.union(v.literal("webhook"), v.literal("cron"), v.literal("manual")),
+    source: v.union(v.literal("zillow"), v.literal("redfin")),
+    status: v.union(v.literal("running"), v.literal("complete"), v.literal("failed")),
+    scanned: v.number(),
+    newCount: v.number(),
+    analyzedCount: v.number(),
+    keeperCount: v.number(),
+    emailedCount: v.number(),
+    startedAt: v.number(),
+    finishedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+  }).index("by_started", ["startedAt"]),
 });
