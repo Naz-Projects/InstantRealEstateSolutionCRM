@@ -147,3 +147,31 @@ export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null;
   if (r.detailOk === false) f.push("detail-missing (VERIFY)");
   return f;
 }
+
+export interface JudgeVerdict { keep: boolean; matchedRequirements: string[]; conditionNotes: string; reason: string; confidence: "low" | "medium" | "high"; }
+const REQS = ["below_market", "fixer", "distressed", "flip"];
+export function buildJudgePrompt(rec: any): string {
+  return `You are a real-estate investment analyst for a New Castle County, DE flipping/rental firm. Judge whether this NEW listing is a deal worth surfacing. Keep it if it meets ANY of: (1) below_market (listed materially under value — the spread is ALREADY COMPUTED below), (2) fixer (needs renovation), (3) distressed (motivated/estate/foreclosure/as-is/must-sell), (4) flip (margin after rehab). DO NOT recompute any numbers — use the ones given. Return ONLY json of the form:
+{"keep":true,"matchedRequirements":["fixer","distressed"],"conditionNotes":"...","reason":"one sentence <=200 chars","confidence":"high"}
+Listing:
+address: ${rec.address}
+listPrice: ${rec.listPrice}
+conservativeARV: ${rec.conservativeArv}
+belowMarketSpread%: ${rec.spreadPct}
+rehabTier(estimated): ${rec.rehabTier}
+flipMargin%: ${rec.flipMarginPct}
+rentalCapRate%: ${rec.capRatePct}
+homeType: ${rec.homeType}
+description: """${(rec.description || "").slice(0, 1500)}"""`;
+}
+export function parseJudgeResponse(raw: string): JudgeVerdict | null {
+  if (!raw) return null;
+  let s = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const start = s.indexOf("{"), end = s.lastIndexOf("}");
+  if (start < 0 || end < 0) return null;
+  let obj: any; try { obj = JSON.parse(s.slice(start, end + 1)); } catch { return null; }
+  if (typeof obj.keep !== "boolean") return null;
+  const matched = Array.isArray(obj.matchedRequirements) ? obj.matchedRequirements.filter((x: any) => REQS.includes(x)) : [];
+  const conf = ["low", "medium", "high"].includes(obj.confidence) ? obj.confidence : "low";
+  return { keep: obj.keep, matchedRequirements: matched, conditionNotes: String(obj.conditionNotes ?? "").slice(0, 500), reason: String(obj.reason ?? "").slice(0, 240), confidence: conf };
+}

@@ -4,6 +4,7 @@ import { extractNextData, listingsFromSearch, totalResultCount } from "../src/sc
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
+import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import type { Comp } from "../src/scraper/comps";
 
 describe("buildSearchUrl", () => {
@@ -160,5 +161,22 @@ describe("riskFlags", () => {
   it("flags manufactured, high HOA, non-financeable, ARV-suspect, detail-missing", () => {
     const f = riskFlags({ homeType: "MANUFACTURED", monthlyHoaFee: 400, description: "cash only, may not qualify FHA/VA", rehabTier: "gut", zestimate: 100000, compsArv: 300000, detailOk: false });
     expect(f).toEqual(expect.arrayContaining([expect.stringContaining("MANUFACTURED"), expect.stringContaining("HOA"), expect.stringContaining("financeable"), expect.stringContaining("heavy-rehab"), expect.stringContaining("ARV"), expect.stringContaining("VERIFY")]));
+  });
+});
+
+describe("parseJudgeResponse", () => {
+  it("parses fenced JSON + clamps to closed sets", () => {
+    const raw = '```json\n{"keep":true,"matchedRequirements":["fixer","distressed","garbage"],"conditionNotes":"fire","reason":"AS-IS fixer","confidence":"high"}\n```';
+    const v = parseJudgeResponse(raw)!;
+    expect(v.keep).toBe(true);
+    expect(v.matchedRequirements).toEqual(["fixer", "distressed"]); // "garbage" dropped
+    expect(v.confidence).toBe("high");
+  });
+  it("returns null on unparseable", () => { expect(parseJudgeResponse("the house looks fine")).toBeNull(); });
+  it("prompt contains the 4 requirements + says return json + forbids recomputing", () => {
+    const p = buildJudgePrompt({ address: "1 X St", listPrice: 100000, conservativeArv: 200000, spreadPct: 50, description: "as-is" });
+    expect(p.toLowerCase()).toContain("json");
+    expect(p).toMatch(/below.market/i); expect(p).toMatch(/fixer|renovat/i); expect(p).toMatch(/distress/i);
+    expect(p.toLowerCase()).toContain("do not recompute");
   });
 });
