@@ -37,6 +37,7 @@ type ScanResult = { scanned: number; newCount: number; keeperCount: number };
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const RESEND_URL = "https://api.resend.com/emails";
+const FIRECRAWL_V2_MONITOR_URL = "https://api.firecrawl.dev/v2/monitor";
 const LLM_MODEL = process.env.MONITOR_LLM_MODEL ?? "deepseek/deepseek-v3.2";
 const STAGGER_MS = 3000; // per-listing analyze fan-out (mirror sheriff enrich)
 // Buffer after the last analyzeOne is scheduled before the digest fires. Each
@@ -554,5 +555,76 @@ export const devMonitorScan = action({
       trigger: "manual",
       ...(maxPages != null ? { maxPages } : {}),
     });
+  },
+});
+
+/**
+ * One-time (or update) registration of the Firecrawl Monitor that watches the NCC
+ * newest-listings search and POSTs to our webhook. Operator-invoked via the deploy
+ * key (`npx convex run monitorActions:createFirecrawlMonitor`), see the monitor-web
+ * skill. Key-gated on FIRECRAWL_API_KEY (throws CONFIG when unset). POSTs the
+ * `/v2/monitor` body from spec §10: daily 8 PM ET scrape of `buildSearchUrl({})`
+ * (`proxy:"enhanced"`) delivering `monitor.page`/`monitor.check.completed` to
+ * `<site>/firecrawl-monitor`, signed with FIRECRAWL_WEBHOOK_SECRET (the HMAC key
+ * convex/http.ts verifies). The site URL comes from CONVEX_SITE_URL, else the
+ * `{siteUrl}` arg (`https://<deployment>.convex.site`). Returns a tolerant summary;
+ * never throws on an HTTP/parse error (returns `{ok:false, error}`).
+ */
+export const createFirecrawlMonitor = internalAction({
+  args: { siteUrl: v.optional(v.string()) },
+  handler: async (
+    _ctx,
+    { siteUrl },
+  ): Promise<{ ok: boolean; id?: string; error?: string }> => {
+    const apiKey = fcKey();
+
+    const site = (siteUrl ?? process.env.CONVEX_SITE_URL ?? "").trim().replace(/\/+$/, "");
+    if (!site) {
+      throw new ConvexError({
+        code: "CONFIG",
+        message:
+          "No deployment site URL — set CONVEX_SITE_URL or pass {\"siteUrl\":\"https://<deployment>.convex.site\"}",
+      });
+    }
+    const secret = (process.env.FIRECRAWL_WEBHOOK_SECRET ?? "").trim();
+
+    const body = {
+      name: "IRES NCC new listings",
+      schedule: { text: "daily at 8:00 PM", timezone: "America/New_York" },
+      targets: [
+        {
+          type: "scrape",
+          urls: [buildSearchUrl({})],
+          scrapeOptions: { formats: ["markdown"], proxy: "enhanced" },
+        },
+      ],
+      webhook: {
+        url: `${site}/firecrawl-monitor`,
+        events: ["monitor.page", "monitor.check.completed"],
+        headers: {},
+        // The signing secret http.ts checks the X-Firecrawl-Signature HMAC against.
+        ...(secret ? { secret } : {}),
+      },
+      retentionDays: 30,
+    };
+
+    try {
+      const res = await fetch(FIRECRAWL_V2_MONITOR_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const json = (await res.json().catch(() => null)) as
+        | { success?: boolean; id?: string; monitor?: { id?: string }; error?: string }
+        | null;
+      if (!res.ok || json?.success === false) {
+        return { ok: false, error: (json?.error ?? `Firecrawl ${res.status}`).toString().slice(0, 300) };
+      }
+      const id = json?.id ?? json?.monitor?.id;
+      return { ok: true, ...(id ? { id } : {}) };
+    } catch (e) {
+      return { ok: false, error: (e instanceof Error ? e.message : String(e)).slice(0, 300) };
+    }
   },
 });
