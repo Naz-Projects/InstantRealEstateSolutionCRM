@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MONITOR, buildSearchUrl } from "../src/scraper/monitorListings";
+import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 
 describe("buildSearchUrl", () => {
   it("encodes NCC region + newest + doz + price ceiling", () => {
@@ -15,5 +16,48 @@ describe("buildSearchUrl", () => {
   it("adds currentPage for page>1", () => {
     const sqs = JSON.parse(decodeURIComponent(buildSearchUrl({ page: 3 }).split("searchQueryState=")[1]));
     expect(sqs.pagination).toEqual({ currentPage: 3 });
+  });
+});
+
+const FAKE_NEXT = {
+  props: { pageProps: { searchPageState: { cat1: {
+    searchList: { totalResultCount: 134 },
+    searchResults: { listResults: [
+      { zpid: "72883530", unformattedPrice: 270000, beds: 3, baths: 2, area: 1554,
+        marketingStatusSimplifiedCd: "Foreclosure", statusType: "FOR_SALE",
+        address: "837 Hasting Ct, Newark, DE 19702", addressZipcode: "19702",
+        latLong: { latitude: 39.6, longitude: -75.7 },
+        hdpData: { homeInfo: { homeType: "SINGLE_FAMILY", daysOnZillow: 0, zestimate: 300000 } },
+        detailUrl: "https://www.zillow.com/homedetails/837-Hasting-Ct-Newark-DE-19702/72883530_zpid/" },
+      { zpid: "444685170", unformattedPrice: 362800, beds: 5, baths: 2, area: 2669,
+        marketingStatusSimplifiedCd: "New Construction Spec", statusType: "FOR_SALE",
+        address: "Truman Plan, Venue at Winchelsea 55+", addressZipcode: "19709",
+        hdpData: { homeInfo: { homeType: "TOWNHOUSE", daysOnZillow: 0, zestimate: 356800 } },
+        builderName: "Lennar",
+        detailUrl: "https://www.zillow.com/community/venue-at-winchelsea/444685170_zpid/" },
+    ] } } } } },
+};
+
+describe("listingsFromSearch", () => {
+  it("maps listResults into SearchListing with derived ppsf + zestSpread + flags", () => {
+    const rows = listingsFromSearch(FAKE_NEXT);
+    expect(rows).toHaveLength(2);
+    const a = rows[0];
+    expect(a.zpid).toBe("72883530");
+    expect(a.price).toBe(270000);
+    expect(a.sqft).toBe(1554);
+    expect(a.ppsf).toBe(174); // 270000/1554
+    expect(a.status).toBe("Foreclosure");
+    expect(a.zestimate).toBe(300000);
+    expect(a.zestSpreadPct).toBeCloseTo(10, 0); // (300000-270000)/300000
+    expect(a.isNewConstruction).toBe(false);
+    const b = rows[1];
+    expect(b.isNewConstruction).toBe(true); // builderName or /community/
+  });
+  it("totalResultCount reads the searchList", () => {
+    expect(totalResultCount(FAKE_NEXT)).toBe(134);
+  });
+  it("extractNextData returns null when absent", () => {
+    expect(extractNextData("<html>no script</html>")).toBeNull();
   });
 });
