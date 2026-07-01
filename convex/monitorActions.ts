@@ -143,7 +143,6 @@ export const runMonitorScan = internalAction({
         }
       }
     }
-    const apiKey = fcKey();
     const runId = await ctx.runMutation(internal.monitorData.createRun, {
       trigger,
       source: "zillow",
@@ -152,6 +151,9 @@ export const runMonitorScan = internalAction({
     let scanned = 0;
     let newCount = 0;
     try {
+      // A missing key throws here — inside the try, so the catch below finalizes
+      // this run as "failed" + logs it, instead of leaving no run row at all.
+      const apiKey = fcKey();
       // 1) Paginated search scrape → accumulate survivors.
       const survivors: SearchListing[] = [];
       let total: number | null = null;
@@ -317,8 +319,7 @@ export const analyzeOne = internalAction({
       // 10) Keeper decision (deterministic OR + AI distress).
       const distress =
         !!verdict?.matchedRequirements.includes("distressed") ||
-        !!detail?.foreclosure ||
-        !!verdict?.keep;
+        !!detail?.foreclosure;
       const keeper = decideKeeper({ belowMarket, flip, rental, distress });
 
       const matched = new Set<string>(verdict?.matchedRequirements ?? []);

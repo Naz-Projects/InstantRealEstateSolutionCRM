@@ -376,6 +376,13 @@ export const latestRun = query({
  * analyze action, which has no user identity) wrap this one helper — one query
  * body, two thin auth wrappers. Returns a compact summary or null when no parcel matches.
  */
+// Leading house number from a street address (e.g. "837 HASTING CT" -> "837").
+// null when the string has no leading digits — never blocks the match in that case.
+const houseNum = (s: string) => {
+  const m = (s || "").trim().match(/^\d+/);
+  return m ? m[0] : null;
+};
+
 async function crossRefOffMarket(
   ctx: QueryCtx,
   address: string,
@@ -389,6 +396,14 @@ async function crossRefOffMarket(
     .withSearchIndex("search_text", (s) => s.search("searchText", queryText))
     .first();
   if (!parcel) return null;
+
+  // House-number guard: the search index can return a same-street WRONG parcel
+  // (e.g. "837 Hasting Ct" matching "839 Hasting Ct"). Only block when BOTH sides
+  // parse to a number and they differ — an unparseable number never blocks (avoid
+  // false negatives).
+  const inputNum = houseNum(address);
+  const parcelNum = houseNum(parcel.situsStreet);
+  if (inputNum && parcelNum && inputNum !== parcelNum) return null;
 
   const prclid = parcel.prclid;
 
