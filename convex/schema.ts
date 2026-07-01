@@ -614,8 +614,8 @@ export default defineSchema({
     lng: v.optional(v.number()),
     // listing facts
     listPrice: v.optional(v.number()),
-    beds: v.optional(v.string()),
-    baths: v.optional(v.string()),
+    beds: v.optional(v.union(v.number(), v.string())),
+    baths: v.optional(v.union(v.number(), v.string())),
     sqft: v.optional(v.number()),
     ppsf: v.optional(v.number()),
     homeType: v.optional(v.string()), // "House"|"Townhome"|... as scraped
