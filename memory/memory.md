@@ -2,21 +2,27 @@
 
 _Read this first. It's the "what & why" so you don't have to reverse-engineer the codebase._
 
-## ★★ Monitor the Web (Zillow NCC on-market deal finder) — BUILT + LIVE-ACCEPTED ON DEV (2026-07-01)
-The on-market counterpart to the off-market `/leads` engine. Nightly (8 PM ET) Firecrawl scrape of new NCC Zillow
+## ★★ Monitor the Web (Zillow NCC on-market deal finder) — SHIPPED TO PROD + PEN-TESTED LIVE (2026-07-01)
+The on-market counterpart to the off-market `/leads` engine. Nightly Firecrawl scrape of new NCC Zillow
 for-sale ≤$500K → underwrite **every exit** (flip/rental/wholesale, comps-capped conservative ARV) + DeepSeek judge +
 **off-market cross-ref** (address→prclid → signalEvents/equity/condition = the moat) → keepers on a `/monitor` page +
 key-gated Resend digest + one-click Promote-to-Potential. Triggered by a Firecrawl Monitor **HMAC webhook** (`convex/http.ts`)
 with a daily safety-net cron `0 2 * * *`. **Strictly additive** (new `src/scraper/monitorListings.ts`, `convex/monitor{Data,Actions,Scrape}.ts`,
 `convex/http.ts`, `src/web/MonitorPage.tsx`, `.claude/skills/monitor-web/SKILL.md`; additive edits to schema/crons/firecrawl/app/sidebar).
-Built subagent-driven (Opus, 15 tasks) on branch **`feat/monitor-web-zillow`** (worktree, head `7fc2648`); per-task + final
-whole-branch review (0 Critical) passed; **312 tests, build clean**. Scrape = Firecrawl **v2 REST direct** (`proxy:"enhanced"`
-Zillow / `"auto"` Redfin; parse embedded `__NEXT_DATA__` JSON, NOT markdown; spaced-retry 12/28/50s + shell-detect). AI =
-DeepSeek `deepseek/deepseek-v3.2` via OpenRouter (`MONITOR_LLM_MODEL`). **Live-accepted on dev** (24 real listings analyzed
-right — rentals surfaced, fire-damage demoted, moat fired; caught+fixed a $0-foreclosure "mirage" via `MONITOR.minListPrice`).
-**NOT merged / NOT on prod** — merge=auto prod deploy, user-gated. Full detail: `memory/next-session-prompt.md` (top) +
-spec `docs/superpowers/specs/2026-06-30-monitor-web-zillow-design.md` + ledger `.superpowers/sdd/progress.md`. #1 fast-follow:
-off-market **house-number guard** (`.first()` can mis-match a parcel → false distress badge).
+Built subagent-driven (15 tasks) on branch **`feat/monitor-web-zillow`**; per-task + final whole-branch review;
+**312 tests, build clean**. Scrape = Firecrawl **v2 REST direct** (`proxy:"enhanced"` Zillow / `"auto"` Redfin; parse
+embedded `__NEXT_DATA__` JSON, NOT markdown; spaced-retry 12/28/50s + shell-detect). AI = DeepSeek `deepseek/deepseek-v3.2`
+via OpenRouter (`MONITOR_LLM_MODEL`). Reuses `src/scraper/{comps,flip}.ts`.
+**MERGED → `origin/main` `72eed27` + DEPLOYED TO PROD** `pastel-crocodile-994` (tables+indexes, functions, http route, cron;
+`FIRECRAWL_WEBHOOK_SECRET` set). **Final review found 1 Critical + 3 Important, all fixed (`72eed27`):** keeper gate no longer
+takes the LLM's soft `keep` (deterministic math decides); off-market **house-number guard** added (the old #1 fast-follow, DONE);
+missing-Firecrawl-key fails safe. **LIVE PROD PEN-TEST:** manual 1-page scan = 41→24→24 analyzed/0 failed; 16 keepers, real
+investor-grade insights (top = rentals cap 6.3–6.8%, flip -ve, comps-capped ARV, agent+price-history+DeepSeek reason);
+`/monitor` UI + Promote-to-Potential + Flip handoff all work; auth gates + webhook HMAC fail closed (401/404).
+**Fast-follows (next session, user-requested):** (a) keeper-precision tuning — distress-only PASS/above-market listings are
+kept (noisy); (c) register the Firecrawl Monitor (`createFirecrawlMonitor`) for real-time webhook scans. Full detail:
+`memory/next-session-prompt.md` (top) + spec `docs/superpowers/specs/2026-06-30-monitor-web-zillow-design.md` + ledger
+`.superpowers/sdd/progress.md`.
 
 ## ★ Active initiative (2026-06-06..08) — Wholesaling Lead Engine
 Current build focus: turn the CRM into a New Castle County **wholesaling lead engine** (ingest ALL parcels + attach

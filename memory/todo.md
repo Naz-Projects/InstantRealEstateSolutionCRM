@@ -3,19 +3,23 @@
 What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocked on the user.
 (History lives in git; this is the current picture, not a session log.)
 
-## ★ ACTIVE — "Monitor the Web" (Zillow NCC deal finder) — BUILT + LIVE-ACCEPTED ON DEV → merge/prod (user-gated)
+## ★ SHIPPED — "Monitor the Web" (Zillow NCC deal finder) — LIVE ON PROD + PEN-TESTED (2026-07-01)
 - [x] **Design + live test + 15-task plan** — `docs/superpowers/{specs,plans,research}/2026-06-30-monitor-web-*` (committed on the branch).
-- [x] **BUILT (all 15 tasks, subagent-driven Opus)** on branch `feat/monitor-web-zillow` (worktree, head `7fc2648`). Pure
-  `monitorListings.ts` (parsers + multi-exit math + DeepSeek judge, 23 tests) · `monitorListings`/`monitorRuns` schema ·
-  `monitorData` (requireUser reads + off-market cross-ref) · `monitorScrape` (Firecrawl v2 direct) · `monitorActions`
-  (scan/enrich/judge/digest/createMonitor) · `http.ts` HMAC webhook · daily cron · `/monitor` page · `monitor-web` op skill.
-  Per-task + **final whole-branch review (0 Critical)** + fixes. **312 tests, build clean.**
-- [x] **LIVE-ACCEPTED on dev** (`fearless-donkey-585`): 24 real listings analyzed correctly; caught+fixed the $0-foreclosure mirage.
-- [ ] **Merge → main (= auto prod deploy via CF) — USER-GATED.** Set prod `FIRECRAWL_WEBHOOK_SECRET` (+confirm FIRECRAWL/OPENROUTER
-  keys; optional RESEND_*); one-time prod scan; `createFirecrawlMonitor`; click through `/monitor`. Steps in `next-session-prompt.md` top.
-- [ ] **#1 fast-follow (before prod-hardening):** off-market house-number guard in `crossRefOffMarket` (`.first()` can mis-match).
-- [ ] **Product Q (user):** surface no-list-price foreclosures as a separate flagged section, or keep them dropped (current mirage fix)?
-- [ ] Deferred Minors (cosmetic/low-risk) — see ledger `.superpowers/sdd/progress.md`.
+- [x] **BUILT (all 15 tasks, subagent-driven)** on branch `feat/monitor-web-zillow`. Pure `monitorListings.ts` (parsers +
+  multi-exit math + DeepSeek judge, 23 tests) · `monitorListings`/`monitorRuns` schema · `monitorData` (requireUser reads +
+  off-market cross-ref) · `monitorScrape` (Firecrawl v2 direct) · `monitorActions` (scan/enrich/judge/digest/createMonitor) ·
+  `http.ts` HMAC webhook · daily cron · `/monitor` page · `monitor-web` op skill. **312 tests, build clean.**
+- [x] **Final whole-branch review + fixes (`72eed27`):** #1 keeper gate no longer takes the LLM's soft `keep` (deterministic
+  math decides) · #2 off-market **house-number guard** in `crossRefOffMarket` (was the old #1 fast-follow — DONE) · #3 missing-Firecrawl-key fail-safe.
+- [x] **MERGED → `origin/main` `72eed27` + DEPLOYED TO PROD** `pastel-crocodile-994` (tables+indexes/functions/http-route/cron;
+  `FIRECRAWL_WEBHOOK_SECRET` set); frontend via CF. **LIVE PROD PEN-TEST:** 1-page scan 41→24→24 analyzed/0 failed; 16 keepers,
+  real insights (rentals cap 6.3–6.8%, flip -ve, comps-capped ARV, agent/price-history/DeepSeek reason); `/monitor` UI + Promote-to-Potential
+  (test-promoted 309 Cedar) + Flip handoff all work; auth gates + webhook HMAC fail closed (401/404).
+- [ ] **(a) Keeper-precision tuning (next session):** ~9/16 keepers score 0–20 PASS, kept only via DeepSeek "distressed"; some
+  listed ABOVE market yet kept. Tighten `decideKeeper` distress-keep (require spread≥0 OR dealScore≥~30) → redeploy + re-scan.
+- [ ] **(c) Register the Firecrawl Monitor (next session):** `createFirecrawlMonitor` → prod `.convex.site/firecrawl-monitor` webhook (verify vs current `/v2/monitor` docs). Daily cron is the safety net.
+- [ ] **Product Q (user):** surface no-list-price foreclosures as a separate "distress, price TBD" section, or keep them dropped (current mirage fix)?
+- [ ] **Minor visual:** one card (218 W 23rd) rendered a broken-image placeholder (missing/404 photo URL). Deferred Minors — see ledger `.superpowers/sdd/progress.md`.
 
 ## ★ ACTIVE — Wholesaling Lead Engine (Phase 0 DONE → Phase 1 NEXT)
 - [x] **Spec written + committed** (`ce11b62`) — `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`.
