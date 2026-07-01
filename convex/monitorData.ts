@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, internalQuery, internalMutation } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import { requireUser } from "./helpers";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
 
@@ -313,55 +314,78 @@ export const latestRun = query({
 });
 
 /**
- * The moat: cross-reference an on-market listing against the CRM's off-market
- * parcel spine. Search `parcels` (situs + city + zip + owner + prclid) for the
- * address, take the best match, then gather that parcel's distress signals,
- * delinquent NCC balances, and Street-View condition score. Read-only, additive.
- * Returns a compact summary or null when no parcel matches.
+ * The moat (shared body): cross-reference an on-market listing against the CRM's
+ * off-market parcel spine. Search `parcels` for the address, take the best match,
+ * then gather that parcel's distress signals, delinquent NCC balances, and
+ * Street-View condition score. Read-only. Both the public `offMarketFor` (UI,
+ * requireUser-gated) and the internal `offMarketForInternal` (the scheduled
+ * analyze action, which has no user identity) wrap this one helper — one query
+ * body, two thin auth wrappers. Returns a compact summary or null when no parcel matches.
  */
+async function crossRefOffMarket(
+  ctx: QueryCtx,
+  address: string,
+  zip: string | undefined,
+) {
+  const queryText = normalizeAddress(zip ? `${address} ${zip}` : address);
+  if (!queryText) return null;
+
+  const parcel = await ctx.db
+    .query("parcels")
+    .withSearchIndex("search_text", (s) => s.search("searchText", queryText))
+    .first();
+  if (!parcel) return null;
+
+  const prclid = parcel.prclid;
+
+  const signalRows = await ctx.db
+    .query("signalEvents")
+    .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
+    .collect();
+  const signals = Array.from(
+    new Set(signalRows.map((r) => r.type).filter((t) => !!t)),
+  );
+
+  const equity = await ctx.db
+    .query("parcelEquity")
+    .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
+    .first();
+  let balances: number | null = null;
+  if (equity) {
+    const parts = [
+      equity.countyBalance,
+      equity.schoolBalance,
+      equity.sewerBalance,
+    ].filter((n): n is number => typeof n === "number");
+    balances = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+  }
+
+  const condition = await ctx.db
+    .query("parcelCondition")
+    .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
+    .first();
+  const conditionScore = condition?.score ?? null;
+
+  return { prclid, signals, balances, conditionScore };
+}
+
+/** Public (UI) off-market cross-reference — requireUser-gated. */
 export const offMarketFor = query({
   args: { address: v.string(), zip: v.optional(v.string()) },
   handler: async (ctx, { address, zip }) => {
     await requireUser(ctx);
-    const queryText = normalizeAddress(zip ? `${address} ${zip}` : address);
-    if (!queryText) return null;
+    return crossRefOffMarket(ctx, address, zip);
+  },
+});
 
-    const parcel = await ctx.db
-      .query("parcels")
-      .withSearchIndex("search_text", (s) => s.search("searchText", queryText))
-      .first();
-    if (!parcel) return null;
-
-    const prclid = parcel.prclid;
-
-    const signalRows = await ctx.db
-      .query("signalEvents")
-      .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
-      .collect();
-    const signals = Array.from(
-      new Set(signalRows.map((r) => r.type).filter((t) => !!t)),
-    );
-
-    const equity = await ctx.db
-      .query("parcelEquity")
-      .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
-      .first();
-    let balances: number | null = null;
-    if (equity) {
-      const parts = [
-        equity.countyBalance,
-        equity.schoolBalance,
-        equity.sewerBalance,
-      ].filter((n): n is number => typeof n === "number");
-      balances = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
-    }
-
-    const condition = await ctx.db
-      .query("parcelCondition")
-      .withIndex("by_prclid", (q) => q.eq("prclid", prclid))
-      .first();
-    const conditionScore = condition?.score ?? null;
-
-    return { prclid, signals, balances, conditionScore };
+/**
+ * Internal off-market cross-reference for the scheduled analyze action. Scheduled
+ * actions carry NO user identity, so they cannot call the requireUser-gated
+ * `offMarketFor`; this variant runs the same helper with no auth gate. Read-only.
+ */
+export const offMarketForInternal = internalQuery({
+  args: { address: v.string(), zip: v.optional(v.string()) },
+  handler: async (ctx, { address, zip }) => {
+    return crossRefOffMarket(ctx, address, zip);
   },
 });
