@@ -15,9 +15,16 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   `FIRECRAWL_WEBHOOK_SECRET` set); frontend via CF. **LIVE PROD PEN-TEST:** 1-page scan 41→24→24 analyzed/0 failed; 16 keepers,
   real insights (rentals cap 6.3–6.8%, flip -ve, comps-capped ARV, agent/price-history/DeepSeek reason); `/monitor` UI + Promote-to-Potential
   (test-promoted 309 Cedar) + Flip handoff all work; auth gates + webhook HMAC fail closed (401/404).
-- [ ] **(a) Keeper-precision tuning (next session):** ~9/16 keepers score 0–20 PASS, kept only via DeepSeek "distressed"; some
-  listed ABOVE market yet kept. Tighten `decideKeeper` distress-keep (require spread≥0 OR dealScore≥~30) → redeploy + re-scan.
-- [ ] **(c) Register the Firecrawl Monitor (next session):** `createFirecrawlMonitor` → prod `.convex.site/firecrawl-monitor` webhook (verify vs current `/v2/monitor` docs). Daily cron is the safety net.
+- [x] **(a) Keeper-precision tuning — SHIPPED + PROD-VERIFIED (2026-07-01 later, `b72f951`).** `decideKeeper` distress-only
+  keeps now require spread≥0 OR dealScore≥30 (`MONITOR.distressScoreFloor`; null spread ≠ free pass). 313 tests, reviews clean.
+  Live: 513 W 37th / 508 Lake Dr / 1805 W 8th re-analyzed → keeper=false; keepers 16→13 (survivors legitimately kept).
+- [x] **(c) Firecrawl Monitor — REGISTERED + ACTIVE (2026-07-01 later, `76197c8`).** `createFirecrawlMonitor` first aligned w/
+  current v2 docs (account-level signing — NO webhook `secret` body field; id at `data.id`; events `check.completed` only), then
+  run on prod: monitor `019f1f6e-de66-759e-ad19-7364acf49fd3`, cron `0 20 * * *` ET, first run 2026-07-02. Daily Convex cron stays as safety net.
+  - [~] **USER: webhook secret sync** — set prod `FIRECRAWL_WEBHOOK_SECRET` to the ACCOUNT secret (firecrawl.dev → Settings →
+    Advanced, the account owning prod's `fc-286…` key). Until then deliveries 401 fail-closed (cron still scans).
+  - [~] **USER: which Firecrawl account for prod?** Prod key `fc-286…` = original account (17,874 credits, monthly); the new
+    **annual 100k** key `fc-3f8…` (96,608 left) is only in `.env.local`. Switching = env set + re-register monitor + that account's secret.
 - [ ] **Product Q (user):** surface no-list-price foreclosures as a separate "distress, price TBD" section, or keep them dropped (current mirage fix)?
 - [ ] **Minor visual:** one card (218 W 23rd) rendered a broken-image placeholder (missing/404 photo URL). Deferred Minors — see ledger `.superpowers/sdd/progress.md`.
 
