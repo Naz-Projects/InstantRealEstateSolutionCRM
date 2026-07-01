@@ -52,6 +52,7 @@ export interface FirecrawlScrapeOptions {
   onlyMainContent?: boolean;
   timeoutMs?: number;
   maxRetries?: number;
+  proxy?: "basic" | "enhanced" | "auto";
 }
 
 export interface FirecrawlResult {
@@ -76,6 +77,7 @@ export async function firecrawlScrape(
     onlyMainContent,
     timeoutMs = 60000,
     maxRetries = 2,
+    proxy,
   } = opts;
 
   if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not set");
@@ -84,6 +86,7 @@ export async function firecrawlScrape(
   if (actions) body.actions = actions;
   if (waitFor !== undefined) body.waitFor = waitFor;
   if (onlyMainContent !== undefined) body.onlyMainContent = onlyMainContent;
+  if (proxy !== undefined) body.proxy = proxy;
 
   let lastError: unknown = null;
 
