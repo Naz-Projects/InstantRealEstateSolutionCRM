@@ -157,7 +157,9 @@ export const runMonitorScan = internalAction({
           if (
             l.isNewConstruction ||
             l.isZillowOwned ||
+            // $0/placeholder-price foreclosure/auction listings have no underwritable purchase price -> mirage 100% spread; exclude.
             l.price == null ||
+            l.price < MONITOR.minListPrice ||
             l.price > MONITOR.priceCeiling
           ) {
             continue;
