@@ -1,7 +1,7 @@
 export const MONITOR = {
   regionId: 2986, regionType: 4, // New Castle County, DE
   priceCeiling: 500000, minListPrice: 1000, dozDays: "7", sort: "days",
-  spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06,
+  spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06, distressScoreFloor: 30,
   ncc_bounds: { west: -75.97218944726562, east: -75.22237255273437, south: 39.36230086205304, north: 39.76777058263119 },
 } as const;
 
@@ -131,10 +131,12 @@ export function scoreDeal(flip: any, rental: RentalMetrics | null) {
   const bestExit = dealScore < 35 ? "PASS" : flipScore >= rentScore ? "FLIP" : "RENTAL";
   return { flipScore, rentScore, dealScore, bestExit } as const;
 }
-export function decideKeeper({ belowMarket, flip, rental, distress }: { belowMarket: boolean; flip?: any; rental?: any; distress: boolean }): boolean {
-  if (belowMarket || distress) return true;
+export function decideKeeper({ belowMarket, flip, rental, distress, spread, dealScore }: { belowMarket: boolean; flip?: any; rental?: any; distress: boolean; spread: number | null; dealScore: number }): boolean {
+  if (belowMarket) return true;
   if (flip && flip.margin != null && flip.margin >= MONITOR.flipMarginBar) return true;
   if (rental && rental.capRate != null && rental.capRate >= MONITOR.capRateBar) return true;
+  // distress (an LLM/foreclosure tag) never keeps a listing whose economics are negative
+  if (distress) return (spread != null && spread >= 0) || dealScore >= MONITOR.distressScoreFloor;
   return false;
 }
 export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean }): string[] {

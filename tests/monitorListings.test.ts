@@ -149,12 +149,26 @@ describe("scoreDeal + decideKeeper", () => {
     const f = analyzeFlip(247200, 125000, 23265); const r = analyzeRental({ rent: 1788, list: 125000, rehab: 23265 });
     const s = scoreDeal(f, r); expect(s.bestExit).toBe("FLIP"); expect(s.dealScore).toBeGreaterThanOrEqual(75);
   });
-  it("keeps when any exit clears (below-market OR flip OR rental OR distress)", () => {
-    expect(decideKeeper({ belowMarket: true, distress: false })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.2 }, distress: false })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, rental: { capRate: 0.09 }, distress: false })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, distress: true })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.02 }, rental: { capRate: 0.03 }, distress: false })).toBe(false);
+  it("keeps when a deterministic exit clears (below-market OR flip OR rental)", () => {
+    expect(decideKeeper({ belowMarket: true, distress: false, spread: null, dealScore: 0 })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.2 }, distress: false, spread: null, dealScore: 0 })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, rental: { capRate: 0.09 }, distress: false, spread: null, dealScore: 0 })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.02 }, rental: { capRate: 0.03 }, distress: false, spread: null, dealScore: 0 })).toBe(false);
+  });
+  it("distress keeps ONLY when not above market (spread>=0) OR dealScore>=floor", () => {
+    // above-market AS-IS boilerplate (508 Lake Dr / 513 W 37th noise) — dropped
+    expect(decideKeeper({ belowMarket: false, distress: true, spread: -20000, dealScore: 0 })).toBe(false);
+    // distressed and not above market — kept
+    expect(decideKeeper({ belowMarket: false, distress: true, spread: 0, dealScore: 0 })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, distress: true, spread: 25000, dealScore: 0 })).toBe(true);
+    // unknown spread is not a free pass
+    expect(decideKeeper({ belowMarket: false, distress: true, spread: null, dealScore: 0 })).toBe(false);
+    // score floor keeps it
+    expect(decideKeeper({ belowMarket: false, distress: true, spread: null, dealScore: 40 })).toBe(true);
+    // below the 30 floor
+    expect(decideKeeper({ belowMarket: false, distress: true, spread: -20000, dealScore: 20 })).toBe(false);
+    // deterministic rental keep unchanged (218 W 23rd)
+    expect(decideKeeper({ belowMarket: false, distress: false, rental: { capRate: 0.065 }, spread: null, dealScore: 0 })).toBe(true);
   });
 });
 describe("riskFlags", () => {

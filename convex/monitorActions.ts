@@ -320,7 +320,7 @@ export const analyzeOne = internalAction({
       const distress =
         !!verdict?.matchedRequirements.includes("distressed") ||
         !!detail?.foreclosure;
-      const keeper = decideKeeper({ belowMarket, flip, rental, distress });
+      const keeper = decideKeeper({ belowMarket, flip, rental, distress, spread, dealScore: score.dealScore });
 
       const matched = new Set<string>(verdict?.matchedRequirements ?? []);
       if (belowMarket) matched.add("below_market");
