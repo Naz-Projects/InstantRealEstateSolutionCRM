@@ -82,7 +82,7 @@ export function detailFromCache(nextData: any): ListingDetail | null {
 }
 
 import { selectComps, suggestArv, type Comp } from "./comps";
-import { estimateRehab } from "./flip";
+import { estimateRehab, computeFlip, FLIP_DEFAULTS } from "./flip";
 export { estimateRehab };
 
 export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds: number | null; zestimate: number | null; homeType?: string; }):
@@ -105,4 +105,45 @@ export function inferRehabTier(description: string): "cosmetic" | "moderate" | "
   if (GUT.test(d)) return "gut";
   if (COSMETIC.test(d) && !MODERATE.test(d)) return "cosmetic";
   return "moderate";
+}
+
+export interface RentalMetrics { rent: number; onePct: number; capRate: number; cashFlow: number; cashOnCash: number; allIn: number; }
+
+export function analyzeFlip(arv: number | null, list: number | null, rehab: number) {
+  if (arv == null || list == null) return null;
+  const m = computeFlip({ arv, purchasePrice: list, rehabTotal: rehab, assumptions: FLIP_DEFAULTS.assumptions });
+  return { mao: m.mao, profit: m.profit, margin: m.margin ?? 0, roi: m.roi, roomVsList: m.mao != null ? Math.round(m.mao - list) : null };
+}
+export function analyzeRental({ rent, list, rehab, taxRatePct }: { rent: number | null; list: number; rehab: number; taxRatePct?: number }): RentalMetrics | null {
+  if (!rent || !list) return null;
+  const allIn = list + (rehab || 0);
+  const taxMo = (list * ((taxRatePct ?? 1.6) / 100)) / 12, ins = 95, opVar = 0.25 * rent;
+  const noiMo = rent - taxMo - ins - opVar;
+  const r = 0.075 / 12, loan = 0.75 * allIn, pi = loan * r / (1 - (1 + r) ** -360);
+  const cashFlow = noiMo - pi, capRate = (noiMo * 12) / allIn;
+  const invested = 0.25 * allIn + 0.03 * list;
+  return { rent, onePct: rent / list, capRate, cashFlow: Math.round(cashFlow), cashOnCash: (cashFlow * 12) / invested, allIn };
+}
+export function scoreDeal(flip: any, rental: RentalMetrics | null) {
+  const flipScore = !flip || flip.margin == null ? 0 : flip.margin >= 0.2 ? 90 : flip.margin >= 0.15 ? 75 : flip.margin >= 0.1 ? 60 : flip.margin >= 0.05 ? 40 : flip.margin > 0 ? 20 : 0;
+  const rentScore = !rental ? 0 : rental.capRate >= 0.08 ? 90 : rental.capRate >= 0.06 ? 72 : rental.capRate >= 0.05 ? 55 : rental.capRate >= 0.04 ? 40 : 20;
+  const dealScore = Math.max(flipScore, rentScore);
+  const bestExit = dealScore < 35 ? "PASS" : flipScore >= rentScore ? "FLIP" : "RENTAL";
+  return { flipScore, rentScore, dealScore, bestExit } as const;
+}
+export function decideKeeper({ belowMarket, flip, rental, distress }: { belowMarket: boolean; flip?: any; rental?: any; distress: boolean }): boolean {
+  if (belowMarket || distress) return true;
+  if (flip && flip.margin != null && flip.margin >= MONITOR.flipMarginBar) return true;
+  if (rental && rental.capRate != null && rental.capRate >= MONITOR.capRateBar) return true;
+  return false;
+}
+export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean }): string[] {
+  const f: string[] = [];
+  if ((r.homeType || "").toUpperCase() === "MANUFACTURED") f.push("MANUFACTURED (comps/lot-rent suspect)");
+  if (r.monthlyHoaFee && r.monthlyHoaFee > 250) f.push("HIGH-HOA $" + r.monthlyHoaFee + "/mo");
+  if (/may not qualify|cash only|\bFHA\b|\bVA\b/i.test(r.description || "")) f.push("non-financeable (cash)");
+  if (r.rehabTier === "gut") f.push("heavy-rehab");
+  if (r.zestimate && r.compsArv && r.compsArv > r.zestimate * 1.5) f.push("comps>>Zestimate (ARV suspect)");
+  if (r.detailOk === false) f.push("detail-missing (VERIFY)");
+  return f;
 }

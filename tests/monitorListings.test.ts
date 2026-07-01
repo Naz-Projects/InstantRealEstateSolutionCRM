@@ -3,6 +3,7 @@ import { buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier } from "../src/scraper/monitorListings";
+import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
 import type { Comp } from "../src/scraper/comps";
 
 describe("buildSearchUrl", () => {
@@ -123,4 +124,41 @@ describe("inferRehabTier", () => {
   it("cosmetic on turnkey", () => { expect(inferRehabTier("totally renovated 2022, shows like new, move-in")).toBe("cosmetic"); });
   it("moderate on needs-work/investor", () => { expect(inferRehabTier("great investment, needs full renovation, priced to sell, sold as-is")).toBe("gut"); });
   it("moderate default when unknown", () => { expect(inferRehabTier("charming home near shopping")).toBe("moderate"); });
+});
+
+describe("analyzeFlip", () => {
+  it("computes MAO/profit/margin/roomVsList (918 Kirkwood: ARV 247200, list 125000, cosmetic rehab ~23265)", () => {
+    const f = analyzeFlip(247200, 125000, 23265)!;
+    expect(f.mao).toBe(Math.round(247200 * 0.7 - 23265)); // 149775
+    expect(f.roomVsList).toBe(f.mao! - 125000); // ~+24775 (can offer below list)
+    expect(f.margin).toBeGreaterThan(0.2); // ~26%
+  });
+});
+describe("analyzeRental", () => {
+  it("computes cap rate + cash flow (801 9th: rent 1925, list 69900, rehab ~20176)", () => {
+    const r = analyzeRental({ rent: 1925, list: 69900, rehab: 20176 })!;
+    expect(r.onePct).toBeCloseTo(1925 / 69900, 3);
+    expect(r.capRate).toBeGreaterThan(0.1); // strong
+    expect(r.cashFlow).toBeGreaterThan(0);
+  });
+  it("returns null without rent", () => { expect(analyzeRental({ rent: null, list: 100000, rehab: 0 })).toBeNull(); });
+});
+describe("scoreDeal + decideKeeper", () => {
+  it("labels best exit FLIP when flip margin high", () => {
+    const f = analyzeFlip(247200, 125000, 23265); const r = analyzeRental({ rent: 1788, list: 125000, rehab: 23265 });
+    const s = scoreDeal(f, r); expect(s.bestExit).toBe("FLIP"); expect(s.dealScore).toBeGreaterThanOrEqual(75);
+  });
+  it("keeps when any exit clears (below-market OR flip OR rental OR distress)", () => {
+    expect(decideKeeper({ belowMarket: true, distress: false })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.2 }, distress: false })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, rental: { capRate: 0.09 }, distress: false })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, distress: true })).toBe(true);
+    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.02 }, rental: { capRate: 0.03 }, distress: false })).toBe(false);
+  });
+});
+describe("riskFlags", () => {
+  it("flags manufactured, high HOA, non-financeable, ARV-suspect, detail-missing", () => {
+    const f = riskFlags({ homeType: "MANUFACTURED", monthlyHoaFee: 400, description: "cash only, may not qualify FHA/VA", rehabTier: "gut", zestimate: 100000, compsArv: 300000, detailOk: false });
+    expect(f).toEqual(expect.arrayContaining([expect.stringContaining("MANUFACTURED"), expect.stringContaining("HOA"), expect.stringContaining("financeable"), expect.stringContaining("heavy-rehab"), expect.stringContaining("ARV"), expect.stringContaining("VERIFY")]));
+  });
 });
