@@ -234,6 +234,24 @@ export const finishRun = internalMutation({
   },
 });
 
+/**
+ * The most recent COMPLETE run (by started time), for the cron 20h no-op guard.
+ * The daily safety-net cron skips scanning if this run's finish/start time is
+ * within the last 20h so the webhook + cron don't double-scan. null before any
+ * complete run.
+ */
+export const mostRecentCompleteRun = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("monitorRuns")
+      .withIndex("by_started")
+      .order("desc")
+      .filter((q) => q.eq(q.field("status"), "complete"))
+      .first();
+  },
+});
+
 /** Stamp emailedAt so a keeper is never emailed twice. */
 export const markEmailed = internalMutation({
   args: { id: v.id("monitorListings") },

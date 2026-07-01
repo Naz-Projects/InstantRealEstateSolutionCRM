@@ -129,8 +129,19 @@ export const runMonitorScan = internalAction({
     maxPages: v.optional(v.number()),
   },
   handler: async (ctx, { trigger, content, maxPages }): Promise<ScanResult> => {
-    // TODO(Task 13): when trigger === "cron", no-op if a successful monitorRuns
-    // row exists in the last ~20h (the daily safety net shouldn't double-run).
+    // Cron 20h no-op guard: the daily safety net only fills in when the webhook
+    // didn't fire. If a COMPLETE run already finished/started within the last 20h,
+    // skip entirely (no run row, no scrape). Only the cron is guarded — webhook /
+    // manual always run.
+    if (trigger === "cron") {
+      const recent = await ctx.runQuery(internal.monitorData.mostRecentCompleteRun, {});
+      if (recent) {
+        const ts = recent.finishedAt ?? recent.startedAt;
+        if (Date.now() - ts < 20 * 60 * 60 * 1000) {
+          return { scanned: 0, newCount: 0, keeperCount: 0 };
+        }
+      }
+    }
     const apiKey = fcKey();
     const runId = await ctx.runMutation(internal.monitorData.createRun, {
       trigger,

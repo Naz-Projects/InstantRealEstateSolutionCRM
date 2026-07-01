@@ -21,6 +21,7 @@ import type * as flipData from "../flipData.js";
 import type * as geocodeActions from "../geocodeActions.js";
 import type * as geocodeData from "../geocodeData.js";
 import type * as helpers from "../helpers.js";
+import type * as http from "../http.js";
 import type * as invitations from "../invitations.js";
 import type * as legalActions from "../legalActions.js";
 import type * as legalData from "../legalData.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   geocodeActions: typeof geocodeActions;
   geocodeData: typeof geocodeData;
   helpers: typeof helpers;
+  http: typeof http;
   invitations: typeof invitations;
   legalActions: typeof legalActions;
   legalData: typeof legalData;
