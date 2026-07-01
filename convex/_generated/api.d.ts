@@ -28,6 +28,7 @@ import type * as lib_getAuthUser from "../lib/getAuthUser.js";
 import type * as marketActions from "../marketActions.js";
 import type * as marketData from "../marketData.js";
 import type * as monitorData from "../monitorData.js";
+import type * as monitorScrape from "../monitorScrape.js";
 import type * as offerData from "../offerData.js";
 import type * as parcelActions from "../parcelActions.js";
 import type * as parcelData from "../parcelData.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   marketActions: typeof marketActions;
   marketData: typeof marketData;
   monitorData: typeof monitorData;
+  monitorScrape: typeof monitorScrape;
   offerData: typeof offerData;
   parcelActions: typeof parcelActions;
   parcelData: typeof parcelData;

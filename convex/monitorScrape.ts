@@ -1,83 +1,117 @@
-// Runtime-agnostic scrape helpers for the Monitor-the-Web pipeline.
-// NO "use node" and NO Convex functions — just exported async functions that
-// the Task-10 monitor action imports. Reuses the shared (proxy-aware) Firecrawl
-// client so there is one scrape path, plus the pure __NEXT_DATA__ parser and
-// the Redfin sold-comps URL builder.
+// "Monitor the Web" (Zillow NCC deal-finder) — Firecrawl v2 scrape helper. Plain,
+// runtime-agnostic module (uses global fetch, Node 18+) — NOT a Convex function file:
+// no "use node", no queries/mutations/actions. Imported by convex/monitorActions.ts
+// (Task 10) for both the search/detail JSON scrape and the Redfin comps scrape.
+//
+// Talks to Firecrawl's REST **v2** `/scrape` endpoint directly (per the plan,
+// docs/superpowers/plans/2026-06-30-monitor-web-zillow.md: "Firecrawl: REST v2
+// https://api.firecrawl.dev/v2/scrape ..."). This is deliberately NOT the shared
+// `firecrawlScrape` client in src/scraper/firecrawl.ts, which still targets the v1
+// endpoint for the existing NCC-parcel/comps pipelines — `proxy` (basic/enhanced/
+// auto) is a v2-only field (confirmed against Firecrawl's docs), so routing it
+// through the v1 client would silently send a proxy mode the API doesn't recognize
+// and defeat the whole point of this module (getting past Zillow's bot-block).
+//
+// Zillow (and, less often, Redfin) sometimes serve a bot-block "shell" page on an
+// HTTP-200 response: short HTML with no usable data. Firecrawl's own internal HTTP
+// retry can't catch that (it's a content problem, not a transport error), so this
+// module retries the WHOLE scrape at the operation level with spaced gaps — long
+// enough to give Firecrawl's proxy rotation a chance to clear the block before the
+// next attempt, unlike the tight backoff in src/scraper/firecrawl.ts's withRetry.
 
-import { firecrawlScrape } from "../src/scraper/firecrawl";
 import { extractNextData } from "../src/scraper/monitorListings";
 import { buildRedfinSoldUrl } from "../src/scraper/comps";
 
-// A real Zillow page carries the full __NEXT_DATA__ blob (hundreds of KB); a
-// hydration shell returns HTTP 200 but < ~50 KB with no parseable JSON. Treat
-// that (or a scrape error) as transient and re-issue with spaced, jittered gaps.
-const SHELL_MIN_HTML = 50_000;
-const ZILLOW_RETRY_GAPS_MS = [0, 12_000, 28_000, 50_000] as const;
-// Long timeout: proxy:enhanced + waitFor makes a single scrape slow.
-const SCRAPE_TIMEOUT_MS = 150_000;
+const FIRECRAWL_V2_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape";
+const RETRY_GAPS_MS = [0, 12_000, 28_000, 50_000];
+const SHELL_MIN_LEN = 50_000;
+const FETCH_TIMEOUT_MS = 150_000;
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface V2ScrapeData {
+  rawHtml: string;
+  markdown: string;
 }
 
 /**
- * Scrape a Zillow URL (search index or detail) and return its parsed
- * `__NEXT_DATA__` object, or null if every attempt yields a hydration shell or
- * error. Re-issues the whole scrape on failure with spaced increasing gaps
- * (0 → 12s → 28s → 50s) plus jitter. When this returns null the caller falls
- * back to search-card data.
+ * POST Firecrawl REST v2 scrape. Returns rawHtml/markdown, or null on any
+ * failure (HTTP error, network error/timeout, or an unsuccessful response) —
+ * every failure mode is treated as transient/retryable by the callers below.
  */
-export async function scrapeZillowJson(
+async function firecrawlV2Scrape(
   url: string,
   apiKey: string,
-): Promise<any | null> {
-  for (let i = 0; i < ZILLOW_RETRY_GAPS_MS.length; i++) {
-    const gap = ZILLOW_RETRY_GAPS_MS[i];
-    if (gap > 0) await sleep(gap + Math.floor(Math.random() * 3000)); // + jitter
-    try {
-      const { rawHtml } = await firecrawlScrape({
+  proxy: "enhanced" | "auto",
+): Promise<V2ScrapeData | null> {
+  try {
+    const res = await fetch(FIRECRAWL_V2_SCRAPE_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
         url,
-        apiKey,
         formats: ["rawHtml", "markdown"],
-        proxy: "enhanced",
+        proxy,
         waitFor: 5000,
-        timeoutMs: SCRAPE_TIMEOUT_MS,
-        maxRetries: 0, // the spaced loop here is the retry
-      });
-      if (rawHtml.length >= SHELL_MIN_HTML) {
-        const nextData = extractNextData(rawHtml);
-        if (nextData) return nextData;
-      }
-      // otherwise: hydration shell → fall through to the next spaced attempt
-    } catch {
-      // transient block / timeout → fall through to the next spaced attempt
-    }
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+
+    const json = (await res.json()) as {
+      success?: boolean;
+      data?: { rawHtml?: string; markdown?: string };
+    };
+    if (!json.success || !json.data) return null;
+
+    return { rawHtml: json.data.rawHtml ?? "", markdown: json.data.markdown ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Scrape a Zillow search or detail URL and return its parsed `__NEXT_DATA__` JSON.
+ * A bot-block shell (rawHtml under 50k chars, or no parseable `__NEXT_DATA__`) is
+ * treated as retryable, not a hard failure: retries with spaced gaps
+ * [0, 12s, 28s, 50s] + jitter (Firecrawl `proxy:"enhanced"`, `waitFor:5000`).
+ * Returns the nextData object, or null after all retries are exhausted (the caller
+ * falls back to search-card data).
+ */
+export async function scrapeZillowJson(url: string, apiKey: string): Promise<any | null> {
+  if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not set");
+
+  for (const gap of RETRY_GAPS_MS) {
+    if (gap > 0) await sleep(gap + Math.random() * 2000);
+    const data = await firecrawlV2Scrape(url, apiKey, "enhanced");
+    if (!data || data.rawHtml.length < SHELL_MIN_LEN) continue;
+    const nextData = extractNextData(data.rawHtml);
+    if (!nextData) continue;
+    return nextData;
   }
   return null;
 }
 
 /**
- * Scrape recent Redfin sold listings near `zip` (same URL as the Flip
- * Analyzer's comps pull) and return the raw markdown, or "" on failure.
- * Parsing (parseRedfinComps/selectComps/suggestArv) happens in the caller.
+ * Scrape a ZIP's Redfin "recently sold" page (`buildRedfinSoldUrl`) and return its
+ * markdown (the source `parseRedfinComps` parses). Same spaced shell/transient retry
+ * as `scrapeZillowJson` (Firecrawl `proxy:"auto"`, `waitFor:5000`). Returns the
+ * markdown string, or null after all retries are exhausted.
  */
-export async function scrapeRedfinMarkdown(
-  zip: string,
-  apiKey: string,
-): Promise<string> {
-  try {
-    const { markdown } = await firecrawlScrape({
-      url: buildRedfinSoldUrl(zip),
-      apiKey,
-      formats: ["markdown"],
-      onlyMainContent: true,
-      proxy: "auto",
-      waitFor: 3000,
-      timeoutMs: SCRAPE_TIMEOUT_MS,
-      maxRetries: 1,
-    });
-    return markdown;
-  } catch {
-    return "";
+export async function scrapeRedfinMarkdown(zip: string, apiKey: string): Promise<string | null> {
+  if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not set");
+
+  const url = buildRedfinSoldUrl(zip);
+  for (const gap of RETRY_GAPS_MS) {
+    if (gap > 0) await sleep(gap + Math.random() * 2000);
+    const data = await firecrawlV2Scrape(url, apiKey, "auto");
+    if (!data || data.rawHtml.length < SHELL_MIN_LEN) continue;
+    return data.markdown;
   }
+  return null;
 }
