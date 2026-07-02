@@ -21,10 +21,15 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [x] **(c) Firecrawl Monitor — REGISTERED + ACTIVE (2026-07-01 later, `76197c8`).** `createFirecrawlMonitor` first aligned w/
   current v2 docs (account-level signing — NO webhook `secret` body field; id at `data.id`; events `check.completed` only), then
   run on prod: monitor `019f1f6e-de66-759e-ad19-7364acf49fd3`, cron `0 20 * * *` ET, first run 2026-07-02. Daily Convex cron stays as safety net.
-  - [~] **USER: webhook secret sync** — set prod `FIRECRAWL_WEBHOOK_SECRET` to the ACCOUNT secret (firecrawl.dev → Settings →
-    Advanced, the account owning prod's `fc-286…` key). Until then deliveries 401 fail-closed (cron still scans).
-  - [~] **USER: which Firecrawl account for prod?** Prod key `fc-286…` = original account (17,874 credits, monthly); the new
-    **annual 100k** key `fc-3f8…` (96,608 left) is only in `.env.local`. Switching = env set + re-register monitor + that account's secret.
+  - [x] **Webhook secret SYNCED + VERIFIED END-TO-END (2026-07-02).** User supplied the account webhook secret + a fresh API
+    key (`fc-76ff…`) from their personal account — SAME team as the old `fc-286…` key (verified: identical billing period +
+    the monitor is visible under it → no re-registration). Both set on prod. Proof: self-signed HMAC POST to
+    `/firecrawl-monitor` → **HTTP 200** → real webhook-triggered scan **166 scanned / 63 new / 87 analyzed / 0 failed** on the
+    new key; **42 keepers, 0 violate the tuned gate**; top finds 18 S Pennewell (90 FLIP, 43% spread) + 212 Bohemia Mill Pond
+    (90 FLIP, 51%). Last night's unsynced first check 401'd + cron 20h-guard skipped = fail-safe chain proven organically.
+  - [x] **Account decision RESOLVED (user, 2026-07-02): personal account (~17.8k credits, monthly) for now.** The ANNUAL 100k
+    key (`fc-3f8…`) stays local-only in `.env.local`. Old chat-shared `fc-286…` key can be revoked in the dashboard (new key
+    `fc-76ff…` + secret were also chat-shared → fold into the standing key-rotation punch list).
 - [ ] **Product Q (user):** surface no-list-price foreclosures as a separate "distress, price TBD" section, or keep them dropped (current mirage fix)?
 - [ ] **Minor visual:** one card (218 W 23rd) rendered a broken-image placeholder (missing/404 photo URL). Deferred Minors — see ledger `.superpowers/sdd/progress.md`.
 

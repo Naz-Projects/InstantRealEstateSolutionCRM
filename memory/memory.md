@@ -23,10 +23,10 @@ investor-grade insights (top = rentals cap 6.3–6.8%, flip -ve, comps-capped AR
 `decideKeeper` distress-only keeps require spread≥0 OR dealScore≥30 (`b72f951`; 3 above-market rows re-analyzed → keeper=false,
 16→13 keepers); (c) Firecrawl Monitor **registered + active** (`76197c8` first aligned the action with the real v2 API —
 ACCOUNT-level webhook signing, NO body `secret`, id at `data.id`, events `check.completed` only; monitor
-`019f1f6e-de66-759e-ad19-7364acf49fd3`, daily 8 PM ET). **2 USER items open:** set prod `FIRECRAWL_WEBHOOK_SECRET` to the
-account secret (dashboard → Settings → Advanced; until then deliveries 401 fail-closed, the daily cron scans), and decide which
-Firecrawl account prod uses (prod = original `fc-286…` 17.9k credits monthly; the new ANNUAL 100k key `fc-3f8…` is only in
-`.env.local`). Full detail: `memory/next-session-prompt.md` (top) + spec `docs/superpowers/specs/2026-06-30-monitor-web-zillow-design.md`
+`019f1f6e-de66-759e-ad19-7364acf49fd3`, daily 8 PM ET). **RESOLVED 2026-07-02:** user chose the personal account (~17.8k monthly; same team as before) — prod now runs key `fc-76ff…`
+with the account webhook secret synced; proven end-to-end (self-signed HMAC POST → 200 → real scan 166/63new/87analyzed/0failed,
+42 keepers, 0 gate violations; new top finds 18 S Pennewell + 212 Bohemia Mill Pond, score-90 FLIPs at 43%/51% spreads). The
+ANNUAL 100k key (`fc-3f8…`) stays local-only in `.env.local`. The feature is fully operational — nothing blocking. Full detail: `memory/next-session-prompt.md` (top) + spec `docs/superpowers/specs/2026-06-30-monitor-web-zillow-design.md`
 + ledger `.superpowers/sdd/progress.md`.
 
 ## ★ Active initiative (2026-06-06..08) — Wholesaling Lead Engine

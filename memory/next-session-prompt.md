@@ -2,7 +2,7 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★★★★★★★ START HERE — 2026-07-01 (later) — "MONITOR THE WEB" — **FAST-FOLLOWS DONE + DEPLOYED: keeper tuning live-verified on prod; Firecrawl Monitor REGISTERED (active, daily 8 PM ET). Remaining = 2 USER decisions below.**
+## ★★★★★★★ START HERE — 2026-07-02 — "MONITOR THE WEB" — **COMPLETE + FULLY OPERATIONAL: keeper tuning live, Firecrawl Monitor active (daily 8 PM ET), webhook secret synced + proven end-to-end. Nothing blocking.**
 
 **What it is:** the **on-market** counterpart to the off-market `/leads` engine — nightly scrape of new NCC Zillow for-sale ≤$500K, multi-exit underwriting (flip/rental/wholesale) + DeepSeek judge + off-market cross-ref, surfaced on `/monitor` + key-gated Resend digest + one-click Promote-to-Potential.
 
@@ -16,10 +16,23 @@ _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 1. **(a) KEEPER-PRECISION TUNING — SHIPPED + LIVE-VERIFIED (`b72f951`).** `decideKeeper` now keeps a distress-only listing ONLY when `spread >= 0` OR `dealScore >= MONITOR.distressScoreFloor` (30); null spread is NOT a free pass; belowMarket/flip/rental keep paths unchanged; call site passes real `spread` + `score.dealScore`. 313 tests. **Prod-verified via re-run `analyzeOne`:** 513 W 37th (spread −$31k), 508 Lake Dr (−$72.5k), 1805 W 8th (−$14k, score 20) all flipped keeper→false; keepers 16→13; remaining PASS-scored keepers are distressed-and-NOT-above-market (kept by design). Note (final review): distress + negative spread + dealScore ≥30 keeps = the RENTAL leg (cap 4–5% distressed rentable) — intended.
 2. **(c) FIRECRAWL MONITOR — REGISTERED + ACTIVE.** First aligned `createFirecrawlMonitor` with the CURRENT v2 API (`76197c8`, docs live-verified by scraping docs.firecrawl.dev THROUGH the Firecrawl API): webhook body has **NO `secret` field** (signing is ACCOUNT-level — dashboard → Settings → Advanced), monitor id is at `data.id`, events narrowed to `["monitor.check.completed"]` only (`monitor.page` would double-fire our scan-per-delivery http.ts). Then registered on prod: **monitor id `019f1f6e-de66-759e-ad19-7364acf49fd3`, status active, cron `0 20 * * *` America/New_York (8 PM ET), first run 2026-07-02**; GET-verified via the API. Backend deployed to `pastel-crocodile-994`; `main` pushed → `76197c8` (CF builds).
 
-### ★ REMAINING — 2 USER decisions (then ~5 min of CLI I can run)
-1. **Webhook signing secret (until fixed: deliveries 401 fail-closed; the daily 02:00-UTC cron still scans — nothing breaks).** Firecrawl signs with the ACCOUNT secret; prod's `FIRECRAWL_WEBHOOK_SECRET` is a locally-generated value that won't match. Fix: sign in to firecrawl.dev (the account that owns PROD's key, `fc-286…`) → Settings → **Advanced** → copy the webhook secret → `CONVEX_DEPLOY_KEY=<prod> npx convex env set FIRECRAWL_WEBHOOK_SECRET <value>`. (I tried via Chrome — firecrawl.dev was signed out; user must sign in, then I can finish it.)
-2. **WHICH Firecrawl account should prod use?** Discovered: prod Convex `FIRECRAWL_API_KEY` = the ORIGINAL account (`fc-286…`, **17,874 credits left**, monthly period ends 2026-07-05) — the pen-test + the new monitor live THERE. The user's NEW **100k key is ANNUAL** (`fc-3f8…` in `.env.local`, 96,608 left, period ends 2027-06-08) and is NOT on prod. If the user wants nightly scans on the 100k account: set prod `FIRECRAWL_API_KEY` to the new key (affects ALL prod scraping: sheriff/Zillow/comps too), delete the old monitor (`DELETE /v2/monitor/<id>` w/ old key) + re-run `createFirecrawlMonitor`, and put the NEW account's dashboard secret in `FIRECRAWL_WEBHOOK_SECRET`. If staying on the old account: do nothing (mind the monthly credit budget: nightly ≈ 50–100 credits/day).
-3. (b) MEMORY — done again this session (this file + todo/lessons + auto-memory `[[monitor-web-zillow]]`).
+### ✅ BOTH USER ITEMS RESOLVED (2026-07-02) — the Monitor feature is FULLY OPERATIONAL end-to-end
+1. **Webhook secret SYNCED + PROVEN.** User chose the **personal account** (~17.8k credits, monthly; = the same team as the old
+   `fc-286…` key) and supplied its dashboard webhook secret + a fresh API key **`fc-76ff…`** — verified same-team (identical
+   billing period; the monitor `019f1f6e…` is visible under it → **no re-registration needed**). Prod env updated:
+   `FIRECRAWL_API_KEY=fc-76ff…`, `FIRECRAWL_WEBHOOK_SECRET=<account secret>` (copy in the worktree's gitignored
+   `.superpowers/sdd/firecrawl_webhook_secret.txt`). **End-to-end proof:** self-signed HMAC POST → `/firecrawl-monitor` →
+   **HTTP 200** → real scan **166/63 new/87 analyzed/0 failed** on the new key; **42 keepers, 0 violate the tuned gate**; new
+   top finds 18 S Pennewell Dr (score 90 FLIP, 43% spread) + 212 Bohemia Mill Pond Dr (90 FLIP, 51%). Bonus organic proof:
+   last night's FIRST monitor check (00:00 UTC) 401'd on the then-unsynced secret and the 02:00 cron correctly 20h-guard
+   skipped — the fail-safe chain behaved exactly as designed. Tonight's 8 PM ET check = first fully organic run.
+2. **Account decision: personal account for now (user).** The ANNUAL 100k key (`fc-3f8…`, ~96.6k left) stays LOCAL-ONLY in
+   `.env.local`. If nightly volume ever threatens the ~17.8k monthly budget (nightly ≈ 50–150 credits), switch = env set new
+   key + move the monitor + that account's secret. NOTE: `fc-76ff…` + the secret were pasted in chat → fold into the standing
+   key-rotation punch list (old `fc-286…` can be revoked in the dashboard now).
+3. Remaining Monitor items are only the earlier deferrals: product Q (no-list-price foreclosures section?), broken-image
+   card cosmetic, ledger minors. NEXT session: back to the wholesaling pipeline roadmap (P5 merge awaits Tracerfy key · P8
+   buyer-match · P3/end-bucket) or wherever the user points.
 
 ### Deferred fast-follows / minors (from the pen-test + branch ledger — low-risk)
 - **Product Q for the user:** no-list-price foreclosure listings are DROPPED (the `MONITOR.minListPrice` mirage fix). They're distress signals — surface them as a separate "distress, price TBD" section, or leave dropped?
