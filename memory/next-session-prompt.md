@@ -2,7 +2,14 @@
 
 _Read `memory/memory.md` + `memory/lessons.md` first, then this._
 
-## ★★★★★★★ START HERE — 2026-07-02 — "MONITOR THE WEB" — **COMPLETE + FULLY OPERATIONAL: keeper tuning live, Firecrawl Monitor active (daily 8 PM ET), webhook secret synced + proven end-to-end. Nothing blocking.**
+## ★★★★★★★ START HERE — 2026-07-03 — "MONITOR THE WEB" — **AUDITED + P0-HARDENED IN PROD. One user item: paste a Resend API key to turn on the daily digest email.**
+
+### 2026-07-03 — 48h production audit + P0 fix batch (SHIPPED, origin/main `ca63244`+)
+**Audit (artifact report delivered):** webhook fired organically nightly ✓, scans+analysis autonomous 0-failed ✓, insights real ✓ (48 keepers; 18 S Pennewell 90-FLIP 43% below w/ code-violation owner; 29 N Dragon found overnight 66.5% below) — BUT found: (a) **webhook retry storm** (handler awaited the ~60s scan; Firecrawl 10s timeout → 1/5/15-min retries → 4 scans/night); (b) **LOT false positive** (212 Bohemia, vacant lot comps'd as a house → #2 keeper, score 90); (c) header echoed the 0-new retry run; (d) **Resend never configured → 48 keepers "unemailed", user saw nothing for 2 days** (the value-delivery gap); (e) nothing being worked (2 Potential cards, all leads "New").
+**P0 SHIPPED (3 Opus tasks, per-task + final reviews all clean, deployed + live-verified):** `20ffa6e` webhook instant-ACK (`ctx.scheduler.runAfter(0)` + 200; ACKs measured **1.4s/0.3s**; 10-min any-status duplicate guard — 2nd signed POST absorbed, exactly one run row) · `1c7f0d9` `isLandType` guard (land never underwritten/kept, no comps/LLM spend; Bohemia re-analyzed live → keeper=false "LAND (not underwritten)"; was the only land row) · `ca63244` honest header ("{N} new in last 24h" aggregate via `latestRun {run,newLast24h,runsLast24h}`).
+**REMAINING (user):** paste a **Resend API key** (free resend.com account) → I set `RESEND_API_KEY`+`RESEND_FROM` (onboarding@resend.dev works for solo)+`RESEND_TO` on prod → daily digest goes live (`PORTAL_BASE_URL` already set). Then P1 backlog from the audit: dismiss/snooze on keeper cards · auto-enrich keepers (condition+equity) · price-cut signal from stored priceHistory · 4h monitor cadence · dashboard "New on Monitor" panel + polish (photo fallback, promote source tag, hydration skeletons). P2: unlock P5 skip-trace (Tracerfy) · P8 buyer-match · product Qs (no-price foreclosure section, land section). Audit artifact: claude.ai/code/artifact/c630427e-8385-453b-b292-a9ed058d9443.
+
+## (superseded 2026-07-03) — 2026-07-02 — "MONITOR THE WEB" — COMPLETE + FULLY OPERATIONAL: keeper tuning live, Firecrawl Monitor active (daily 8 PM ET), webhook secret synced + proven end-to-end.
 
 **What it is:** the **on-market** counterpart to the off-market `/leads` engine — nightly scrape of new NCC Zillow for-sale ≤$500K, multi-exit underwriting (flip/rental/wholesale) + DeepSeek judge + off-market cross-ref, surfaced on `/monitor` + key-gated Resend digest + one-click Promote-to-Potential.
 

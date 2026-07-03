@@ -30,7 +30,18 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   - [x] **Account decision RESOLVED (user, 2026-07-02): personal account (~17.8k credits, monthly) for now.** The ANNUAL 100k
     key (`fc-3f8…`) stays local-only in `.env.local`. Old chat-shared `fc-286…` key can be revoked in the dashboard (new key
     `fc-76ff…` + secret were also chat-shared → fold into the standing key-rotation punch list).
-- [ ] **Product Q (user):** surface no-list-price foreclosures as a separate "distress, price TBD" section, or keep them dropped (current mirage fix)?
+- [x] **P0 audit-fix batch — SHIPPED + LIVE-VERIFIED (2026-07-03, `20ffa6e`+`1c7f0d9`+`ca63244` → prod).** From the 48h production
+  audit: webhook instant-ACK (1.4s, was ~60s → killed the 4-scans/night Firecrawl retry storm) + 10-min duplicate guard (2nd
+  signed POST absorbed) · LOT/LAND guard (Bohemia lot no longer a fake 90-score flip; land never underwritten, no comps/LLM spend) ·
+  honest header ("N new in last 24h" aggregate). All Opus subagent-built, per-task + final reviews clean.
+- [~] **USER: Resend API key** — the daily digest is built + fires after every scan but skips without `RESEND_API_KEY`
+  (48 keepers sit unemailed; error log shows the honest skip). Free resend.com key → set `RESEND_API_KEY`/`RESEND_FROM`/`RESEND_TO`
+  on prod (`PORTAL_BASE_URL` already set) → insights hit the inbox nightly. THE highest value-per-minute item open.
+- [ ] **P1 backlog (from the audit, in order):** dismiss/snooze on keeper cards (seen-state) · auto-enrich new keepers
+  (Street-View condition + equity/balances, funnel-only capped) · price-cut/relist signal from stored `priceHistory` ·
+  monitor cadence daily→every 4h (safe now the ACK fix landed) · dashboard "New on Monitor" panel · polish batch
+  (photo fallback to Street View, promote source tag "Monitor", hydration skeletons, run-row counts).
+- [ ] **Product Q (user):** surface no-list-price foreclosures as a separate "distress, price TBD" section, or keep them dropped (current mirage fix)? Also: land listings — keep as flagged-only in "All new", or give land its own section?
 - [ ] **Minor visual:** one card (218 W 23rd) rendered a broken-image placeholder (missing/404 photo URL). Deferred Minors — see ledger `.superpowers/sdd/progress.md`.
 
 ## ★ ACTIVE — Wholesaling Lead Engine (Phase 0 DONE → Phase 1 NEXT)
