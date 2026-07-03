@@ -143,6 +143,16 @@ export const runMonitorScan = internalAction({
         }
       }
     }
+    // Webhook 10-min duplicate-scan guard: Firecrawl can redeliver the same event
+    // (its retries, or two near-simultaneous fires). If ANY run — including one still
+    // RUNNING — started within the last 10 min, skip entirely (no run row, no scrape).
+    // Only the webhook is guarded here; manual always runs.
+    if (trigger === "webhook") {
+      const recent = await ctx.runQuery(internal.monitorData.mostRecentRun, {});
+      if (recent && Date.now() - recent.startedAt < 10 * 60 * 1000) {
+        return { scanned: 0, newCount: 0, keeperCount: 0 };
+      }
+    }
     const runId = await ctx.runMutation(internal.monitorData.createRun, {
       trigger,
       source: "zillow",

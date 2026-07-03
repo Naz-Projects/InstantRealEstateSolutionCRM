@@ -252,6 +252,19 @@ export const mostRecentCompleteRun = internalQuery({
   },
 });
 
+/** The most recent run of ANY status (running/complete/failed), for the webhook
+ *  10-min duplicate-scan guard — a still-RUNNING scan must block a duplicate too. */
+export const mostRecentRun = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("monitorRuns")
+      .withIndex("by_started")
+      .order("desc")
+      .first();
+  },
+});
+
 /** Stamp emailedAt so a keeper is never emailed twice. */
 export const markEmailed = internalMutation({
   args: { id: v.id("monitorListings") },

@@ -59,15 +59,17 @@ http.route({
     if (!secret || !header || !(await verifySignature(secret, rawBody, header))) {
       return new Response("unauthorized", { status: 401 });
     }
-    // Valid signature → trigger a scan and return 200 promptly (payload not trusted).
-    // A scan error is already recorded as a failed monitorRuns row by runMonitorScan's
-    // own try/catch; catch it here too so it can never 500 this webhook response — a
+    // Valid signature → ACK fast, scan async. Firecrawl requires a 2xx within 10s
+    // or it retry-storms us; the scan takes ~30–160s, so we SCHEDULE it (a fast
+    // write) and return 200 immediately instead of awaiting it. Duplicate deliveries
+    // are absorbed by runMonitorScan's own 10-min webhook guard (payload not trusted).
+    // A scheduling error is caught here so it can never 500 this webhook response — a
     // 500 would make Firecrawl retry-storm us, and the daily cron is the safety net.
     try {
-      await ctx.runAction(internal.monitorActions.runMonitorScan, { trigger: "webhook" });
+      await ctx.scheduler.runAfter(0, internal.monitorActions.runMonitorScan, { trigger: "webhook" });
     } catch (e) {
       await ctx.runMutation(internal.errors.logServerError, {
-        message: `firecrawl-monitor webhook: runMonitorScan threw: ${e instanceof Error ? e.message : String(e)}`,
+        message: `firecrawl-monitor webhook: scheduling runMonitorScan threw: ${e instanceof Error ? e.message : String(e)}`,
         context: "http.firecrawl-monitor",
       });
     }
