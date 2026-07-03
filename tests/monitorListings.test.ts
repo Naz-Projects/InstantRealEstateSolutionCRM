@@ -4,6 +4,7 @@ import { extractNextData, listingsFromSearch, totalResultCount } from "../src/sc
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
+import { isLandType } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import type { Comp } from "../src/scraper/comps";
 
@@ -175,6 +176,22 @@ describe("riskFlags", () => {
   it("flags manufactured, high HOA, non-financeable, ARV-suspect, detail-missing", () => {
     const f = riskFlags({ homeType: "MANUFACTURED", monthlyHoaFee: 400, description: "cash only, may not qualify FHA/VA", rehabTier: "gut", zestimate: 100000, compsArv: 300000, detailOk: false });
     expect(f).toEqual(expect.arrayContaining([expect.stringContaining("MANUFACTURED"), expect.stringContaining("HOA"), expect.stringContaining("financeable"), expect.stringContaining("heavy-rehab"), expect.stringContaining("ARV"), expect.stringContaining("VERIFY")]));
+  });
+});
+
+describe("isLandType", () => {
+  it("true for LOT / LAND (case-insensitive, trimmed)", () => {
+    expect(isLandType("LOT")).toBe(true);
+    expect(isLandType("LAND")).toBe(true);
+    expect(isLandType("lot")).toBe(true);
+    expect(isLandType(" LOT ")).toBe(true);
+  });
+  it("false for house types and empty/undefined/null", () => {
+    expect(isLandType("SINGLE_FAMILY")).toBe(false);
+    expect(isLandType("MANUFACTURED")).toBe(false);
+    expect(isLandType(undefined)).toBe(false);
+    expect(isLandType(null)).toBe(false);
+    expect(isLandType("")).toBe(false);
   });
 });
 

@@ -11,6 +11,7 @@ import {
   listingsFromSearch,
   totalResultCount,
   detailFromCache,
+  isLandType,
   conservativeArv,
   inferRehabTier,
   estimateRehab,
@@ -275,6 +276,26 @@ export const analyzeOne = internalAction({
       const zestimate = detail?.zestimate ?? row.zestimate ?? null;
       const rentZestimate = detail?.rentZestimate ?? row.rentZestimate ?? null;
       const zip = row.propZip ?? parseZip(row.address) ?? undefined;
+
+      // 2b) LAND guard: house comps / rehab / rental math are meaningless on vacant
+      // land, so it is never underwritten or kept — surfaced in "All new" only. Bail
+      // before comps/ARV/rehab/exits/off-market and the DeepSeek call (saves credits).
+      if (isLandType(homeType)) {
+        await ctx.runMutation(internal.monitorData.patchAnalysis, {
+          id,
+          fields: {
+            status: "analyzed" as const,
+            arvSource: "none",
+            keeper: false,
+            aiKeep: false,
+            dealScore: 0,
+            bestExit: "PASS",
+            riskFlags: ["LAND (not underwritten)"],
+            matchedRequirements: [],
+          },
+        });
+        return;
+      }
 
       // 3) Comps → conservative ARV (comps median $/sqft, capped vs Zestimate).
       const comps = zip ? await compsForZip(zip, apiKey) : [];

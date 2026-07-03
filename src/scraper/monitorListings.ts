@@ -85,6 +85,13 @@ import { selectComps, suggestArv, type Comp } from "./comps";
 import { estimateRehab, computeFlip, FLIP_DEFAULTS } from "./flip";
 export { estimateRehab };
 
+// Vacant land: house comps/rehab/rental math are meaningless on it, so land is
+// never underwritten or kept (it stays visible in "All new", honestly labeled).
+export function isLandType(homeType: string | null | undefined): boolean {
+  const t = (homeType || "").trim().toUpperCase();
+  return t === "LOT" || t === "LAND";
+}
+
 export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds: number | null; zestimate: number | null; homeType?: string; }):
   { arv: number | null; source: "comps" | "zestimate" | "none"; compsPpsf: number | null; compsCount: number } {
   const manufactured = (opts.homeType || "").toUpperCase() === "MANUFACTURED";
