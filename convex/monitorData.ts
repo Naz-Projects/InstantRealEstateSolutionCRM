@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
 
@@ -367,16 +368,30 @@ export const markPromoted = mutation({
   },
 });
 
-/** The latest run for the /monitor header summary (null before the first run). */
+/**
+ * The /monitor header summary. Returns the latest run row (any status, as before)
+ * plus a trailing-24h aggregate so the header reports the night's real result
+ * instead of echoing one arbitrary run (e.g. a 0-new webhook retry). Null only
+ * when no runs exist. Walks `by_started` desc and stops once startedAt leaves the
+ * window (no history table-scan).
+ */
 export const latestRun = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    return await ctx.db
-      .query("monitorRuns")
-      .withIndex("by_started")
-      .order("desc")
-      .first();
+    const rows = ctx.db.query("monitorRuns").withIndex("by_started").order("desc");
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    let run: Doc<"monitorRuns"> | null = null;
+    let newLast24h = 0;
+    let runsLast24h = 0;
+    for await (const r of rows) {
+      if (run === null) run = r;
+      if (r.startedAt < cutoff) break;
+      newLast24h += r.newCount;
+      runsLast24h += 1;
+    }
+    if (run === null) return null;
+    return { run, newLast24h, runsLast24h };
   },
 });
 

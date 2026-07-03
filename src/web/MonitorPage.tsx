@@ -382,9 +382,10 @@ function MonitorCard({ row }: { row: MonitorRow }) {
 
 type LatestRun = FunctionReturnType<typeof api.monitorData.latestRun>;
 
-function summaryText(run: LatestRun | undefined, keeperCount: number): string {
-  if (run === undefined) return "Loading latest run…";
-  if (run === null) return "No scans yet — the daily monitor runs at 8 PM ET.";
+function summaryText(summary: LatestRun | undefined, keeperCount: number): string {
+  if (summary === undefined) return "Loading latest run…";
+  if (summary === null) return "No scans yet — the daily monitor runs at 8 PM ET.";
+  const { run, newLast24h } = summary;
   const t = run.finishedAt ?? run.startedAt;
   const when = new Date(t).toLocaleString("en-US", {
     month: "short",
@@ -392,7 +393,8 @@ function summaryText(run: LatestRun | undefined, keeperCount: number): string {
     hour: "numeric",
     minute: "2-digit",
   });
-  return `Last run ${when} · ${run.scanned} scanned · ${run.newCount} new · ${keeperCount} ${keeperCount === 1 ? "keeper" : "keepers"}`;
+  const failed = run.status === "failed" ? " · last scan failed" : "";
+  return `Last scan ${when} · ${newLast24h} new in last 24h · ${keeperCount} ${keeperCount === 1 ? "keeper" : "keepers"}${failed}`;
 }
 
 export function MonitorPage() {
