@@ -82,7 +82,7 @@ export function detailFromCache(nextData: any): ListingDetail | null {
 }
 
 import { selectComps, suggestArv, type Comp } from "./comps";
-import { estimateRehab, computeFlip, FLIP_DEFAULTS } from "./flip";
+import { estimateRehab, computeFlip, FLIP_DEFAULTS, type FlipAssumptions } from "./flip";
 export { estimateRehab };
 
 // Vacant land: house comps/rehab/rental math are meaningless on it, so land is
@@ -126,9 +126,21 @@ export function detectRenovated(description: string | null | undefined): boolean
 
 export interface RentalMetrics { rent: number; onePct: number; capRate: number; cashFlow: number; cashOnCash: number; allIn: number; }
 
+// NCC/Delaware transfer-tax correction, applied ONLY to the monitor's underwriting
+// (the standalone /flip Analyzer keeps FLIP_DEFAULTS' generic math). Research
+// docs/superpowers/research/2026-07-04-flipper-criteria.md §1.15 + §1.2: NCC transfer
+// tax is 4% total, customarily split 50/50 -> the investor pays ~2% of purchase when
+// BUYING and ~2% of resale (ARV) when SELLING. closingPct is purchase-based (+0.02 buy
+// leg); sellTransferPct is ARV-based (+0.02 sell leg). This lowers flip profit/margin/roi
+// by the transfer tax (MAO is the fixed 70%-rule ceiling and is unaffected).
+export const MONITOR_FLIP_ASSUMPTIONS: FlipAssumptions = {
+  ...FLIP_DEFAULTS.assumptions,
+  closingPct: FLIP_DEFAULTS.assumptions.closingPct + 0.02,
+  sellTransferPct: FLIP_DEFAULTS.assumptions.sellTransferPct + 0.02,
+};
 export function analyzeFlip(arv: number | null, list: number | null, rehab: number) {
   if (arv == null || list == null) return null;
-  const m = computeFlip({ arv, purchasePrice: list, rehabTotal: rehab, assumptions: FLIP_DEFAULTS.assumptions });
+  const m = computeFlip({ arv, purchasePrice: list, rehabTotal: rehab, assumptions: MONITOR_FLIP_ASSUMPTIONS });
   return { mao: m.mao, profit: m.profit, margin: m.margin ?? 0, roi: m.roi, roomVsList: m.mao != null ? Math.round(m.mao - list) : null };
 }
 export function analyzeRental({ rent, list, rehab, taxRatePct }: { rent: number | null; list: number; rehab: number; taxRatePct?: number }): RentalMetrics | null {

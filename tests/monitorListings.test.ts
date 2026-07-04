@@ -6,6 +6,7 @@ import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper
 import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
 import { isLandType } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
+import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import type { Comp } from "../src/scraper/comps";
 
 describe("buildSearchUrl", () => {
@@ -160,6 +161,23 @@ describe("analyzeFlip", () => {
     expect(f.mao).toBe(Math.round(247200 * 0.7 - 23265)); // 149775
     expect(f.roomVsList).toBe(f.mao! - 125000); // ~+24775 (can offer below list)
     expect(f.margin).toBeGreaterThan(0.2); // ~26%
+  });
+  it("NCC transfer-tax correction lowers flip profit vs FLIP_DEFAULTS (relationship + exact)", () => {
+    // Corrected monitor underwriting (MONITOR_FLIP_ASSUMPTIONS: +2% buy closing, +2% ARV transfer)
+    const corrected = analyzeFlip(300000, 200000, 40000)!;
+    // Generic /flip math for the same deal (unchanged FLIP_DEFAULTS)
+    const generic = computeFlip({ arv: 300000, purchasePrice: 200000, rehabTotal: 40000, assumptions: FLIP_DEFAULTS.assumptions });
+    // Relationship: transfer tax makes the monitor's economics strictly worse.
+    expect(corrected.profit!).toBeLessThan(generic.profit!);
+    // MAO is the fixed 70%-rule ceiling — unaffected by the assumption change.
+    expect(corrected.mao).toBe(generic.mao);
+    // Exact corrected values.
+    expect(corrected.mao).toBe(170000);
+    expect(corrected.profit).toBe(3100);
+    expect(corrected.margin).toBeCloseTo(31 / 3000, 10);
+    expect(corrected.roomVsList).toBe(-30000);
+    // The gap is exactly the two transfer-tax legs: 2% of purchase + 2% of ARV.
+    expect(generic.profit! - corrected.profit!).toBe(200000 * 0.02 + 300000 * 0.02);
   });
 });
 describe("analyzeRental", () => {
