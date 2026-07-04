@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 import { detailFromCache } from "../src/scraper/monitorListings";
-import { conservativeArv, inferRehabTier } from "../src/scraper/monitorListings";
+import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
 import { isLandType } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
@@ -126,6 +126,32 @@ describe("inferRehabTier", () => {
   it("cosmetic on turnkey", () => { expect(inferRehabTier("totally renovated 2022, shows like new, move-in")).toBe("cosmetic"); });
   it("moderate on needs-work/investor", () => { expect(inferRehabTier("great investment, needs full renovation, priced to sell, sold as-is")).toBe("gut"); });
   it("moderate default when unknown", () => { expect(inferRehabTier("charming home near shopping")).toBe("moderate"); });
+  it("word 'dated' still reads moderate (word-boundary regression pin)", () => { expect(inferRehabTier("dated kitchen, needs updating")).toBe("moderate"); });
+  it("'updated' no longer substring-matches MODERATE's 'dated' -> cosmetic", () => { expect(inferRehabTier("Updated kitchen and baths, move-in ready")).toBe("cosmetic"); });
+});
+
+describe("detectRenovated", () => {
+  it("true on explicit done-renovation language", () => {
+    expect(detectRenovated("Beautifully renovated 3BR with new kitchen")).toBe(true);
+    expect(detectRenovated("Fully remodeled from top to bottom")).toBe(true);
+    expect(detectRenovated("Recently rehabbed, turnkey rental")).toBe(true);
+    expect(detectRenovated("Updated kitchen and baths, move-in ready")).toBe(true);
+    expect(detectRenovated("Completely updated throughout")).toBe(true);
+    expect(detectRenovated("Shows like new")).toBe(true);
+  });
+  it("false when needs-work language wins or it's a renovation opportunity", () => {
+    expect(detectRenovated("Needs renovation — bring your vision")).toBe(false);
+    expect(detectRenovated("Great renovation opportunity for investors")).toBe(false);
+    expect(detectRenovated("Partially renovated, unfinished basement project")).toBe(false);
+    expect(detectRenovated("Move-in ready charmer")).toBe(false); // bare move-in
+    expect(detectRenovated("Renovated kitchen but the rest needs TLC")).toBe(false); // MODERATE wins
+    expect(detectRenovated("Sold strictly as-is, full rehab needed")).toBe(false); // GUT wins
+  });
+  it("false on empty / undefined / null", () => {
+    expect(detectRenovated("")).toBe(false);
+    expect(detectRenovated(undefined)).toBe(false);
+    expect(detectRenovated(null)).toBe(false);
+  });
 });
 
 describe("analyzeFlip", () => {
@@ -204,10 +230,20 @@ describe("parseJudgeResponse", () => {
     expect(v.confidence).toBe("high");
   });
   it("returns null on unparseable", () => { expect(parseJudgeResponse("the house looks fine")).toBeNull(); });
-  it("prompt contains the 4 requirements + says return json + forbids recomputing", () => {
+  it("parses renovated:true, defaults missing renovated to false", () => {
+    const yes = parseJudgeResponse('{"keep":false,"matchedRequirements":[],"conditionNotes":"","reason":"already flipped","confidence":"high","renovated":true}')!;
+    expect(yes.renovated).toBe(true);
+    const missing = parseJudgeResponse('{"keep":true,"matchedRequirements":["fixer"],"conditionNotes":"","reason":"fixer","confidence":"low"}')!;
+    expect(missing.renovated).toBe(false); // missing field -> false
+    const truthy = parseJudgeResponse('{"keep":false,"matchedRequirements":[],"conditionNotes":"","reason":"x","confidence":"low","renovated":"yes"}')!;
+    expect(truthy.renovated).toBe(false); // tolerant: anything not === true is false
+  });
+  it("prompt contains the 4 requirements + says return json + forbids recomputing + asks for renovated", () => {
     const p = buildJudgePrompt({ address: "1 X St", listPrice: 100000, conservativeArv: 200000, spreadPct: 50, description: "as-is" });
     expect(p.toLowerCase()).toContain("json");
     expect(p).toMatch(/below.market/i); expect(p).toMatch(/fixer|renovat/i); expect(p).toMatch(/distress/i);
     expect(p.toLowerCase()).toContain("do not recompute");
+    expect(p).toContain('"renovated":false');
+    expect(p.toLowerCase()).toContain("already renovated");
   });
 });

@@ -14,6 +14,7 @@ import {
   isLandType,
   conservativeArv,
   inferRehabTier,
+  detectRenovated,
   estimateRehab,
   analyzeFlip,
   analyzeRental,
@@ -249,8 +250,9 @@ export const runMonitorScan = internalAction({
 
 /**
  * Enrich one discovered listing: detail scrape → comps → conservative ARV →
- * rehab tier → multi-exit (flip + rental) → deal score → off-market cross-ref →
- * DeepSeek judge → keeper decision. Patches the row `analyzed` (or `failed` +
+ * rehab tier → multi-exit (flip + rental) → off-market cross-ref → DeepSeek
+ * judge → renovated veto (an already-renovated house never keeps a flip exit) →
+ * deal score → keeper decision. Patches the row `analyzed` (or `failed` +
  * lastError on a thrown error). Runs as a scheduled action (no user identity).
  */
 export const analyzeOne = internalAction({
@@ -312,10 +314,9 @@ export const analyzeOne = internalAction({
       const spreadPct = spread != null && arv ? +(((spread) / arv) * 100).toFixed(1) : null;
       const belowMarket = spreadPct != null && spreadPct >= MONITOR.spreadThreshold * 100;
 
-      // 6) Multi-exit underwriting + score.
+      // 6) Multi-exit underwriting (scored at 9b, after the renovated veto).
       const flip = analyzeFlip(arv, listPrice, rehabTotal);
       const rental = analyzeRental({ rent: rentZestimate, list: listPrice ?? 0, rehab: rehabTotal });
-      const score = scoreDeal(flip, rental);
 
       // 7) Risk flags (all from the scraped JSON).
       const flags = riskFlags({
@@ -347,11 +348,20 @@ export const analyzeOne = internalAction({
         description,
       });
 
+      // 9b) Renovated veto: you cannot flip a house someone already flipped.
+      // Deterministic detection is primary; the judge's opinion may only SUPPRESS
+      // a flip (never create/restore a keep). Rental/below-market exits untouched —
+      // a renovated rental with a clearing cap rate is a legitimate keeper.
+      const renovated = detectRenovated(description) || verdict?.renovated === true;
+      const flipFinal = renovated ? null : flip;
+      const score = scoreDeal(flipFinal, rental);
+      if (renovated) flags.push("RENOVATED (no flip)");
+
       // 10) Keeper decision (deterministic OR + AI distress).
       const distress =
         !!verdict?.matchedRequirements.includes("distressed") ||
         !!detail?.foreclosure;
-      const keeper = decideKeeper({ belowMarket, flip, rental, distress, spread, dealScore: score.dealScore });
+      const keeper = decideKeeper({ belowMarket, flip: flipFinal, rental, distress, spread, dealScore: score.dealScore });
 
       const matched = new Set<string>(verdict?.matchedRequirements ?? []);
       if (belowMarket) matched.add("below_market");
@@ -377,13 +387,13 @@ export const analyzeOne = internalAction({
           ...(spread != null ? { spread } : {}),
           ...(spreadPct != null ? { spreadPct } : {}),
           ...(rehab.total != null ? { rehabEstimate: Math.round(rehab.total) } : {}),
-          ...(flip
+          ...(flipFinal
             ? {
-                ...(flip.mao != null ? { flipMao: Math.round(flip.mao) } : {}),
-                ...(flip.profit != null ? { flipProfit: Math.round(flip.profit) } : {}),
-                ...(flip.margin != null ? { flipMargin: flip.margin } : {}),
-                ...(flip.roi != null ? { flipRoi: flip.roi } : {}),
-                ...(flip.roomVsList != null ? { roomVsList: flip.roomVsList } : {}),
+                ...(flipFinal.mao != null ? { flipMao: Math.round(flipFinal.mao) } : {}),
+                ...(flipFinal.profit != null ? { flipProfit: Math.round(flipFinal.profit) } : {}),
+                ...(flipFinal.margin != null ? { flipMargin: flipFinal.margin } : {}),
+                ...(flipFinal.roi != null ? { flipRoi: flipFinal.roi } : {}),
+                ...(flipFinal.roomVsList != null ? { roomVsList: flipFinal.roomVsList } : {}),
               }
             : {}),
           ...(rental

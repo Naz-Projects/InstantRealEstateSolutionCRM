@@ -106,12 +106,22 @@ export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds
 
 const GUT = /fire|flood|gut|shell|structural|severe|full rehab|full renovation|complete renovation|tear down|needs everything/i;
 const COSMETIC = /updated|renovated|remodel|move.?in|turn.?key|shows like new|refreshed|pride of ownership|new (kitchen|roof|hvac|appliances)/i;
-const MODERATE = /needs? (work|updating|tlc|repairs|renovation)|dated|handyman|investor|value.?add|personal touch|bring your (vision|contractor|imagination)|fixer|sold (strictly )?as.?is|cash only|may not qualify/i;
+const MODERATE = /needs? (work|updating|tlc|repairs|renovation)|\bdated\b|handyman|investor|value.?add|personal touch|bring your (vision|contractor|imagination)|fixer|sold (strictly )?as.?is|cash only|may not qualify/i;
 export function inferRehabTier(description: string): "cosmetic" | "moderate" | "gut" {
   const d = description || "";
   if (GUT.test(d)) return "gut";
   if (COSMETIC.test(d) && !MODERATE.test(d)) return "cosmetic";
   return "moderate";
+}
+
+// Explicit ALREADY-DONE renovation language (someone else already flipped it) —
+// stricter than COSMETIC so a fixer isn't mislabeled. Needs-work language wins:
+// a description with both ("renovated kitchen but needs TLC") is NOT renovated,
+// mirroring inferRehabTier's MODERATE/GUT precedence.
+const RENOVATED_STRONG = /(fully|newly|completely|totally|beautifully|recently|freshly|tastefully|professionally)[\s-]+(renovated|remodeled|rehabbed|updated)|(?<!needs?\s|being\s|partially\s|unfinished\s|mid[\s-]?)\b(renovated|remodeled|rehabbed)\b(?!\s+(opportunity|project|potential|ideas))|updated throughout|(new|updated) kitchen|(new|updated) bath(room)?s?|turn[\s-]?key|shows like new|like[\s-]new condition|nothing to do but move in/i;
+export function detectRenovated(description: string | null | undefined): boolean {
+  const d = description || "";
+  return RENOVATED_STRONG.test(d) && !MODERATE.test(d) && !GUT.test(d);
 }
 
 export interface RentalMetrics { rent: number; onePct: number; capRate: number; cashFlow: number; cashOnCash: number; allIn: number; }
@@ -157,11 +167,12 @@ export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null;
   return f;
 }
 
-export interface JudgeVerdict { keep: boolean; matchedRequirements: string[]; conditionNotes: string; reason: string; confidence: "low" | "medium" | "high"; }
+export interface JudgeVerdict { keep: boolean; matchedRequirements: string[]; conditionNotes: string; reason: string; confidence: "low" | "medium" | "high"; renovated: boolean; }
 const REQS = ["below_market", "fixer", "distressed", "flip"];
 export function buildJudgePrompt(rec: any): string {
   return `You are a real-estate investment analyst for a New Castle County, DE flipping/rental firm. Judge whether this NEW listing is a deal worth surfacing. Keep it if it meets ANY of: (1) below_market (listed materially under value — the spread is ALREADY COMPUTED below), (2) fixer (needs renovation), (3) distressed (motivated/estate/foreclosure/as-is/must-sell), (4) flip (margin after rehab). DO NOT recompute any numbers — use the ones given. Return ONLY json of the form:
-{"keep":true,"matchedRequirements":["fixer","distressed"],"conditionNotes":"...","reason":"one sentence <=200 chars","confidence":"high"}
+{"keep":true,"matchedRequirements":["fixer","distressed"],"conditionNotes":"...","reason":"one sentence <=200 chars","confidence":"high","renovated":false}
+renovated: true ONLY if the description shows the home was ALREADY renovated/remodeled/turnkey (someone else did the flip).
 Listing:
 address: ${rec.address}
 listPrice: ${rec.listPrice}
@@ -182,5 +193,5 @@ export function parseJudgeResponse(raw: string): JudgeVerdict | null {
   if (typeof obj.keep !== "boolean") return null;
   const matched = Array.isArray(obj.matchedRequirements) ? obj.matchedRequirements.filter((x: any) => REQS.includes(x)) : [];
   const conf = ["low", "medium", "high"].includes(obj.confidence) ? obj.confidence : "low";
-  return { keep: obj.keep, matchedRequirements: matched, conditionNotes: String(obj.conditionNotes ?? "").slice(0, 500), reason: String(obj.reason ?? "").slice(0, 240), confidence: conf };
+  return { keep: obj.keep, matchedRequirements: matched, conditionNotes: String(obj.conditionNotes ?? "").slice(0, 500), reason: String(obj.reason ?? "").slice(0, 240), confidence: conf, renovated: obj.renovated === true };
 }
