@@ -158,9 +158,9 @@ describe("detectRenovated", () => {
 describe("analyzeFlip", () => {
   it("computes MAO/profit/margin/roomVsList (918 Kirkwood: ARV 247200, list 125000, cosmetic rehab ~23265)", () => {
     const f = analyzeFlip(247200, 125000, 23265)!;
-    expect(f.mao).toBe(Math.round(247200 * 0.7 - 23265)); // 149775
-    expect(f.roomVsList).toBe(f.mao! - 125000); // ~+24775 (can offer below list)
-    expect(f.margin).toBeGreaterThan(0.2); // ~26%
+    expect(f.mao).toBe(Math.round((0.68 * 247200 - 23265) / 1.02)); // 141991 — NCC-corrected MAO
+    expect(f.roomVsList).toBe(f.mao! - 125000); // ~+16991 (can offer below list)
+    expect(f.margin).toBeGreaterThan(0.2); // ~23% under NCC-corrected assumptions
   });
   it("NCC transfer-tax correction lowers flip profit vs FLIP_DEFAULTS (relationship + exact)", () => {
     // Corrected monitor underwriting (MONITOR_FLIP_ASSUMPTIONS: +2% buy closing, +2% ARV transfer)
@@ -169,13 +169,13 @@ describe("analyzeFlip", () => {
     const generic = computeFlip({ arv: 300000, purchasePrice: 200000, rehabTotal: 40000, assumptions: FLIP_DEFAULTS.assumptions });
     // Relationship: transfer tax makes the monitor's economics strictly worse.
     expect(corrected.profit!).toBeLessThan(generic.profit!);
-    // MAO is the fixed 70%-rule ceiling — unaffected by the assumption change.
-    expect(corrected.mao).toBe(generic.mao);
+    // NCC-corrected MAO is LOWER than the generic 70%-rule ceiling.
+    expect(corrected.mao!).toBeLessThan(generic.mao!);
     // Exact corrected values.
-    expect(corrected.mao).toBe(170000);
+    expect(corrected.mao).toBe(160784); // (0.68·300000 − 40000)/1.02
     expect(corrected.profit).toBe(3100);
     expect(corrected.margin).toBeCloseTo(31 / 3000, 10);
-    expect(corrected.roomVsList).toBe(-30000);
+    expect(corrected.roomVsList).toBe(160784 - 200000); // -39216
     // The gap is exactly the two transfer-tax legs: 2% of purchase + 2% of ARV.
     expect(generic.profit! - corrected.profit!).toBe(200000 * 0.02 + 300000 * 0.02);
   });

@@ -132,7 +132,8 @@ export interface RentalMetrics { rent: number; onePct: number; capRate: number; 
 // tax is 4% total, customarily split 50/50 -> the investor pays ~2% of purchase when
 // BUYING and ~2% of resale (ARV) when SELLING. closingPct is purchase-based (+0.02 buy
 // leg); sellTransferPct is ARV-based (+0.02 sell leg). This lowers flip profit/margin/roi
-// by the transfer tax (MAO is the fixed 70%-rule ceiling and is unaffected).
+// by the transfer tax (analyzeFlip additionally replaces computeFlip's generic 70%-rule
+// MAO with the NCC-corrected closed form below).
 export const MONITOR_FLIP_ASSUMPTIONS: FlipAssumptions = {
   ...FLIP_DEFAULTS.assumptions,
   closingPct: FLIP_DEFAULTS.assumptions.closingPct + 0.02,
@@ -141,7 +142,11 @@ export const MONITOR_FLIP_ASSUMPTIONS: FlipAssumptions = {
 export function analyzeFlip(arv: number | null, list: number | null, rehab: number) {
   if (arv == null || list == null) return null;
   const m = computeFlip({ arv, purchasePrice: list, rehabTotal: rehab, assumptions: MONITOR_FLIP_ASSUMPTIONS });
-  return { mao: m.mao, profit: m.profit, margin: m.margin ?? 0, roi: m.roi, roomVsList: m.mao != null ? Math.round(m.mao - list) : null };
+  // NCC-corrected MAO (research §1.2/§1.15): the offer ceiling must absorb BOTH transfer-tax
+  // legs — solve P + 0.02·P (buy leg) + rehab + 0.02·ARV (sell leg) = 0.70·ARV
+  // => P = (0.68·ARV − rehab) / 1.02, an effective ~66.7% rule (inside the NCC 65–68% band).
+  const nccMao = Math.round((0.68 * arv - rehab) / 1.02);
+  return { mao: nccMao, profit: m.profit, margin: m.margin ?? 0, roi: m.roi, roomVsList: nccMao - list };
 }
 export function analyzeRental({ rent, list, rehab, taxRatePct }: { rent: number | null; list: number; rehab: number; taxRatePct?: number }): RentalMetrics | null {
   if (!rent || !list) return null;
