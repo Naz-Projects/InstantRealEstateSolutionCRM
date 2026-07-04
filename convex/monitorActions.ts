@@ -285,6 +285,7 @@ export const analyzeOne = internalAction({
       if (isLandType(homeType)) {
         await ctx.runMutation(internal.monitorData.patchAnalysis, {
           id,
+          clearFlip: true, // a re-analyzed pre-guard land row may carry stale flip fields
           fields: {
             status: "analyzed" as const,
             arvSource: "none",
@@ -367,8 +368,11 @@ export const analyzeOne = internalAction({
       if (belowMarket) matched.add("below_market");
 
       // 11) Patch everything + status:"analyzed" (omit null-valued optionals).
+      // clearFlip: patchAnalysis merges, so a re-analyzed row that had flip fields
+      // before the veto must have them REMOVED, not just omitted.
       await ctx.runMutation(internal.monitorData.patchAnalysis, {
         id,
+        ...(renovated ? { clearFlip: true } : {}),
         fields: {
           status: "analyzed" as const,
           arvSource: arvRes.source,

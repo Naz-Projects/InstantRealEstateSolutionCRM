@@ -188,11 +188,23 @@ export const seenZpids = internalQuery({
   },
 });
 
-/** Patch one listing with any analysis/valuation/exit/decision output. */
+/**
+ * Patch one listing with any analysis/valuation/exit/decision output. `clearFlip`
+ * REMOVES the five flip fields (patch-to-undefined) — for re-analysis where the
+ * renovated/land veto nulls the flip exit: the merge would otherwise keep stale
+ * flipMao/flipMargin/etc. from a pre-veto pass. Must live here in the mutation —
+ * explicit `undefined` values are stripped from action→mutation args.
+ */
 export const patchAnalysis = internalMutation({
-  args: { id: v.id("monitorListings"), fields: analysisFields },
-  handler: async (ctx, { id, fields }) => {
-    await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });
+  args: { id: v.id("monitorListings"), fields: analysisFields, clearFlip: v.optional(v.boolean()) },
+  handler: async (ctx, { id, fields, clearFlip }) => {
+    await ctx.db.patch(id, {
+      ...fields,
+      ...(clearFlip
+        ? { flipMao: undefined, flipProfit: undefined, flipMargin: undefined, flipRoi: undefined, roomVsList: undefined }
+        : {}),
+      updatedAt: Date.now(),
+    });
   },
 });
 
