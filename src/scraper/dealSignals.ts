@@ -51,12 +51,12 @@ export interface DealSignals {
 // ── Tunable thresholds/points (research §-refs in comments) ───────────────────
 export const SIGNAL_CONFIG = {
   motivationCap: 10, // §3 "sum motivation points (cap ~10)"
-  cutDepth: {        // §3 row 1
-    noise: 0.02, responsive: 0.05, softening: 0.10, motivated: 0.15,
-    pts: { responsive: 1, softening: 2, motivated: 3 }, // ≥noise..resp / ≥resp..soft / ≥soft
+  cutDepth: {        // §3 row 1: <2% noise · 2–5% responsive (+1) · 5–10% softening (+2) · >10% motivated (+3)
+    responsive: 0.02, softening: 0.05, motivated: 0.10, // band FLOORS; motivated is exclusive (>10%)
+    pts: { responsive: 1, softening: 2, motivated: 3 },
   },
   cutCount: { flexible: 2, strong: 3, pts: { flexible: 1, strong: 2 } }, // §3 row 2
-  cutVelocity: { acute: 2, pts: 2 },       // §3 row 3: ≥2 cuts/~30d = acute
+  cutVelocity: { acute: 2, minCuts: 2, pts: 2 }, // §3 row 3: ≥2 cuts/~30d = acute; a single cut is never acute
   largeLateCut: { minPct: 0.05, afterDay: 90, pts: 1 }, // §3 row 4
   dom: { fresh: 14, aging: 30, stale: 60, outlier: 90, stalePts: 2 }, // §3 rows 5-6 backstops
   tenure: { longYears: 15, recentYears: 2, longPts: 2 }, // §3 row 8
@@ -199,7 +199,11 @@ function appreciationMetrics(listPrice: number, lastSoldPrice: number | null, te
   if (ratio < 1.0) flags.push("underwater");
   if (tenureYears != null) {
     const expectedRatio = Math.pow(1 + a.annualRate, tenureYears);
-    if (ratio <= expectedRatio && ratio >= 1.0) flags.push("priced_below_appreciation");
+    // §3 row 9 scopes this to "at/below appreciation-implied ON LONG TENURE" —
+    // a short-tenure reseller at a low ratio is the thin-margin case, not pricing-to-move.
+    if (tenureYears >= SIGNAL_CONFIG.tenure.longYears && ratio <= expectedRatio && ratio >= 1.0) {
+      flags.push("priced_below_appreciation");
+    }
     if (tenureYears < SIGNAL_CONFIG.tenure.recentYears && ratio < a.thinMarginRatio && ratio >= 1.0) {
       flags.push("thin_margin_resale");
     }
@@ -251,7 +255,7 @@ function eraHazardsFromYear(yearBuilt: number | null): string[] {
   if (yearBuilt == null) return [];
   const h: string[] = [];
   if (yearBuilt < 1978) h.push("lead_paint_pre1978");
-  if (yearBuilt < 1980) h.push("asbestos_era_pre1980");
+  if (yearBuilt <= 1980) h.push("asbestos_era_pre1980"); // §4: flag range ≤1980 (inclusive)
   if (yearBuilt < 1940) h.push("knob_tube_era_pre1940");
   if (yearBuilt >= 1965 && yearBuilt <= 1975) h.push("aluminum_wiring_era_1965_75");
   if (yearBuilt >= 1978 && yearBuilt <= 1995) h.push("polybutylene_era_1978_95");
@@ -269,8 +273,8 @@ function composeMotivation(m: {
   const signals: string[] = [];
   const C = SIGNAL_CONFIG;
 
-  // cut depth (§3 row 1) — tiered
-  if (m.cutDepthPct >= C.cutDepth.motivated) { pts += C.cutDepth.pts.motivated; }
+  // cut depth (§3 row 1) — 2–5% +1 · 5–10% +2 · >10% +3 (below 2% = noise)
+  if (m.cutDepthPct > C.cutDepth.motivated) { pts += C.cutDepth.pts.motivated; }
   else if (m.cutDepthPct >= C.cutDepth.softening) { pts += C.cutDepth.pts.softening; }
   else if (m.cutDepthPct >= C.cutDepth.responsive) { pts += C.cutDepth.pts.responsive; }
 
@@ -281,8 +285,10 @@ function composeMotivation(m: {
     signals.push(`${m.cutCount} price cut${m.cutCount === 1 ? "" : "s"} (-${Math.round(m.cutDepthPct * 100)}%)`);
   }
 
-  // cut velocity (§3 row 3)
-  if (m.cutVelocity >= C.cutVelocity.acute) { pts += C.cutVelocity.pts; signals.push("rapid price cuts"); }
+  // cut velocity (§3 row 3) — "≥2 cuts/~30d": a single cut can never be acute
+  if (m.cutCount >= C.cutVelocity.minCuts && m.cutVelocity >= C.cutVelocity.acute) {
+    pts += C.cutVelocity.pts; signals.push("rapid price cuts");
+  }
 
   // large late cut (§3 row 4)
   if (m.largeLateCut) { pts += C.largeLateCut.pts; signals.push("large late price cut"); }

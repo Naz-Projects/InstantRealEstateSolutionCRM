@@ -164,6 +164,18 @@ describe("list-to-last-sold ratio + appreciation (§3 row 9)", () => {
     // ratio ~1.139 < 1.25 and tenure < 2y
     expect(s.vsAppreciation).toContain("thin_margin_resale");
   });
+  it("priced_below_appreciation is gated to LONG tenure: short-tenure reseller at ratio <= expected carries only thin_margin_resale", () => {
+    // 1-yr owner, list 202k vs bought 200k: ratio 1.01 <= 1.03^1 but tenure is short
+    const s = deriveDealSignals({ ...base, listPrice: 202000, dateSold: daysAgo(365), lastSoldPrice: 200000, daysOnZillow: 5 });
+    expect(s.vsAppreciation).not.toContain("priced_below_appreciation");
+    expect(s.vsAppreciation).toContain("thin_margin_resale");
+  });
+  it("mid tenure (not long) at ratio <= expected does not earn priced_below_appreciation either", () => {
+    // 6-yr owner, ratio 1.05 <= 1.03^6 (~1.194) but tenure < 15y
+    const s = deriveDealSignals({ ...base, listPrice: 210000, dateSold: daysAgo(365 * 6), lastSoldPrice: 200000 });
+    expect(s.vsAppreciation).not.toContain("priced_below_appreciation");
+    expect(s.vsAppreciation).not.toContain("thin_margin_resale"); // tenure >= 2y
+  });
   it("null lastSold -> null ratio, empty vsAppreciation", () => {
     const s = deriveDealSignals({ ...base, lastSoldPrice: null, dateSold: null });
     expect(s.listToLastSoldRatio).toBeNull();
@@ -270,6 +282,12 @@ describe("era hazards from year built (§4 table)", () => {
     expect(s.eraHazards).not.toContain("lead_paint_pre1978");
     expect(s.eraHazards).not.toContain("asbestos_era_pre1980");
   });
+  it("asbestos boundary is inclusive: a 1980 build flags (<=1980 per §4)", () => {
+    const s = deriveDealSignals({ ...base, yearBuilt: 1980 });
+    expect(s.eraHazards).toContain("asbestos_era_pre1980");
+    expect(s.eraHazards).not.toContain("lead_paint_pre1978"); // 1980 >= 1978
+    expect(s.eraHazards).toContain("polybutylene_era_1978_95");
+  });
   it("2005 house triggers no era hazards", () => {
     expect(deriveDealSignals({ ...base, yearBuilt: 2005 }).eraHazards).toEqual([]);
   });
@@ -312,7 +330,8 @@ describe("motivation composite (§3, cap 10)", () => {
       dateSold: daysAgo(365 * 22), // 22-yr owner
       lastSoldPrice: 120000,
     });
-    expect(s.motivationPoints).toBeGreaterThan(0);
+    // exact: depth 20% (+3) + 3 cuts (+2) + large late cut (+1) + outlier DOM (+2) + 22-yr tenure (+2) = 10 (== cap)
+    expect(s.motivationPoints).toBe(10);
     expect(s.motivationPoints).toBeLessThanOrEqual(SIGNAL_CONFIG.motivationCap);
     expect(s.motivationSignals.length).toBeGreaterThan(0);
     // human-readable strings mention the cuts and the tenure
@@ -327,6 +346,86 @@ describe("motivation composite (§3, cap 10)", () => {
     const s = deriveDealSignals({ ...base, priceHistory, daysOnZillow: 3 });
     expect(s.motivationPoints).toBe(0);
     expect(s.motivationSignals).toEqual([]);
+  });
+});
+
+describe("motivation composite — exact point values per §3 bands (review fixes)", () => {
+  // One early single cut to the given price; DOM kept in a non-scoring bucket.
+  // With ONE cut: no count points, no acute-velocity points, no large-late cut.
+  const singleCut = (cutTo: number) => ({
+    ...base,
+    listPrice: cutTo,
+    daysOnZillow: 20, // "normal" bucket -> 0 pts
+    priceHistory: [
+      { date: daysAgo(20), event: "Listed for sale", price: 200000, ppsf: null },
+      { date: daysAgo(5), event: "Price change", price: cutTo, ppsf: null },
+    ] as PriceEvent[],
+  });
+
+  it("2-5% cut depth band -> exactly +1 (responsive, §3 row 1)", () => {
+    const s = deriveDealSignals(singleCut(194000)); // -3%
+    expect(s.cutDepthPct).toBeCloseTo(0.03, 4);
+    expect(s.motivationPoints).toBe(1);
+  });
+  it("5-10% cut depth band -> exactly +2 (softening, §3 row 1)", () => {
+    const s = deriveDealSignals(singleCut(186000)); // -7%
+    expect(s.cutDepthPct).toBeCloseTo(0.07, 4);
+    expect(s.motivationPoints).toBe(2);
+  });
+  it(">10% cut depth band -> exactly +3 (motivated, §3 row 1)", () => {
+    const s = deriveDealSignals(singleCut(176000)); // -12%
+    expect(s.cutDepthPct).toBeCloseTo(0.12, 4);
+    expect(s.motivationPoints).toBe(3);
+  });
+  it("exactly 10% stays softening (+2); motivated begins ABOVE 10%", () => {
+    const s = deriveDealSignals(singleCut(180000)); // -10.0%
+    expect(s.motivationPoints).toBe(2);
+  });
+  it("below 2% is noise -> 0 points", () => {
+    const s = deriveDealSignals(singleCut(198000)); // -1%
+    expect(s.motivationPoints).toBe(0);
+  });
+  it("a SINGLE recent cut never scores acute velocity (needs >=2 cuts, §3 row 3)", () => {
+    // one cut 2 days ago -> raw velocity is high, but no +2 and no 'rapid' signal
+    const s = deriveDealSignals({
+      ...base,
+      listPrice: 195000,
+      daysOnZillow: 10, // fresh -> 0 pts
+      priceHistory: [
+        { date: daysAgo(10), event: "Listed for sale", price: 200000, ppsf: null },
+        { date: daysAgo(2), event: "Price change", price: 195000, ppsf: null }, // -2.5% -> +1 responsive only
+      ],
+    });
+    expect(s.motivationPoints).toBe(1);
+    expect(s.motivationSignals.join(" ")).not.toMatch(/rapid/i);
+  });
+  it("two fast small cuts DO score acute velocity: +1 depth +1 count +2 velocity = 4", () => {
+    const s = deriveDealSignals({
+      ...base,
+      listPrice: 292000,
+      daysOnZillow: 20, // normal -> 0 pts
+      priceHistory: [
+        { date: daysAgo(20), event: "Listed for sale", price: 300000, ppsf: null },
+        { date: daysAgo(12), event: "Price change", price: 296000, ppsf: null },
+        { date: daysAgo(2), event: "Price change", price: 292000, ppsf: null }, // 2 cuts in 10d, depth 2.67%
+      ],
+    });
+    expect(s.cutCount).toBe(2);
+    expect(s.cutVelocity).toBeGreaterThanOrEqual(2);
+    expect(s.motivationPoints).toBe(4);
+    expect(s.motivationSignals.join(" ")).toMatch(/rapid/i);
+  });
+  it("short-tenure ratio<=expected earns NO appreciation points (only thin_margin_resale, no pts)", () => {
+    const s = deriveDealSignals({
+      ...base,
+      listPrice: 202000,
+      dateSold: daysAgo(365),
+      lastSoldPrice: 200000,
+      daysOnZillow: 5, // fresh -> 0 pts
+      priceHistory: [{ date: daysAgo(5), event: "Listed for sale", price: 202000, ppsf: null }],
+    });
+    expect(s.vsAppreciation).toEqual(["thin_margin_resale"]);
+    expect(s.motivationPoints).toBe(0);
   });
 });
 
