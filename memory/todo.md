@@ -34,9 +34,11 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   audit: webhook instant-ACK (1.4s, was ~60s → killed the 4-scans/night Firecrawl retry storm) + 10-min duplicate guard (2nd
   signed POST absorbed) · LOT/LAND guard (Bohemia lot no longer a fake 90-score flip; land never underwritten, no comps/LLM spend) ·
   honest header ("N new in last 24h" aggregate). All Opus subagent-built, per-task + final reviews clean.
-- [~] **USER: Resend API key** — the daily digest is built + fires after every scan but skips without `RESEND_API_KEY`
-  (48 keepers sit unemailed; error log shows the honest skip). Free resend.com key → set `RESEND_API_KEY`/`RESEND_FROM`/`RESEND_TO`
-  on prod (`PORTAL_BASE_URL` already set) → insights hit the inbox nightly. THE highest value-per-minute item open.
+- [x] **DIGEST EMAIL LIVE (2026-07-03).** User supplied the Resend key; the account already had
+  **instantrealestatesolution.com verified for sending** → `RESEND_FROM="IRES Monitor <monitor@instantrealestatesolution.com>"`,
+  `RESEND_TO=nazhossain16@gmail.com`, `RESEND_API_KEY` set on prod. First live digest sent + **Resend-confirmed `delivered`**:
+  "IRES Monitor: 50 new deals (Zillow NCC)" (cleared the keeper backlog; 7 late-analyzed keepers roll into tonight's digest).
+  Every scan now ends with an inbox digest automatically. NOTE: key was pasted in chat → standing key-rotation list.
 - [ ] **P1 backlog (from the audit, in order):** dismiss/snooze on keeper cards (seen-state) · auto-enrich new keepers
   (Street-View condition + equity/balances, funnel-only capped) · price-cut/relist signal from stored `priceHistory` ·
   monitor cadence daily→every 4h (safe now the ACK fix landed) · dashboard "New on Monitor" panel · polish batch
