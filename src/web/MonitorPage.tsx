@@ -15,6 +15,12 @@ import {
   TrendingDown,
   Eye,
   TriangleAlert,
+  Microscope,
+  Flame,
+  Wrench,
+  History,
+  OctagonAlert,
+  ShieldAlert,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
@@ -39,6 +45,7 @@ function fmtMoney(n: number | null | undefined): string {
 // bestExit is stored uppercase ("FLIP" | "RENTAL" | "WHOLESALE" | "PASS").
 const EXIT_CHIP: Record<string, string> = {
   FLIP: "border-teal/40 bg-teal/10 text-teal-glow",
+  WHOLETAIL: "border-sky-500/40 bg-sky-500/10 text-sky-400", // analyst-only exit (never a deterministic bestExit)
   RENTAL: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
   WHOLESALE: "border-violet-500/40 bg-violet-500/10 text-violet-400",
   PASS: "border-border bg-muted/40 text-muted-foreground",
@@ -173,6 +180,208 @@ function PriceHistoryLine({ row }: { row: MonitorRow }) {
           {pct}%
         </span>
       )}
+    </div>
+  );
+}
+
+// ---- analyst breakdown (deep-analysis: deterministic dealSignals + LLM condition/exit) ----
+
+// LLM condition tiers → chip tone (cosmetic → structural = green → red).
+const CONDITION_CHIP: Record<string, { label: string; chip: string }> = {
+  cosmetic: { label: "Cosmetic", chip: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" },
+  moderate: { label: "Moderate", chip: "border-teal/40 bg-teal/10 text-teal-glow" },
+  systems: { label: "Systems", chip: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
+  structural: { label: "Structural", chip: "border-red-500/40 bg-red-500/10 text-red-400" },
+};
+
+// year-built era-hazard slugs → readable label.
+const ERA_HAZARD_LABEL: Record<string, string> = {
+  lead_paint_pre1978: "Lead paint era",
+  asbestos_era_pre1980: "Asbestos era",
+  knob_tube_era_pre1940: "Knob & tube era",
+  aluminum_wiring_era_1965_75: "Aluminum wiring era",
+  polybutylene_era_1978_95: "Polybutylene era",
+  oil_tank_risk_pre1975: "Oil tank risk",
+};
+
+// NCC ZIP tier → label + tone (premium=green, standard=neutral, city=risk-red).
+const ZIP_TIER_CHIP: Record<string, { label: string; chip: string }> = {
+  "city-high-risk": { label: "City · high-risk ZIP", chip: "border-red-500/40 bg-red-500/10 text-red-400" },
+  "suburb-standard": { label: "Suburb · standard ZIP", chip: "border-border bg-muted/40 text-muted-foreground" },
+  "suburb-premium": { label: "Suburb · premium ZIP", chip: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" },
+};
+
+// Humanize the compact history facts: ppsfDiscountPct 0.28 → "28% under comps $/sqft";
+// tenureYears 22.3 → "22-yr owner".
+function analystHistoryLine(row: MonitorRow): string | null {
+  const parts: string[] = [];
+  if (row.ppsfDiscountPct != null) {
+    const pct = Math.round(row.ppsfDiscountPct * 100);
+    parts.push(pct >= 0 ? `${pct}% under comps $/sqft` : `${-pct}% over comps $/sqft`);
+  }
+  if (row.tenureYears != null) parts.push(`${Math.round(row.tenureYears)}-yr owner`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * The per-listing analyst read (Task 4): motivation, condition/value-add, a compact
+ * price history, era-hazard + ZIP-tier context, red flags vs VERIFY checklist, and
+ * the analyst's exit call (distinct from the deterministic score badge up top).
+ * Every field is optional — a pre-upgrade row renders nothing (block is gated).
+ */
+function AnalystBreakdown({ row }: { row: MonitorRow }) {
+  const motivationSignals = row.motivationSignals ?? [];
+  const eraHazards = row.eraHazards ?? [];
+  const redFlags = row.redFlags ?? [];
+  const verifyGates = row.verifyGates ?? [];
+  const exitFallbacks = row.exitFallbacks ?? [];
+  const history = analystHistoryLine(row);
+
+  const hasAny =
+    row.motivationPoints != null ||
+    motivationSignals.length > 0 ||
+    row.conditionTier != null ||
+    row.valueAddScope != null ||
+    history != null ||
+    eraHazards.length > 0 ||
+    row.zipTier != null ||
+    redFlags.length > 0 ||
+    verifyGates.length > 0 ||
+    row.exitTriage != null ||
+    row.breakdown != null;
+  if (!hasAny) return null;
+
+  const cond = row.conditionTier ? CONDITION_CHIP[row.conditionTier] : null;
+  const zip = row.zipTier ? ZIP_TIER_CHIP[row.zipTier] : null;
+  const exitTone = row.exitTriage
+    ? EXIT_CHIP[row.exitTriage.toUpperCase()] ?? "border-border text-muted-foreground"
+    : "";
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <Microscope className="h-3.5 w-3.5 text-teal-glow" /> Analyst breakdown
+      </div>
+
+      {/* motivation points + signal chips */}
+      {(row.motivationPoints != null || motivationSignals.length > 0) && (
+        <div className="space-y-1">
+          {row.motivationPoints != null && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Flame className="h-3 w-3 text-amber-400" />
+              <span className="text-muted-foreground">Seller motivation</span>
+              <span className="font-semibold text-foreground">{row.motivationPoints}/10</span>
+            </div>
+          )}
+          {motivationSignals.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {motivationSignals.map((s) => (
+                <span
+                  key={s}
+                  className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* condition tier + value-add scope */}
+      {(cond || row.valueAddScope) && (
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <Wrench className="h-3 w-3" /> Condition
+          </span>
+          {cond && (
+            <span className={cn("rounded-md border px-1.5 py-0.5 text-[11px] font-medium", cond.chip)}>
+              {cond.label}
+            </span>
+          )}
+          {row.valueAddScope && <span className="text-muted-foreground">{row.valueAddScope}</span>}
+        </div>
+      )}
+
+      {/* compact history: ppsf discount + tenure */}
+      {history && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <History className="h-3 w-3" /> {history}
+        </div>
+      )}
+
+      {/* era-hazard chips + zip-tier chip */}
+      {(eraHazards.length > 0 || zip) && (
+        <div className="flex flex-wrap gap-1.5">
+          {eraHazards.map((h) => (
+            <span
+              key={h}
+              className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+            >
+              {ERA_HAZARD_LABEL[h] ?? h.replace(/_/g, " ")}
+            </span>
+          ))}
+          {zip && (
+            <span className={cn("rounded-md border px-1.5 py-0.5 text-[11px] font-medium", zip.chip)}>
+              {zip.label}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* red flags — red */}
+      {redFlags.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-400">
+            <OctagonAlert className="h-3.5 w-3.5" /> Red flags
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {redFlags.map((f) => (
+              <span
+                key={f}
+                className="rounded-md border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[11px] font-medium text-red-400"
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* verify gates — amber, distinct "Verify before bid" checklist */}
+      {verifyGates.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-400">
+            <ShieldAlert className="h-3.5 w-3.5" /> Verify before bid
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {verifyGates.map((g) => (
+              <span
+                key={g}
+                className="rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-400"
+              >
+                {g}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* analyst exit read — labeled distinct from the deterministic score badge up top */}
+      {row.exitTriage && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground">Analyst exit</span>
+          <span className={cn("rounded-md border px-1.5 py-0.5 text-[11px] font-semibold uppercase", exitTone)}>
+            {row.exitTriage}
+          </span>
+          {exitFallbacks.length > 0 && (
+            <span className="text-muted-foreground">· fallback {exitFallbacks.join(", ")}</span>
+          )}
+        </div>
+      )}
+
+      {/* the analyst narrative */}
+      {row.breakdown && <p className="text-xs leading-relaxed text-foreground">{row.breakdown}</p>}
     </div>
   );
 }
@@ -341,6 +550,7 @@ function MonitorCard({ row }: { row: MonitorRow }) {
             {row.aiReason && <p className="text-sm text-foreground">{row.aiReason}</p>}
             {row.aiConditionNotes && <p className="text-xs text-muted-foreground">{row.aiConditionNotes}</p>}
             <PriceHistoryLine row={row} />
+            <AnalystBreakdown row={row} />
           </div>
         )}
 
