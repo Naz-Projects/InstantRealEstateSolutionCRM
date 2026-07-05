@@ -161,7 +161,7 @@ describe("analyzeFlip", () => {
     const f = analyzeFlip(247200, 125000, 23265)!;
     expect(f.mao).toBe(Math.round((0.68 * 247200 - 23265) / 1.02)); // 141991 — NCC-corrected MAO
     expect(f.roomVsList).toBe(f.mao! - 125000); // ~+16991 (can offer below list)
-    expect(f.margin).toBeGreaterThan(0.2); // ~23% under NCC-corrected assumptions
+    expect(f.margin).toBeGreaterThan(0.2); // ~25% under NCC-corrected assumptions
   });
   it("NCC transfer-tax correction lowers flip profit vs FLIP_DEFAULTS (relationship + exact)", () => {
     // Corrected monitor underwriting (MONITOR_FLIP_ASSUMPTIONS: +2% buy closing, +2% ARV transfer)
@@ -174,11 +174,11 @@ describe("analyzeFlip", () => {
     expect(corrected.mao!).toBeLessThan(generic.mao!);
     // Exact corrected values.
     expect(corrected.mao).toBe(160784); // (0.68·300000 − 40000)/1.02
-    expect(corrected.profit).toBe(3100);
-    expect(corrected.margin).toBeCloseTo(31 / 3000, 10);
+    expect(corrected.profit).toBe(9100);
+    expect(corrected.margin).toBeCloseTo(91 / 3000, 10);
     expect(corrected.roomVsList).toBe(160784 - 200000); // -39216
-    // The gap is exactly the two transfer-tax legs: 2% of purchase + 2% of ARV.
-    expect(generic.profit! - corrected.profit!).toBe(200000 * 0.02 + 300000 * 0.02);
+    // The gap is exactly the missing BUY-leg transfer tax: 2% of purchase.
+    expect(generic.profit! - corrected.profit!).toBe(200000 * 0.02);
   });
 });
 describe("analyzeRental", () => {

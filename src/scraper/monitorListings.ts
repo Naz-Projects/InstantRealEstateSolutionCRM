@@ -130,14 +130,15 @@ export interface RentalMetrics { rent: number; onePct: number; capRate: number; 
 // (the standalone /flip Analyzer keeps FLIP_DEFAULTS' generic math). Research
 // docs/superpowers/research/2026-07-04-flipper-criteria.md §1.15 + §1.2: NCC transfer
 // tax is 4% total, customarily split 50/50 -> the investor pays ~2% of purchase when
-// BUYING and ~2% of resale (ARV) when SELLING. closingPct is purchase-based (+0.02 buy
-// leg); sellTransferPct is ARV-based (+0.02 sell leg). This lowers flip profit/margin/roi
-// by the transfer tax (analyzeFlip additionally replaces computeFlip's generic 70%-rule
-// MAO with the NCC-corrected closed form below).
+// BUYING and ~2% of resale (ARV) when SELLING. The BASE assumptions already carry the
+// ~2% SELL-leg (seller) portion as sellTransferPct (see flip.ts); the generic closingPct
+// is a pure purchase-closing rate with NO transfer component, so the monitor adds only
+// the missing BUY leg (+0.02 of purchase on closingPct). This lowers flip profit/margin/roi
+// by the buy-side transfer tax (analyzeFlip additionally replaces computeFlip's generic
+// 70%-rule MAO with the NCC-corrected closed form below).
 export const MONITOR_FLIP_ASSUMPTIONS: FlipAssumptions = {
   ...FLIP_DEFAULTS.assumptions,
   closingPct: FLIP_DEFAULTS.assumptions.closingPct + 0.02,
-  sellTransferPct: FLIP_DEFAULTS.assumptions.sellTransferPct + 0.02,
 };
 export function analyzeFlip(arv: number | null, list: number | null, rehab: number) {
   if (arv == null || list == null) return null;

@@ -329,7 +329,7 @@ export const analyzeOne = internalAction({
         dateSold: detail?.dateSold ?? row.lastSoldDate ?? null,
         daysOnZillow: detail?.daysOnZillow ?? row.daysOnZillow ?? null,
         yearBuilt: detail?.yearBuilt ?? row.yearBuilt ?? null,
-        photoCount: detail?.photoUrls?.length ?? 0,
+        photoCount: detailOk ? (detail?.photoUrls?.length ?? 0) : null,
         compsPpsf: arvRes.compsPpsf,
         ...(zip ? { zip } : {}),
         now: Date.now(),
