@@ -533,6 +533,29 @@ function exitDetail(row: Keeper): string {
   return "";
 }
 
+// Compact analyst "history": the ≤3 most-informative (already-humanized) motivation
+// signals plus the $/sqft-vs-comps discount. "" for a row that predates deep-analysis.
+function historyLine(row: Keeper): string {
+  const parts = [...(row.motivationSignals ?? []).slice(0, 3)];
+  if (row.ppsfDiscountPct != null) {
+    const p = Math.round(row.ppsfDiscountPct * 100);
+    parts.push(p >= 0 ? `${p}% under comps $/sqft` : `${-p}% over comps $/sqft`);
+  }
+  return parts.join(" · ");
+}
+
+// The LLM's exit call, surfaced only when it disagrees with the deterministic
+// bestExit (both stored uppercase). "" otherwise. Fallbacks appended when present.
+function analystExitNote(row: Keeper): string {
+  const triage = row.exitTriage;
+  if (!triage) return "";
+  if (row.bestExit && triage.toUpperCase() === row.bestExit.toUpperCase()) return "";
+  const fallbacks = row.exitFallbacks ?? [];
+  return fallbacks.length
+    ? `Analyst: ${triage} → fallback ${fallbacks.join(", ")}`
+    : `Analyst: ${triage}`;
+}
+
 // The score/exit pill tier color (>=70 teal, 35–69 amber, else gray).
 function scoreTier(score: number | null | undefined): string {
   if (score != null && score >= 70) return "#2D9C84";
@@ -568,6 +591,12 @@ function keeperText(row: Keeper, monitorLink: string): string {
   if (row.offMarketSignals?.length) lines.push(`   OWNER: ${row.offMarketSignals.join(", ")}`);
   const exit = exitDetail(row);
   if (exit) lines.push(`   ${exit}`);
+  const history = historyLine(row);
+  if (history) lines.push(`   ${history}`);
+  const exitNote = analystExitNote(row);
+  if (exitNote) lines.push(`   ${exitNote}`);
+  const flags = (row.redFlags ?? []).slice(0, 2);
+  if (flags.length) lines.push(`   RED FLAGS: ${flags.join(" · ")}`);
   if (row.aiReason) lines.push(`   ${row.aiReason}`);
   lines.push(`   Monitor: ${monitorLink}   Zillow: ${row.url}`);
   return lines.join("\n");
@@ -615,6 +644,20 @@ function keeperHtml(row: Keeper, monitorLink: string): string {
   const exit = exitDetail(row);
   const exitLine = exit
     ? `<div style="color:#4a5156;font-size:13px;margin:0 0 6px;">${esc(exit)}</div>` : "";
+
+  // Analyst essentials (deep-analysis fields) — all optional; pre-upgrade rows
+  // carry none of them and render exactly as before (fragments are "").
+  const history = historyLine(row);
+  const historyDiv = history
+    ? `<div style="color:#4a5156;font-size:13px;margin:0 0 6px;">${esc(history)}</div>` : "";
+  const exitNote = analystExitNote(row);
+  const exitNoteDiv = exitNote
+    ? `<div style="color:#4a5156;font-size:13px;margin:0 0 6px;">${esc(exitNote)}</div>` : "";
+  const flagChips = (row.redFlags ?? []).slice(0, 2).map((f) =>
+    `<span style="display:inline-block;background:#fdecec;color:#a33333;font-size:12px;font-weight:600;padding:4px 10px;border-radius:12px;">${esc(f)}</span>`);
+  const flagRow = flagChips.length
+    ? `<div style="margin:0 0 10px;line-height:1.9;">${flagChips.join(" ")}</div>` : "";
+
   const reason = row.aiReason
     ? `<div style="color:#4a5156;font-size:13px;line-height:1.45;margin:0 0 12px;">${esc(row.aiReason)}</div>` : "";
 
@@ -631,7 +674,7 @@ function keeperHtml(row: Keeper, monitorLink: string): string {
       ${badgeRow}
       <div style="font-size:17px;font-weight:700;color:#17191a;line-height:1.3;margin:0 0 8px;">${esc(row.address)}</div>
       ${numbers}
-      ${exitLine}
+      ${exitLine}${historyDiv}${exitNoteDiv}${flagRow}
       ${reason}
       ${buttons}
     </div>
