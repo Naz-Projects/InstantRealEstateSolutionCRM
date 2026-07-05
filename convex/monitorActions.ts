@@ -28,6 +28,7 @@ import {
 } from "../src/scraper/monitorListings";
 import { REHAB_TIERS, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { parseZip, parseRedfinComps, type Comp } from "../src/scraper/comps";
+import { deriveDealSignals } from "../src/scraper/dealSignals";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — the "use node" action layer:
 // scan → per-listing enrich → keeper decision. ONE shared scan path (webhook /
@@ -92,7 +93,7 @@ async function judgeWithDeepSeek(rec: unknown): Promise<JudgeVerdict | null> {
         model: LLM_MODEL,
         messages: [{ role: "user", content: buildJudgePrompt(rec) }],
         temperature: 0,
-        max_tokens: 600,
+        max_tokens: 1200,
       }),
     });
     if (!res.ok) return null;
@@ -319,6 +320,21 @@ export const analyzeOne = internalAction({
       const flip = analyzeFlip(arv, listPrice, rehabTotal);
       const rental = analyzeRental({ rent: rentZestimate, list: listPrice ?? 0, rehab: rehabTotal });
 
+      // 6.5) Deterministic deal signals (math, not LLM). Stored even if the judge fails.
+      const dealSignals = deriveDealSignals({
+        listPrice: listPrice ?? 0,
+        sqft,
+        priceHistory: (detail?.priceHistory ?? row.priceHistory ?? []) as any,
+        lastSoldPrice: detail?.lastSoldPrice ?? row.lastSoldPrice ?? null,
+        dateSold: detail?.dateSold ?? row.lastSoldDate ?? null,
+        daysOnZillow: detail?.daysOnZillow ?? row.daysOnZillow ?? null,
+        yearBuilt: detail?.yearBuilt ?? row.yearBuilt ?? null,
+        photoCount: detail?.photoUrls?.length ?? 0,
+        compsPpsf: arvRes.compsPpsf,
+        ...(zip ? { zip } : {}),
+        now: Date.now(),
+      });
+
       // 7) Risk flags (all from the scraped JSON).
       const flags = riskFlags({
         homeType,
@@ -347,6 +363,13 @@ export const analyzeOne = internalAction({
         capRatePct: rental ? +(rental.capRate * 100).toFixed(1) : null,
         homeType,
         description,
+        dealSignals,
+        priceHistoryCompact: (detail?.priceHistory ?? row.priceHistory ?? []).map((h: any) => `${h.date ?? "?"} ${h.event ?? ""} ${h.price != null ? "$" + h.price : ""}`.trim()).slice(0, 6).join(" | ") || undefined,
+        lastSoldPrice: detail?.lastSoldPrice ?? row.lastSoldPrice ?? null,
+        lastSoldDate: detail?.dateSold ?? row.lastSoldDate ?? null,
+        yearBuilt: detail?.yearBuilt ?? row.yearBuilt ?? null,
+        photoCount: detail?.photoUrls?.length ?? 0,
+        daysOnMarket: detail?.daysOnZillow ?? row.daysOnZillow ?? null,
       });
 
       // 9b) Renovated veto: you cannot flip a house someone already flipped.
@@ -386,6 +409,13 @@ export const analyzeOne = internalAction({
           dealScore: score.dealScore,
           bestExit: score.bestExit,
           aiModel: LLM_MODEL,
+          // deterministic deal signals (ALWAYS store — stands even when the judge fails)
+          motivationPoints: dealSignals.motivationPoints,
+          motivationSignals: dealSignals.motivationSignals,
+          eraHazards: dealSignals.eraHazards,
+          ...(dealSignals.ppsfDiscountPct != null ? { ppsfDiscountPct: dealSignals.ppsfDiscountPct } : {}),
+          ...(dealSignals.tenureYears != null ? { tenureYears: dealSignals.tenureYears } : {}),
+          ...(dealSignals.zipTier ? { zipTier: dealSignals.zipTier } : {}),
           ...(arv != null ? { conservativeArv: arv } : {}),
           ...(arvRes.compsPpsf != null ? { compsPpsf: arvRes.compsPpsf } : {}),
           ...(spread != null ? { spread } : {}),
@@ -413,6 +443,13 @@ export const analyzeOne = internalAction({
                 aiReason: verdict.reason,
                 aiConditionNotes: verdict.conditionNotes,
                 aiConfidence: verdict.confidence,
+                ...(verdict.conditionTier ? { conditionTier: verdict.conditionTier } : {}),
+                ...(verdict.valueAddScope ? { valueAddScope: verdict.valueAddScope } : {}),
+                ...(verdict.redFlags.length ? { redFlags: verdict.redFlags } : {}),
+                ...(verdict.verifyGates.length ? { verifyGates: verdict.verifyGates } : {}),
+                ...(verdict.exitTriage ? { exitTriage: verdict.exitTriage } : {}),
+                ...(verdict.exitFallbacks.length ? { exitFallbacks: verdict.exitFallbacks } : {}),
+                ...(verdict.breakdown ? { breakdown: verdict.breakdown } : {}),
               }
             : {}),
           ...(offMarket

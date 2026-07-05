@@ -184,21 +184,85 @@ export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null;
   return f;
 }
 
-export interface JudgeVerdict { keep: boolean; matchedRequirements: string[]; conditionNotes: string; reason: string; confidence: "low" | "medium" | "high"; renovated: boolean; }
+// v2 analyst verdict: the legacy keep/match/condition fields PLUS a structured
+// condition/exit breakdown (research §2 lexicon + §5 exit triage). All new fields
+// are nullable/empty-defaulted so a missing/garbage LLM field never throws.
+export interface JudgeVerdict {
+  keep: boolean;
+  matchedRequirements: string[];
+  conditionNotes: string;
+  reason: string;
+  confidence: "low" | "medium" | "high";
+  renovated: boolean;
+  conditionTier: "cosmetic" | "moderate" | "systems" | "structural" | null;
+  valueAddScope: string | null;   // ≤300 chars
+  redFlags: string[];
+  verifyGates: string[];
+  exitTriage: "FLIP" | "WHOLETAIL" | "RENTAL" | "WHOLESALE" | "PASS" | null;
+  exitFallbacks: string[];
+  breakdown: string | null;        // ≤900 chars — the analyst narrative
+}
 const REQS = ["below_market", "fixer", "distressed", "flip"];
+const CONDITION_TIERS = ["cosmetic", "moderate", "systems", "structural"] as const;
+const EXIT_TRIAGE = ["FLIP", "WHOLETAIL", "RENTAL", "WHOLESALE", "PASS"] as const;
+
+// Compact GIVEN/pre-computed deal-signals block (Task 1's DealSignals). Every
+// number here is deterministic — the judge must NOT recompute it. Omitted when
+// rec.dealSignals is absent (VERIFY / detail-missing rows).
+function dealSignalsBlock(rec: any): string {
+  const ds = rec.dealSignals;
+  if (!ds) return "dealSignals: n/a";
+  const pct = (n: any) => (typeof n === "number" ? `${Math.round(n * 100)}%` : "n/a");
+  return `dealSignals (GIVEN — pre-computed, DO NOT recompute):
+  motivationPoints: ${ds.motivationPoints ?? "n/a"} (cap 10)
+  motivationSignals: ${(ds.motivationSignals ?? []).join(", ") || "none"}
+  ppsfDiscountVsComps: ${pct(ds.ppsfDiscountPct)}
+  daysOnMarket: ${ds.domDays ?? "n/a"} (${ds.domBucket ?? "n/a"})
+  priceCuts: ${ds.cutCount ?? 0} cut(s), depth ${pct(ds.cutDepthPct)}
+  ownerTenureYears: ${ds.tenureYears != null ? Math.round(ds.tenureYears) : "n/a"} (${ds.tenureSignal ?? "n/a"})
+  eraHazards: ${(ds.eraHazards ?? []).join(", ") || "none"}
+  zipTier: ${ds.zipTier ?? "n/a"}
+  photoSignal: ${ds.photoSignal ?? "n/a"}
+  backOnMarket: ${ds.backOnMarket ? "yes" : "no"}`;
+}
+
 export function buildJudgePrompt(rec: any): string {
-  return `You are a real-estate investment analyst for a New Castle County, DE flipping/rental firm. Judge whether this NEW listing is a deal worth surfacing. Keep it if it meets ANY of: (1) below_market (listed materially under value — the spread is ALREADY COMPUTED below), (2) fixer (needs renovation), (3) distressed (motivated/estate/foreclosure/as-is/must-sell), (4) flip (margin after rehab). DO NOT recompute any numbers — use the ones given. Return ONLY json of the form:
-{"keep":true,"matchedRequirements":["fixer","distressed"],"conditionNotes":"...","reason":"one sentence <=200 chars","confidence":"high","renovated":false}
-renovated: true ONLY if the description shows the home was ALREADY renovated/remodeled/turnkey (someone else did the flip).
+  return `You are a real-estate investment analyst for a New Castle County, DE flipping/rental firm. Judge whether this NEW listing is a deal worth surfacing. Keep it if it meets ANY of: (1) below_market (listed materially under value — the spread is ALREADY COMPUTED below), (2) fixer (needs renovation), (3) distressed (motivated/estate/foreclosure/as-is/must-sell), (4) flip (margin after rehab). DO NOT recompute any numbers — every number below is GIVEN, use it as-is; never recompute the spread, margin, cap rate, $/sqft, or signals.
+
+RUBRIC (condense the description against this; the numbers are already computed):
+CONDITION TIERS (route the value-add):
+- cosmetic: dated · original / all original · needs updating · well-maintained · paint/carpet only.
+- moderate: needs TLC / needs work · fixer / handyman/contractor special · investor special · good/great potential · diamond in the rough · value-add · sweat equity (the classic flip band).
+- systems: good bones + deferred maintenance · mechanicals · roof leak/end-of-life · HVAC/electrical/plumbing/rewire.
+- structural: foundation/settling/bowing · gut · tear-down / lot value · mold · fire/water damage · uninhabitable · vandalized.
+EUPHEMISM DECODER: cozy/quaint/dollhouse=small · charming/character=old, needs work · rustic=poorly maintained · unique/custom/quirky=resale risk · heavy location/view talk=house underwhelms · updated/refreshed w/o specifics=maybe just paint.
+RETAIL/RENOVATED (NEGATIVE — reduces): turn-key · move-in ready · fully/newly/recently renovated/remodeled/updated · updated throughout · new kitchen/bath/roof/HVAC · granite/quartz/stainless · immaculate/pristine/mint. These mean someone ALREADY did the flip.
+EXIT TRIAGE (pick best-fit exitTriage + list exitFallbacks[]; score all, never one):
+- WHOLETAIL: livable & financeable AS-IS, only cosmetic (trash-out/clean/paint), meaningful spread. Estate/tenure signals + decent photos + no system red flags.
+- FLIP: moderate/systems condition lifting ARV well beyond cost; both profit floors clear; 3–6mo hold.
+- RENTAL: big as-is→ARV gap AND rents hold (DSCR); Wilmington-city ZIPs bias rental/BRRRR.
+- WHOLESALE: thin margin — assign the contract ($5–20K).
+- PASS: none clears.
+
+Return ONLY json of EXACTLY this shape:
+{"keep":true,"matchedRequirements":["fixer","distressed"],"renovated":false,"conditionTier":"moderate","valueAddScope":"...","redFlags":[],"verifyGates":[],"exitTriage":"FLIP","exitFallbacks":["WHOLETAIL"],"breakdown":"...","confidence":"high","conditionNotes":"...","reason":"one sentence <=200 chars"}
+Rules: conditionTier ∈ {cosmetic,moderate,systems,structural}; exitTriage ∈ {FLIP,WHOLETAIL,RENTAL,WHOLESALE,PASS}; valueAddScope ≤300 chars (the specific scope of work / value-add play); breakdown ≤900 chars (the analyst narrative tying signals→condition→exit); redFlags/verifyGates/exitFallbacks are short string arrays; renovated:true ONLY if the home was ALREADY renovated/remodeled/turnkey (someone else did the flip); missing/unknown → use null (do not fabricate).
 Listing:
-address: ${rec.address}
-listPrice: ${rec.listPrice}
-conservativeARV: ${rec.conservativeArv}
-belowMarketSpread%: ${rec.spreadPct}
-rehabTier(estimated): ${rec.rehabTier}
-flipMargin%: ${rec.flipMarginPct}
-rentalCapRate%: ${rec.capRatePct}
-homeType: ${rec.homeType}
+address: ${rec.address ?? "n/a"}
+listPrice: ${rec.listPrice ?? "n/a"}
+conservativeARV: ${rec.conservativeArv ?? "n/a"}
+belowMarketSpread%: ${rec.spreadPct ?? "n/a"}
+rehabTier(estimated): ${rec.rehabTier ?? "n/a"}
+flipMargin%: ${rec.flipMarginPct ?? "n/a"}
+rentalCapRate%: ${rec.capRatePct ?? "n/a"}
+homeType: ${rec.homeType ?? "n/a"}
+yearBuilt: ${rec.yearBuilt ?? "n/a"}
+photoCount: ${rec.photoCount ?? "n/a"}
+lastSoldPrice: ${rec.lastSoldPrice ?? "n/a"}
+lastSoldDate: ${rec.lastSoldDate ?? "n/a"}
+daysOnMarket: ${rec.daysOnMarket ?? "n/a"}
+priceHistory: ${rec.priceHistoryCompact ?? "n/a"}
+${dealSignalsBlock(rec)}
 description: """${(rec.description || "").slice(0, 1500)}"""`;
 }
 export function parseJudgeResponse(raw: string): JudgeVerdict | null {
@@ -210,5 +274,25 @@ export function parseJudgeResponse(raw: string): JudgeVerdict | null {
   if (typeof obj.keep !== "boolean") return null;
   const matched = Array.isArray(obj.matchedRequirements) ? obj.matchedRequirements.filter((x: any) => REQS.includes(x)) : [];
   const conf = ["low", "medium", "high"].includes(obj.confidence) ? obj.confidence : "low";
-  return { keep: obj.keep, matchedRequirements: matched, conditionNotes: String(obj.conditionNotes ?? "").slice(0, 500), reason: String(obj.reason ?? "").slice(0, 240), confidence: conf, renovated: obj.renovated === true };
+  const conditionTier = CONDITION_TIERS.includes(obj.conditionTier) ? obj.conditionTier : null;
+  const exitTriage = EXIT_TRIAGE.includes(obj.exitTriage) ? obj.exitTriage : null;
+  const valueAddScope = typeof obj.valueAddScope === "string" && obj.valueAddScope.trim() ? String(obj.valueAddScope).slice(0, 300) : null;
+  const breakdown = typeof obj.breakdown === "string" && obj.breakdown.trim() ? String(obj.breakdown).slice(0, 900) : null;
+  const strArr = (x: any): string[] =>
+    Array.isArray(x) ? x.filter((v: any) => typeof v === "string" && v.trim()).map((v: string) => v.slice(0, 120)).slice(0, 12) : [];
+  return {
+    keep: obj.keep,
+    matchedRequirements: matched,
+    conditionNotes: String(obj.conditionNotes ?? "").slice(0, 500),
+    reason: String(obj.reason ?? "").slice(0, 240),
+    confidence: conf,
+    renovated: obj.renovated === true,
+    conditionTier,
+    valueAddScope,
+    redFlags: strArr(obj.redFlags),
+    verifyGates: strArr(obj.verifyGates),
+    exitTriage,
+    exitFallbacks: strArr(obj.exitFallbacks),
+    breakdown,
+  };
 }

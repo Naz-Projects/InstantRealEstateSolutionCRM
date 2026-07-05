@@ -7,6 +7,7 @@ import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "
 import { isLandType } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
+import { deriveDealSignals } from "../src/scraper/dealSignals";
 import type { Comp } from "../src/scraper/comps";
 
 describe("buildSearchUrl", () => {
@@ -263,5 +264,168 @@ describe("parseJudgeResponse", () => {
     expect(p.toLowerCase()).toContain("do not recompute");
     expect(p).toContain('"renovated":false');
     expect(p.toLowerCase()).toContain("already renovated");
+  });
+});
+
+// ── v2 prompt + parser (deep-analysis breakdown) ──────────────────────────────
+describe("buildJudgePrompt v2 (rubric + dealSignals block)", () => {
+  const dealSignals = deriveDealSignals({
+    listPrice: 180000,
+    sqft: 1500,
+    priceHistory: [
+      { date: "2026-01-10", event: "Listed for sale", price: 210000, ppsf: 140 },
+      { date: "2026-03-01", event: "Price change", price: 180000, ppsf: 120 },
+    ],
+    lastSoldPrice: 90000,
+    dateSold: "2004-05-01",
+    daysOnZillow: 120,
+    yearBuilt: 1968,
+    photoCount: 4,
+    compsPpsf: 160,
+    zip: "19702",
+    now: Date.parse("2026-07-04"),
+  });
+  const p = buildJudgePrompt({
+    address: "12 Motivated Ln, Newark, DE 19702",
+    listPrice: 180000,
+    conservativeArv: 260000,
+    spreadPct: 30,
+    rehabTier: "moderate",
+    flipMarginPct: 18,
+    capRatePct: 7,
+    homeType: "SINGLE_FAMILY",
+    yearBuilt: 1968,
+    photoCount: 4,
+    lastSoldPrice: 90000,
+    lastSoldDate: "2004-05-01",
+    daysOnMarket: 120,
+    priceHistoryCompact: "2026-01-10 Listed for sale $210000 | 2026-03-01 Price change $180000",
+    dealSignals,
+    description: "Investor special — needs TLC, sold as-is, motivated seller",
+  });
+
+  it("keeps ALL legacy markers (backward compatible)", () => {
+    expect(p.toLowerCase()).toContain("json");
+    expect(p).toMatch(/below.market/i);
+    expect(p).toMatch(/fixer|renovat/i);
+    expect(p).toMatch(/distress/i);
+    expect(p.toLowerCase()).toContain("do not recompute");
+    expect(p).toContain('"renovated":false');
+    expect(p.toLowerCase()).toContain("already renovated");
+  });
+
+  it("embeds the condition-tier rubric vocabulary", () => {
+    expect(p).toContain("cosmetic");
+    expect(p).toContain("moderate");
+    expect(p).toContain("systems");
+    expect(p).toContain("structural");
+  });
+
+  it("embeds the exit-triage routing words", () => {
+    expect(p).toContain("WHOLETAIL");
+    expect(p).toContain("FLIP");
+    expect(p).toContain("RENTAL");
+    expect(p).toContain("WHOLESALE");
+  });
+
+  it("names the v2 output fields", () => {
+    expect(p).toContain("conditionTier");
+    expect(p).toContain("exitTriage");
+    expect(p).toContain("valueAddScope");
+    expect(p).toContain("breakdown");
+  });
+
+  it("prints the GIVEN dealSignals block + the extra facts", () => {
+    expect(p).toContain("motivationPoints");
+    expect(p).toContain("motivationSignals");
+    expect(p).toContain("ppsfDiscount"); // ppsfDiscountVsComps label
+    expect(p).toContain("yearBuilt");
+    expect(p).toContain("photoCount");
+    expect(p).toContain("priceHistory");
+    // the dealSignals block actually computed a motivation signal from the cut
+    expect(dealSignals.motivationPoints).toBeGreaterThan(0);
+  });
+
+  it("omits the dealSignals block when rec.dealSignals is absent", () => {
+    const bare = buildJudgePrompt({ address: "1 X St", listPrice: 100000, conservativeArv: 200000, spreadPct: 50, description: "as-is" });
+    expect(bare).toContain("dealSignals: n/a");
+  });
+});
+
+describe("parseJudgeResponse v2 (condition/exit breakdown)", () => {
+  it("parses a full valid v2 verdict + respects closed vocab", () => {
+    const raw = JSON.stringify({
+      keep: true,
+      matchedRequirements: ["fixer", "distressed"],
+      renovated: false,
+      conditionTier: "moderate",
+      valueAddScope: "kitchen + baths + paint",
+      redFlags: ["oil tank risk"],
+      verifyGates: ["confirm no leak"],
+      exitTriage: "FLIP",
+      exitFallbacks: ["WHOLETAIL", "RENTAL"],
+      breakdown: "moderate fixer, big spread, both floors clear -> flip",
+      confidence: "high",
+      conditionNotes: "needs TLC",
+      reason: "as-is fixer with spread",
+    });
+    const v = parseJudgeResponse(raw)!;
+    expect(v.keep).toBe(true);
+    expect(v.matchedRequirements).toEqual(["fixer", "distressed"]);
+    expect(v.conditionTier).toBe("moderate");
+    expect(v.valueAddScope).toBe("kitchen + baths + paint");
+    expect(v.redFlags).toEqual(["oil tank risk"]);
+    expect(v.verifyGates).toEqual(["confirm no leak"]);
+    expect(v.exitTriage).toBe("FLIP");
+    expect(v.exitFallbacks).toEqual(["WHOLETAIL", "RENTAL"]);
+    expect(v.breakdown).toContain("moderate fixer");
+    expect(v.confidence).toBe("high");
+  });
+
+  it("defaults missing v2 fields (null scalars, empty arrays), legacy still works", () => {
+    const v = parseJudgeResponse('{"keep":true,"matchedRequirements":["fixer"],"conditionNotes":"","reason":"fixer","confidence":"low","renovated":true}')!;
+    expect(v.keep).toBe(true);
+    expect(v.renovated).toBe(true);
+    expect(v.conditionTier).toBeNull();
+    expect(v.exitTriage).toBeNull();
+    expect(v.valueAddScope).toBeNull();
+    expect(v.breakdown).toBeNull();
+    expect(v.redFlags).toEqual([]);
+    expect(v.verifyGates).toEqual([]);
+    expect(v.exitFallbacks).toEqual([]);
+  });
+
+  it("rejects junk vocab + non-array flags", () => {
+    const v = parseJudgeResponse('{"keep":true,"matchedRequirements":[],"conditionTier":"banana","exitTriage":"FLOP","redFlags":"nope","confidence":"low"}')!;
+    expect(v.conditionTier).toBeNull();
+    expect(v.exitTriage).toBeNull();
+    expect(v.redFlags).toEqual([]);
+  });
+
+  it("clamps oversized strings (valueAddScope 300, breakdown 900, redFlags entry 120)", () => {
+    const raw = JSON.stringify({
+      keep: true,
+      matchedRequirements: [],
+      conditionTier: "systems",
+      valueAddScope: "a".repeat(500),
+      breakdown: "b".repeat(2000),
+      redFlags: ["c".repeat(400)],
+      exitTriage: "RENTAL",
+      confidence: "medium",
+    });
+    const v = parseJudgeResponse(raw)!;
+    expect(v.valueAddScope!.length).toBe(300);
+    expect(v.breakdown!.length).toBe(900);
+    expect(v.redFlags[0].length).toBe(120);
+  });
+
+  it("parses a fenced ```json block with v2 fields", () => {
+    const raw = '```json\n{"keep":true,"matchedRequirements":["flip"],"conditionTier":"cosmetic","exitTriage":"WHOLETAIL","valueAddScope":"paint + carpet","confidence":"high"}\n```';
+    const v = parseJudgeResponse(raw)!;
+    expect(v.keep).toBe(true);
+    expect(v.matchedRequirements).toEqual(["flip"]);
+    expect(v.conditionTier).toBe("cosmetic");
+    expect(v.exitTriage).toBe("WHOLETAIL");
+    expect(v.valueAddScope).toBe("paint + carpet");
   });
 });
