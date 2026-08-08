@@ -99,6 +99,14 @@ export function isMultiUnitType(homeType: string | null | undefined): boolean {
   return t.startsWith("MULTIFAMILY") || t.startsWith("APARTMENT");
 }
 
+// Condo/co-op units (mostly units inside apartment buildings): HOA + financing
+// constraints kill the wholesale exits, and their comps-based ARV is house-biased
+// (fake spreads). Excluded per user decision 2026-08-08.
+export function isCondoType(homeType: string | null | undefined): boolean {
+  const t = (homeType || "").trim().toUpperCase().replace(/_/g, "");
+  return t === "CONDO" || t === "CONDOMINIUM" || t.startsWith("COOP");
+}
+
 // Digest recipients: every active CRM user + the RESEND_TO fallback, deduped
 // case-insensitively; blanks/non-emails dropped. [] = nothing to send to.
 export function digestRecipients(userEmails: Array<string | null | undefined>, fallback?: string): string[] {

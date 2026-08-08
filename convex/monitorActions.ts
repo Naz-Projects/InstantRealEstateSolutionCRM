@@ -13,6 +13,7 @@ import {
   detailFromCache,
   isLandType,
   isMultiUnitType,
+  isCondoType,
   digestRecipients,
   conservativeArv,
   inferRehabTier,
@@ -188,8 +189,9 @@ export const runMonitorScan = internalAction({
           if (
             l.isNewConstruction ||
             l.isZillowOwned ||
-            // Apartment buildings / multi-family are not the wholesaling target — drop at the gate.
+            // Apartment buildings / multi-family / condo units are not the wholesaling target — drop at the gate.
             isMultiUnitType(l.homeType) ||
+            isCondoType(l.homeType) ||
             // $0/placeholder-price foreclosure/auction listings have no underwritable purchase price -> mirage 100% spread; exclude.
             l.price == null ||
             l.price < MONITOR.minListPrice ||
@@ -305,11 +307,12 @@ export const analyzeOne = internalAction({
         return;
       }
 
-      // 2c) Multi-unit guard: apartment buildings / multi-family are not the
-      // wholesaling target. The scan gate drops carded ones; this catches rows
-      // whose card had no homeType but whose detail reveals it, and de-keeps
-      // pre-guard rows on re-analysis. Never underwritten, never a keeper.
-      if (isMultiUnitType(homeType)) {
+      // 2c) Multi-unit / condo guard: apartment buildings, multi-family, and
+      // condo units are not the wholesaling target. The scan gate drops carded
+      // ones; this catches rows whose card had no homeType but whose detail
+      // reveals it, and de-keeps pre-guard rows on re-analysis. Never
+      // underwritten, never a keeper.
+      if (isMultiUnitType(homeType) || isCondoType(homeType)) {
         await ctx.runMutation(internal.monitorData.patchAnalysis, {
           id,
           clearFlip: true,
@@ -320,7 +323,7 @@ export const analyzeOne = internalAction({
             aiKeep: false,
             dealScore: 0,
             bestExit: "PASS",
-            riskFlags: ["MULTI-FAMILY (not a target)"],
+            riskFlags: [isCondoType(homeType) ? "CONDO (not a target)" : "MULTI-FAMILY (not a target)"],
             matchedRequirements: [],
             ...(detail?.homeType ? { homeType: detail.homeType } : {}),
           },

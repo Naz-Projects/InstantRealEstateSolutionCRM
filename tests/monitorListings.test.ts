@@ -4,7 +4,7 @@ import { extractNextData, listingsFromSearch, totalResultCount } from "../src/sc
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
-import { isLandType, isMultiUnitType, digestRecipients } from "../src/scraper/monitorListings";
+import { isLandType, isMultiUnitType, isCondoType, digestRecipients } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
@@ -256,6 +256,24 @@ describe("isMultiUnitType", () => {
     expect(isMultiUnitType(undefined)).toBe(false);
     expect(isMultiUnitType(null)).toBe(false);
     expect(isMultiUnitType("")).toBe(false);
+  });
+});
+
+describe("isCondoType", () => {
+  it("true for condo / co-op units (case-insensitive, trimmed)", () => {
+    expect(isCondoType("CONDO")).toBe(true);
+    expect(isCondoType("condo")).toBe(true);
+    expect(isCondoType(" CONDO ")).toBe(true);
+    expect(isCondoType("COOP")).toBe(true);
+    expect(isCondoType("CO_OP")).toBe(true);
+  });
+  it("false for wholesale-relevant types and empty/undefined/null", () => {
+    expect(isCondoType("SINGLE_FAMILY")).toBe(false);
+    expect(isCondoType("TOWNHOUSE")).toBe(false);
+    expect(isCondoType("MANUFACTURED")).toBe(false);
+    expect(isCondoType(undefined)).toBe(false);
+    expect(isCondoType(null)).toBe(false);
+    expect(isCondoType("")).toBe(false);
   });
 });
 
