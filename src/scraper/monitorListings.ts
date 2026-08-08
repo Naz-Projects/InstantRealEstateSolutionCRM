@@ -92,6 +92,29 @@ export function isLandType(homeType: string | null | undefined): boolean {
   return t === "LOT" || t === "LAND";
 }
 
+// Apartment buildings / multi-family: not the wholesaling target (SFR/townhouse/
+// condo deals), so they are filtered out at scan AND vetoed at analysis.
+export function isMultiUnitType(homeType: string | null | undefined): boolean {
+  const t = (homeType || "").trim().toUpperCase().replace(/_/g, "");
+  return t.startsWith("MULTIFAMILY") || t.startsWith("APARTMENT");
+}
+
+// Digest recipients: every active CRM user + the RESEND_TO fallback, deduped
+// case-insensitively; blanks/non-emails dropped. [] = nothing to send to.
+export function digestRecipients(userEmails: Array<string | null | undefined>, fallback?: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const e of [...userEmails, fallback]) {
+    const t = (e || "").trim();
+    if (!t || !t.includes("@")) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
 export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds: number | null; zestimate: number | null; homeType?: string; }):
   { arv: number | null; source: "comps" | "zestimate" | "none"; compsPpsf: number | null; compsCount: number } {
   const manufactured = (opts.homeType || "").toUpperCase() === "MANUFACTURED";

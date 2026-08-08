@@ -12,6 +12,8 @@ import {
   totalResultCount,
   detailFromCache,
   isLandType,
+  isMultiUnitType,
+  digestRecipients,
   conservativeArv,
   inferRehabTier,
   detectRenovated,
@@ -186,6 +188,8 @@ export const runMonitorScan = internalAction({
           if (
             l.isNewConstruction ||
             l.isZillowOwned ||
+            // Apartment buildings / multi-family are not the wholesaling target — drop at the gate.
+            isMultiUnitType(l.homeType) ||
             // $0/placeholder-price foreclosure/auction listings have no underwritable purchase price -> mirage 100% spread; exclude.
             l.price == null ||
             l.price < MONITOR.minListPrice ||
@@ -296,6 +300,29 @@ export const analyzeOne = internalAction({
             bestExit: "PASS",
             riskFlags: ["LAND (not underwritten)"],
             matchedRequirements: [],
+          },
+        });
+        return;
+      }
+
+      // 2c) Multi-unit guard: apartment buildings / multi-family are not the
+      // wholesaling target. The scan gate drops carded ones; this catches rows
+      // whose card had no homeType but whose detail reveals it, and de-keeps
+      // pre-guard rows on re-analysis. Never underwritten, never a keeper.
+      if (isMultiUnitType(homeType)) {
+        await ctx.runMutation(internal.monitorData.patchAnalysis, {
+          id,
+          clearFlip: true,
+          fields: {
+            status: "analyzed" as const,
+            arvSource: "none",
+            keeper: false,
+            aiKeep: false,
+            dealScore: 0,
+            bestExit: "PASS",
+            riskFlags: ["MULTI-FAMILY (not a target)"],
+            matchedRequirements: [],
+            ...(detail?.homeType ? { homeType: detail.homeType } : {}),
           },
         });
         return;
@@ -743,7 +770,18 @@ export const sendDigest = internalAction({
     if (keepers.length === 0) return { sent: false };
 
     const from = (process.env.RESEND_FROM ?? "").trim();
-    const to = (process.env.RESEND_TO ?? "").trim();
+    // Digest goes to EVERY active CRM user (not just the RESEND_TO admin);
+    // RESEND_TO stays merged in as a fallback so the digest still sends if the
+    // users table is ever empty. Deduped case-insensitively.
+    const userEmails = await ctx.runQuery(internal.users.activeEmailsInternal, {});
+    const to = digestRecipients(userEmails, process.env.RESEND_TO);
+    if (to.length === 0) {
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: "monitor digest: no active-user emails and no RESEND_TO, skipped",
+        context: "monitorActions.sendDigest",
+      });
+      return { sent: false };
+    }
     const base =
       (process.env.PORTAL_BASE_URL ?? "").trim() || "https://crm.instantrealestatesolution.com";
     const monitorLink = `${base}/monitor`;

@@ -4,7 +4,7 @@ import { extractNextData, listingsFromSearch, totalResultCount } from "../src/sc
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
-import { isLandType } from "../src/scraper/monitorListings";
+import { isLandType, isMultiUnitType, digestRecipients } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
@@ -237,6 +237,41 @@ describe("isLandType", () => {
     expect(isLandType(undefined)).toBe(false);
     expect(isLandType(null)).toBe(false);
     expect(isLandType("")).toBe(false);
+  });
+});
+
+describe("isMultiUnitType", () => {
+  it("true for apartment / multi-family types (case-insensitive, trimmed, underscore-optional)", () => {
+    expect(isMultiUnitType("MULTI_FAMILY")).toBe(true);
+    expect(isMultiUnitType("APARTMENT")).toBe(true);
+    expect(isMultiUnitType("multi_family")).toBe(true);
+    expect(isMultiUnitType(" MULTIFAMILY ")).toBe(true);
+    expect(isMultiUnitType("APARTMENT_TYPE")).toBe(true);
+  });
+  it("false for wholesale-relevant types and empty/undefined/null", () => {
+    expect(isMultiUnitType("SINGLE_FAMILY")).toBe(false);
+    expect(isMultiUnitType("TOWNHOUSE")).toBe(false);
+    expect(isMultiUnitType("CONDO")).toBe(false);
+    expect(isMultiUnitType("MANUFACTURED")).toBe(false);
+    expect(isMultiUnitType(undefined)).toBe(false);
+    expect(isMultiUnitType(null)).toBe(false);
+    expect(isMultiUnitType("")).toBe(false);
+  });
+});
+
+describe("digestRecipients", () => {
+  it("merges user emails with the fallback address, deduping case-insensitively", () => {
+    expect(digestRecipients(["a@x.com", "B@Y.com"], "b@y.com")).toEqual(["a@x.com", "B@Y.com"]);
+  });
+  it("trims entries and drops blanks/non-emails", () => {
+    expect(digestRecipients([" a@x.com ", "", "   ", "not-an-email"], undefined)).toEqual(["a@x.com"]);
+  });
+  it("falls back to the single address when there are no user emails", () => {
+    expect(digestRecipients([], "admin@x.com")).toEqual(["admin@x.com"]);
+  });
+  it("returns [] when nothing is valid", () => {
+    expect(digestRecipients([], "")).toEqual([]);
+    expect(digestRecipients(["nope"], undefined)).toEqual([]);
   });
 });
 

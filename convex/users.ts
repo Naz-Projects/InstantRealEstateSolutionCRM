@@ -161,6 +161,16 @@ export const getUserInternal = internalQuery({
   handler: async (ctx, args) => ctx.db.get(args.userId),
 });
 
+// Every active user's email — the monitor digest recipient list (scheduled
+// action context, no caller identity). Deactivated users get nothing.
+export const activeEmailsInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    return users.filter((u) => u.isActive).map((u) => u.email);
+  },
+});
+
 export const getByEmailInternal = internalQuery({
   args: { email: v.string() },
   handler: async (ctx, args) =>
