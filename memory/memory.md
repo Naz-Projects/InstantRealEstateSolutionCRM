@@ -2,6 +2,19 @@
 
 _Read this first. It's the "what & why" so you don't have to reverse-engineer the codebase._
 
+## ★★ Deep dive + monitor fixes (2026-08-08) — SHIPPED TO PROD
+Three fixes shipped (`3cc764b`, `4a6dccc`, prod backend deployed, CF push): (1) **digest email now goes to
+ALL active users** (`users.activeEmailsInternal` + pure `digestRecipients()`; was RESEND_TO=admin only;
+verified live: 5 recipients); (2) **apartment/multi-family excluded** from the monitor (`isMultiUnitType`
+scan gate + analyzeOne guard; 8 stale prod keepers de-keeped); (3) **condos excluded** (user decision;
+`isCondoType`; 37 stale condo keepers de-keeped — root cause was sqft=0 condos getting median HOUSE-comp
+soldPrice as ARV → fake 62% spreads; keeper mix now 98 SFR / 80 TH / 7 manufactured). Same day: three
+parallel deep-dive reviews (architecture/scalability, security, signals research) → **`memory/deep-dive-2026-08-08.md`**
+— read it before any scaling/refactor work. Headlines: 3 CRITICAL unbounded-read countdowns (/monitor
+keeper collects, /leads deriveLeads vs the 16k-doc cap, analyzeOne vs the 10-min action limit + dead run
+counters), Firecrawl credit leaks (~30-60% recoverable), 2 IMPORTANT security items (unverified-email
+account linking; dual-use Google key), and a ranked new-signal roadmap (evictions via CourtConnect first).
+
 ## ★★ Monitor the Web (Zillow NCC on-market deal finder) — SHIPPED TO PROD + PEN-TESTED LIVE (2026-07-01)
 The on-market counterpart to the off-market `/leads` engine. Nightly Firecrawl scrape of new NCC Zillow
 for-sale ≤$500K → underwrite **every exit** (flip/rental/wholesale, comps-capped conservative ARV) + DeepSeek judge +

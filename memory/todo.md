@@ -3,6 +3,26 @@
 What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocked on the user.
 (History lives in git; this is the current picture, not a session log.)
 
+## ★ NEXT — Deep-dive follow-ups (2026-08-08, full detail in `memory/deep-dive-2026-08-08.md`)
+- [x] **Digest → all active users** + **apartment/MF/condo exclusion** + prod keeper cleanup (SHIPPED 2026-08-08).
+- [ ] **P0-arch (½ day):** bound the /monitor keeper set — nightly retire pass (stale `lastSeen` → keeper=false)
+  + `["keeper","emailedAt"]` / `["keeper","dealScore"]` indexes + `take(N)` (A25-1; digest+page hard-fail otherwise).
+- [ ] **P0-arch (1-2 d):** truthful monitor fan-out — retry budget capped under the action limit, pending-row
+  sweeper + "0 analyzed" alert, real run counters, completion-triggered digest (A25-3 + A25-5).
+- [ ] **P0-arch (2-4 d):** materialized `leadScores` projection; /leads reads indexed top-N (A25-2 / A-C1).
+- [ ] **P1-cost (~1 d):** Firecrawl credit batch — `zipComps` nightly cache table, legal idempotency check before
+  the LLM call, forward webhook page-1 content, drop markdown from Zillow scrapes, thin the sheriff cron (A25-4).
+- [ ] **P1-data (1-2 d):** spine freshness — `parcelKeys` CDC side table, monthly `seedSpine` cron, stale-"running"
+  watchdog, one-time 365d foreclosure re-sweep + unmatched-ghost reconciliation (A25-6/A25-8).
+- [ ] **P1-security:** require `email_verified` before the byEmail account-link fallback (S25-1); split the Google
+  key into browser-restricted + server-only (S25-2); `startsWith("http")` guard on 3 scraped-URL hrefs (S25-3).
+- [ ] **P1-hygiene:** weekly retention cron (scrapeEvents/runs/errorLogs/parcelSync); stop sendDigest logging the
+  missing-key config note daily (A25-7).
+- [ ] **P2-signals (build order):** eviction filings via CourtConnect (tired-landlord, ~1 wk) → Wilmington vacant
+  XLSX (1-2 d) → monitor precision batch (absentee badge, keyword lexicon, price-cut cadence, back-on-market) →
+  Register of Wills + RTSC PDF → obituaries pre-probate → monition/mechanic-lien case types → RECAP bankruptcy →
+  PAXWorld deeds index. Product: saved searches + per-user alerts, "On N lists" stack chip, score explainability.
+
 ## ★ SHIPPED — "Monitor the Web" (Zillow NCC deal finder) — LIVE ON PROD + PEN-TESTED (2026-07-01)
 - [x] **Design + live test + 15-task plan** — `docs/superpowers/{specs,plans,research}/2026-06-30-monitor-web-*` (committed on the branch).
 - [x] **BUILT (all 15 tasks, subagent-driven)** on branch `feat/monitor-web-zillow`. Pure `monitorListings.ts` (parsers +
