@@ -41,15 +41,10 @@ export const runLegalScrape = internalAction({
       const weekDate = dateFound ?? new Date().toISOString().split("T")[0];
 
       await ctx.runMutation(internal.runs.patchRun, { runId, phase: "extract", label: weekDate });
-      await log("extract", "Running the AI agent to extract estate listings from the notices…");
-      const all = await extractLegalListings(pdfText, orKey(), weekDate);
-      const listings = limit ? all.slice(0, limit) : all;
-      await ctx.runMutation(internal.runs.patchRun, { runId, listingCount: listings.length });
-      await log(
-        "extract",
-        `AI extracted ${all.length} estate listing(s) for ${weekDate}${limit ? ` (limited to ${listings.length} this run)` : ""}.`,
-      );
 
+      // Idempotency check BEFORE the paid LLM extraction — weekDate is already
+      // known from the PDF fetch, so an already-scraped week (the weekly cron's
+      // common case) skips without spending an OpenRouter call.
       if (!force) {
         const existing = await ctx.runQuery(internal.legalData.countByWeek, { weekDate });
         if (existing > 0) {
@@ -61,6 +56,15 @@ export const runLegalScrape = internalAction({
         const cleared = await ctx.runMutation(internal.legalData.clearWeek, { weekDate });
         if (cleared > 0) await log("extract", `Cleared ${cleared} existing ${weekDate} row(s) for a clean refresh.`);
       }
+
+      await log("extract", "Running the AI agent to extract estate listings from the notices…");
+      const all = await extractLegalListings(pdfText, orKey(), weekDate);
+      const listings = limit ? all.slice(0, limit) : all;
+      await ctx.runMutation(internal.runs.patchRun, { runId, listingCount: listings.length });
+      await log(
+        "extract",
+        `AI extracted ${all.length} estate listing(s) for ${weekDate}${limit ? ` (limited to ${listings.length} this run)` : ""}.`,
+      );
 
       if (listings.length === 0) {
         await log("extract", "No estate listings extracted — the source PDF may have changed or be blocked.", "error");

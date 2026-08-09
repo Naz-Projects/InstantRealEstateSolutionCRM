@@ -1,5 +1,6 @@
 "use node";
 import { internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
@@ -46,9 +47,25 @@ const RESEND_URL = "https://api.resend.com/emails";
 const FIRECRAWL_V2_MONITOR_URL = "https://api.firecrawl.dev/v2/monitor";
 const LLM_MODEL = process.env.MONITOR_LLM_MODEL ?? "deepseek/deepseek-v3.2";
 const STAGGER_MS = 3000; // per-listing analyze fan-out (mirror sheriff enrich)
-// Buffer after the last analyzeOne is scheduled before the digest fires. Each
-// analyzeOne is slow (spaced Zillow retries + comps + DeepSeek), so leave room.
-const DIGEST_BUFFER_MS = 90_000;
+// The digest is COMPLETION-triggered (noteAnalyzeDone at pendingCount 0). This
+// fallback fires late as a safety net for the killed-action case (a keeper is
+// never emailed twice — keepersToEmail excludes stamped rows, so a duplicate
+// digest is a no-op).
+const DIGEST_FALLBACK_MS = 30 * 60_000;
+// Per-scrape retry budgets. analyzeOne does up to TWO scrapes (detail + comps)
+// plus a 30s LLM call inside ONE action, so each scrape's worst case must stay
+// small: 2 attempts × 60s + 12s gap ≈ 2.2 min each → ~5 min action worst case,
+// under the 10-min kill limit (a killed action strands rows "pending"). The
+// top-level search scrape runs alone, so it keeps a longer envelope — capped so
+// one fully-blocked page (~3×90s+40s ≈ 5 min) plus 4 fast pages still fits.
+const ANALYZE_SCRAPE_BUDGET = { gaps: [0, 12_000], timeoutMs: 60_000 };
+const SEARCH_SCRAPE_BUDGET = { gaps: [0, 12_000, 28_000], timeoutMs: 90_000 };
+// Stuck-"pending" sweep threshold (analysis can lag a scan by an hour on a slow
+// night; 6h is unambiguous death).
+const SWEEP_PENDING_AFTER_MS = 6 * 60 * 60 * 1000;
+// Shared per-zip comps cache TTL (DB layer): comps are 6-month sold data, so a
+// half-day of staleness is immaterial next to re-scraping the zip per listing.
+const ZIP_COMPS_DB_TTL_MS = 12 * 60 * 60 * 1000;
 
 function fcKey(): string {
   const k = (process.env.FIRECRAWL_API_KEY ?? "").trim();
@@ -107,19 +124,33 @@ async function judgeWithDeepSeek(rec: unknown): Promise<JudgeVerdict | null> {
   }
 }
 
-// Best-effort per-zip comps cache (module-level; scheduled analyzeOne calls may
-// run in separate isolates → often a cold Map — do NOT rely on it for correctness,
-// it just avoids a duplicate Redfin scrape within one warm isolate). Keyed by zip
-// with a short TTL so a reused isolate can't serve stale comps days later. (The
-// spec's `${runId}:${zip}` key isn't possible here — analyzeOne only gets {id}.)
+// Two-level per-zip comps cache. L1 = module Map (only helps within one warm
+// isolate). L2 = the shared `zipComps` table — scheduled analyzeOne calls run in
+// separate isolates, so without it the SAME zip's Redfin page was re-scraped
+// once per LISTING per night; the table makes it once per ZIP per ~12h.
 const COMPS_TTL_MS = 30 * 60_000;
 const compsCache = new Map<string, { comps: Comp[]; at: number }>();
-async function compsForZip(zip: string, apiKey: string): Promise<Comp[]> {
+async function compsForZip(ctx: ActionCtx, zip: string, apiKey: string): Promise<Comp[]> {
   const hit = compsCache.get(zip);
   if (hit && Date.now() - hit.at < COMPS_TTL_MS) return hit.comps;
-  const md = await scrapeRedfinMarkdown(zip, apiKey);
+
+  const cached = (await ctx.runQuery(internal.monitorData.getZipComps, {
+    zip,
+    maxAgeMs: ZIP_COMPS_DB_TTL_MS,
+  })) as Comp[] | null;
+  if (cached) {
+    compsCache.set(zip, { comps: cached, at: Date.now() });
+    return cached;
+  }
+
+  const md = await scrapeRedfinMarkdown(zip, apiKey, ANALYZE_SCRAPE_BUDGET);
   const comps = md ? parseRedfinComps(md) : [];
   compsCache.set(zip, { comps, at: Date.now() });
+  // Only a NON-EMPTY scrape is worth sharing — caching [] would pin every other
+  // listing in the zip to "no comps" for 12h on one transient block.
+  if (comps.length > 0) {
+    await ctx.runMutation(internal.monitorData.storeZipComps, { zip, comps });
+  }
   return comps;
 }
 
@@ -170,6 +201,24 @@ export const runMonitorScan = internalAction({
       // A missing key throws here — inside the try, so the catch below finalizes
       // this run as "failed" + logs it, instead of leaving no run row at all.
       const apiKey = fcKey();
+
+      // 0) Nightly hygiene. Retire keepers older than the board window so the
+      // keeper queries stay bounded; sweep rows stuck "pending" (killed
+      // analyses) to failed so a blocked night is visible, not green.
+      const retired = await ctx.runMutation(internal.monitorData.archiveStaleKeepers, {
+        days: MONITOR.keeperRetireDays,
+      });
+      const swept = await ctx.runMutation(internal.monitorData.sweepStalePending, {
+        olderThanMs: SWEEP_PENDING_AFTER_MS,
+      });
+      if (swept > 0) {
+        await ctx.runMutation(internal.errors.logServerError, {
+          message: `monitor: swept ${swept} stuck-pending listing(s) to failed (analysis killed or timed out)`,
+          context: "monitorActions.runMonitorScan",
+        });
+      }
+      void retired; // observability only — the mutation logs nothing on 0
+
       // 1) Paginated search scrape → accumulate survivors.
       const survivors: SearchListing[] = [];
       let total: number | null = null;
@@ -177,7 +226,7 @@ export const runMonitorScan = internalAction({
       for (let page = 1; page <= pages; page++) {
         let nextData: any | null = null;
         if (page === 1 && content) nextData = extractNextData(content);
-        if (!nextData) nextData = await scrapeZillowJson(buildSearchUrl({ page }), apiKey);
+        if (!nextData) nextData = await scrapeZillowJson(buildSearchUrl({ page }), apiKey, SEARCH_SCRAPE_BUDGET);
         if (!nextData) break;
 
         const listings = listingsFromSearch(nextData);
@@ -204,34 +253,45 @@ export const runMonitorScan = internalAction({
         if (total != null && scanned >= total) break;
       }
 
-      // 2) Upsert survivors; fan out analyzeOne for new / price-dropped rows.
-      let scheduled = 0;
+      // 2) Upsert survivors, COLLECT the analyze set first — pendingCount must be
+      // set on the run row BEFORE any analyzeOne is scheduled, or a fast first
+      // analysis could decrement an unset counter and fire the digest early.
+      const toAnalyze: Array<Doc<"monitorListings">["_id"]> = [];
       for (const l of survivors) {
         const up = await ctx.runMutation(internal.monitorData.upsertListing, upsertArgsFromCard(l));
         if (up.isNew) newCount++;
-        if (up.isNew || up.priceDropped) {
-          await ctx.scheduler.runAfter(scheduled * STAGGER_MS, internal.monitorActions.analyzeOne, {
-            id: up.id,
-          });
-          scheduled++;
-        }
+        if (up.isNew || up.priceDropped) toAnalyze.push(up.id);
+      }
+      await ctx.runMutation(internal.monitorData.setPendingCount, {
+        id: runId,
+        pendingCount: toAnalyze.length,
+      });
+      for (let i = 0; i < toAnalyze.length; i++) {
+        await ctx.scheduler.runAfter(i * STAGGER_MS, internal.monitorActions.analyzeOne, {
+          id: toAnalyze[i],
+          runId,
+        });
       }
 
-      // 3) Digest after the fan-out window (stub for now — Task 12 fills Resend).
-      await ctx.scheduler.runAfter(
-        scheduled * STAGGER_MS + DIGEST_BUFFER_MS,
-        internal.monitorActions.sendDigest,
-        { runId },
-      );
+      // 3) Digest: completion-triggered by noteAnalyzeDone at pendingCount 0.
+      // With nothing to analyze, send now (still emails prior-night stragglers);
+      // otherwise schedule only the late FALLBACK for the killed-action case
+      // (idempotent — emailed keepers are excluded, so a duplicate is a no-op).
+      if (toAnalyze.length === 0) {
+        await ctx.scheduler.runAfter(0, internal.monitorActions.sendDigest, { runId });
+      } else {
+        await ctx.scheduler.runAfter(
+          toAnalyze.length * STAGGER_MS + DIGEST_FALLBACK_MS,
+          internal.monitorActions.sendDigest,
+          { runId },
+        );
+      }
 
       await ctx.runMutation(internal.monitorData.finishRun, {
         id: runId,
         status: "complete",
         scanned,
         newCount,
-        analyzedCount: 0, // filled by the async analyzeOne fan-out (Task 12 may bump)
-        keeperCount: 0,
-        emailedCount: 0,
       });
       return { scanned, newCount, keeperCount: 0 };
     } catch (e) {
@@ -241,9 +301,6 @@ export const runMonitorScan = internalAction({
         status: "failed",
         scanned,
         newCount,
-        analyzedCount: 0,
-        keeperCount: 0,
-        emailedCount: 0,
         error: message,
       });
       await ctx.runMutation(internal.errors.logServerError, {
@@ -263,16 +320,30 @@ export const runMonitorScan = internalAction({
  * lastError on a thrown error). Runs as a scheduled action (no user identity).
  */
 export const analyzeOne = internalAction({
-  args: { id: v.id("monitorListings") },
-  handler: async (ctx, { id }): Promise<void> => {
+  // runId is optional: re-analysis calls (price drops predate this, skills, CLI)
+  // and in-flight scheduled calls from an older deploy carry none — they simply
+  // skip the run-counter bookkeeping.
+  args: { id: v.id("monitorListings"), runId: v.optional(v.id("monitorRuns")) },
+  handler: async (ctx, { id, runId }): Promise<void> => {
+    // Every exit path MUST report, or the run's pendingCount never reaches 0
+    // and the completion digest waits for the 30-min fallback.
+    const done = async (outcome: "analyzed" | "failed", keeper: boolean): Promise<void> => {
+      if (!runId) return;
+      await ctx.runMutation(internal.monitorData.noteAnalyzeDone, { runId, outcome, keeper });
+    };
     try {
       const row = await ctx.runQuery(internal.monitorData.getListingInternal, { id });
-      if (!row) return;
+      if (!row) {
+        await done("failed", false);
+        return;
+      }
 
       const apiKey = fcKey();
 
       // 1) Detail scrape (embedded JSON). null → card-data fallback (VERIFY).
-      const detailData = await scrapeZillowJson(row.url, apiKey);
+      // Capped budget: this action does up to two scrapes + an LLM call, and a
+      // worst-case full envelope would blow the 10-min action limit.
+      const detailData = await scrapeZillowJson(row.url, apiKey, ANALYZE_SCRAPE_BUDGET);
       const detail = detailData ? detailFromCache(detailData) : null;
       const detailOk = detail != null;
 
@@ -304,6 +375,7 @@ export const analyzeOne = internalAction({
             matchedRequirements: [],
           },
         });
+        await done("analyzed", false);
         return;
       }
 
@@ -328,11 +400,12 @@ export const analyzeOne = internalAction({
             ...(detail?.homeType ? { homeType: detail.homeType } : {}),
           },
         });
+        await done("analyzed", false);
         return;
       }
 
       // 3) Comps → conservative ARV (comps median $/sqft, capped vs Zestimate).
-      const comps = zip ? await compsForZip(zip, apiKey) : [];
+      const comps = zip ? await compsForZip(ctx, zip, apiKey) : [];
       const arvRes = conservativeArv({ comps, sqft, beds: bedsNum, zestimate, homeType });
       const arv = arvRes.arv;
 
@@ -514,12 +587,14 @@ export const analyzeOne = internalAction({
             : {}),
         },
       });
+      await done("analyzed", keeper);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       await ctx.runMutation(internal.monitorData.patchAnalysis, {
         id,
         fields: { status: "failed" as const, lastError: message.slice(0, 500) },
       });
+      await done("failed", false);
     }
   },
 });
@@ -759,7 +834,6 @@ function buildDigest(keepers: Keeper[], monitorLink: string): { subject: string;
 export const sendDigest = internalAction({
   args: { runId: v.id("monitorRuns") },
   handler: async (ctx, { runId }): Promise<{ sent: boolean }> => {
-    void runId;
     const key = (process.env.RESEND_API_KEY ?? "").trim();
     if (!key) {
       await ctx.runMutation(internal.errors.logServerError, {
@@ -804,6 +878,7 @@ export const sendDigest = internalAction({
       for (const k of keepers) {
         await ctx.runMutation(internal.monitorData.markEmailed, { id: k._id });
       }
+      await ctx.runMutation(internal.monitorData.noteEmailed, { runId, count: keepers.length });
       return { sent: true };
     } catch (e) {
       await ctx.runMutation(internal.errors.logServerError, {

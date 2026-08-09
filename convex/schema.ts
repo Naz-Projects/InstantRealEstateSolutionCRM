@@ -695,16 +695,24 @@ export default defineSchema({
     lastError: v.optional(v.string()),
     promotedDealId: v.optional(v.id("potentialDeals")),
     emailedAt: v.optional(v.number()),
+    // Retired off the /monitor board (aged out) — set by archiveStaleKeepers.
+    // Keeps `keeper` history intact while bounding the active-keeper read set.
+    archivedAt: v.optional(v.number()),
     firstSeen: v.number(),
     lastSeen: v.number(),
     updatedAt: v.number(),
   })
     .index("by_zpid", ["zpid"])
     .index("by_keeper", ["keeper"])
+    .index("by_keeper_emailed", ["keeper", "emailedAt"])
+    .index("by_keeper_archived", ["keeper", "archivedAt", "dealScore"])
     .index("by_status", ["status"])
     .index("by_firstSeen", ["firstSeen"]),
 
   // Observability counter row per monitor run (mirrors parcelSync).
+  // analyzedCount/keeperCount/failedCount/emailedCount are bumped LIVE by the
+  // analyzeOne fan-out (noteAnalyzeDone) + sendDigest; pendingCount counts down
+  // to 0, which triggers the completion digest.
   monitorRuns: defineTable({
     trigger: v.union(v.literal("webhook"), v.literal("cron"), v.literal("manual")),
     source: v.union(v.literal("zillow"), v.literal("redfin")),
@@ -714,8 +722,19 @@ export default defineSchema({
     analyzedCount: v.number(),
     keeperCount: v.number(),
     emailedCount: v.number(),
+    failedCount: v.optional(v.number()),
+    pendingCount: v.optional(v.number()),
     startedAt: v.number(),
     finishedAt: v.optional(v.number()),
     error: v.optional(v.string()),
   }).index("by_started", ["startedAt"]),
+
+  // Per-zip Redfin sold-comps cache (monitor). The in-isolate Map cache is cold
+  // for nearly every scheduled analyzeOne, so the same zip's Redfin page was
+  // re-scraped once per LISTING per night; this table makes it once per ZIP.
+  zipComps: defineTable({
+    zip: v.string(),
+    comps: v.array(v.any()),
+    fetchedAt: v.number(),
+  }).index("by_zip", ["zip"]),
 });

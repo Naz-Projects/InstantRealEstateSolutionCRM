@@ -2,6 +2,7 @@ export const MONITOR = {
   regionId: 2986, regionType: 4, // New Castle County, DE
   priceCeiling: 500000, minListPrice: 1000, dozDays: "7", sort: "days",
   spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06, distressScoreFloor: 30,
+  keeperRetireDays: 30, // keepers older than this age off the /monitor board (archivedAt)
   ncc_bounds: { west: -75.97218944726562, east: -75.22237255273437, south: 39.36230086205304, north: 39.76777058263119 },
 } as const;
 

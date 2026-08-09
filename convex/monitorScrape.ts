@@ -36,6 +36,17 @@ interface V2ScrapeData {
   markdown: string;
 }
 
+// Per-call retry-envelope override. A Convex action is killed at 10 minutes, so
+// callers that do MULTIPLE scrapes per action (analyzeOne: detail + comps + LLM)
+// must cap their envelope well below it — a killed action never reaches its
+// catch, leaving rows stuck "pending" (the 132k-seed stall mode, lessons
+// 2026-06-11). Defaults preserve the original long envelope for the single
+// top-level search scrape.
+export interface ScrapeBudget {
+  gaps?: number[]; // retry gaps in ms; length = max attempts
+  timeoutMs?: number; // per-fetch AbortSignal timeout
+}
+
 /**
  * POST Firecrawl REST v2 scrape. Returns rawHtml/markdown, or null on any
  * failure (HTTP error, network error/timeout, or an unsuccessful response) —
@@ -45,6 +56,8 @@ async function firecrawlV2Scrape(
   url: string,
   apiKey: string,
   proxy: "enhanced" | "auto",
+  formats: string[],
+  timeoutMs: number,
 ): Promise<V2ScrapeData | null> {
   try {
     const res = await fetch(FIRECRAWL_V2_SCRAPE_URL, {
@@ -55,11 +68,11 @@ async function firecrawlV2Scrape(
       },
       body: JSON.stringify({
         url,
-        formats: ["rawHtml", "markdown"],
+        formats,
         proxy,
         waitFor: 5000,
       }),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;
 
@@ -78,17 +91,24 @@ async function firecrawlV2Scrape(
 /**
  * Scrape a Zillow search or detail URL and return its parsed `__NEXT_DATA__` JSON.
  * A bot-block shell (rawHtml under 50k chars, or no parseable `__NEXT_DATA__`) is
- * treated as retryable, not a hard failure: retries with spaced gaps
- * [0, 12s, 28s, 50s] + jitter (Firecrawl `proxy:"enhanced"`, `waitFor:5000`).
- * Returns the nextData object, or null after all retries are exhausted (the caller
- * falls back to search-card data).
+ * treated as retryable, not a hard failure: retries with spaced gaps + jitter
+ * (Firecrawl `proxy:"enhanced"`, `waitFor:5000`). Only rawHtml is requested —
+ * the markdown format was never parsed for Zillow. Returns the nextData object,
+ * or null after the budget's retries are exhausted (the caller falls back to
+ * search-card data).
  */
-export async function scrapeZillowJson(url: string, apiKey: string): Promise<any | null> {
+export async function scrapeZillowJson(
+  url: string,
+  apiKey: string,
+  budget?: ScrapeBudget,
+): Promise<any | null> {
   if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not set");
 
-  for (const gap of RETRY_GAPS_MS) {
+  const gaps = budget?.gaps ?? RETRY_GAPS_MS;
+  const timeoutMs = budget?.timeoutMs ?? FETCH_TIMEOUT_MS;
+  for (const gap of gaps) {
     if (gap > 0) await sleep(gap + Math.random() * 2000);
-    const data = await firecrawlV2Scrape(url, apiKey, "enhanced");
+    const data = await firecrawlV2Scrape(url, apiKey, "enhanced", ["rawHtml"], timeoutMs);
     if (!data || data.rawHtml.length < SHELL_MIN_LEN) continue;
     const nextData = extractNextData(data.rawHtml);
     if (!nextData) continue;
@@ -99,17 +119,24 @@ export async function scrapeZillowJson(url: string, apiKey: string): Promise<any
 
 /**
  * Scrape a ZIP's Redfin "recently sold" page (`buildRedfinSoldUrl`) and return its
- * markdown (the source `parseRedfinComps` parses). Same spaced shell/transient retry
- * as `scrapeZillowJson` (Firecrawl `proxy:"auto"`, `waitFor:5000`). Returns the
- * markdown string, or null after all retries are exhausted.
+ * markdown (the source `parseRedfinComps` parses; rawHtml only shell-checks).
+ * Same spaced shell/transient retry as `scrapeZillowJson` (Firecrawl
+ * `proxy:"auto"`, `waitFor:5000`). Returns the markdown string, or null after
+ * the budget's retries are exhausted.
  */
-export async function scrapeRedfinMarkdown(zip: string, apiKey: string): Promise<string | null> {
+export async function scrapeRedfinMarkdown(
+  zip: string,
+  apiKey: string,
+  budget?: ScrapeBudget,
+): Promise<string | null> {
   if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not set");
 
+  const gaps = budget?.gaps ?? RETRY_GAPS_MS;
+  const timeoutMs = budget?.timeoutMs ?? FETCH_TIMEOUT_MS;
   const url = buildRedfinSoldUrl(zip);
-  for (const gap of RETRY_GAPS_MS) {
+  for (const gap of gaps) {
     if (gap > 0) await sleep(gap + Math.random() * 2000);
-    const data = await firecrawlV2Scrape(url, apiKey, "auto");
+    const data = await firecrawlV2Scrape(url, apiKey, "auto", ["rawHtml", "markdown"], timeoutMs);
     if (!data || data.rawHtml.length < SHELL_MIN_LEN) continue;
     return data.markdown;
   }

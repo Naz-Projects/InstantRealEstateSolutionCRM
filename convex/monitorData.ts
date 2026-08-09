@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
@@ -243,21 +244,84 @@ export const createRun = internalMutation({
   },
 });
 
-/** Finalize a run with its counts (source override for the Redfin fallback). */
+/**
+ * Finalize a run's SCAN phase (status/scanned/newCount). The analysis counters
+ * (analyzedCount/keeperCount/failedCount/emailedCount) are deliberately NOT args:
+ * they are bumped live by noteAnalyzeDone/noteEmailed as the async fan-out
+ * completes — passing them here would clobber counts from analyses that raced
+ * ahead of finishRun.
+ */
 export const finishRun = internalMutation({
   args: {
     id: v.id("monitorRuns"),
     status: v.union(v.literal("complete"), v.literal("failed")),
     scanned: v.number(),
     newCount: v.number(),
-    analyzedCount: v.number(),
-    keeperCount: v.number(),
-    emailedCount: v.number(),
     source: v.optional(v.union(v.literal("zillow"), v.literal("redfin"))),
     error: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...rest }) => {
     await ctx.db.patch(id, { ...rest, finishedAt: Date.now() });
+  },
+});
+
+/** Set how many analyzeOne calls the scan is about to schedule — BEFORE any are
+ *  scheduled, so a fast first analysis can never decrement an unset counter. */
+export const setPendingCount = internalMutation({
+  args: { id: v.id("monitorRuns"), pendingCount: v.number() },
+  handler: async (ctx, { id, pendingCount }) => {
+    await ctx.db.patch(id, { pendingCount });
+  },
+});
+
+/**
+ * One analyzeOne finished (any exit path). Bumps the run's real counters and
+ * counts pendingCount down; at 0 the digest fires immediately (completion-
+ * triggered — no guessed buffer), and a night where everything failed writes an
+ * errorLogs alert instead of looking green. Serializable mutations make the
+ * concurrent decrements safe.
+ */
+export const noteAnalyzeDone = internalMutation({
+  args: {
+    runId: v.id("monitorRuns"),
+    outcome: v.union(v.literal("analyzed"), v.literal("failed")),
+    keeper: v.boolean(),
+  },
+  // Explicit return type: this handler references internal.monitorActions.* while
+  // monitorActions references internal.monitorData.* — annotate to break the
+  // TS7022 circular-inference cycle (lessons 2026-06-01).
+  handler: async (ctx, { runId, outcome, keeper }): Promise<void> => {
+    const run = await ctx.db.get(runId);
+    if (!run) return;
+    const analyzedCount = run.analyzedCount + (outcome === "analyzed" ? 1 : 0);
+    const failedCount = (run.failedCount ?? 0) + (outcome === "failed" ? 1 : 0);
+    const keeperCount = run.keeperCount + (keeper ? 1 : 0);
+    const remaining = Math.max(0, (run.pendingCount ?? 0) - 1);
+    await ctx.db.patch(runId, { analyzedCount, failedCount, keeperCount, pendingCount: remaining });
+    if (remaining === 0) {
+      await ctx.scheduler.runAfter(0, internal.monitorActions.sendDigest, { runId });
+      if (analyzedCount === 0 && failedCount > 0) {
+        await ctx.db.insert("errorLogs", {
+          message: `monitor: 0 of ${failedCount} scheduled analyses succeeded — Zillow likely blocked all night`,
+          source: "server" as const,
+          severity: "error" as const,
+          context: "monitorData.noteAnalyzeDone",
+          resolved: false,
+          createdAt: Date.now(),
+        });
+      }
+    }
+  },
+});
+
+/** Digest sent: add its keeper count to the run's emailedCount (incremental —
+ *  the completion digest and the fallback digest may both fire for one run). */
+export const noteEmailed = internalMutation({
+  args: { runId: v.id("monitorRuns"), count: v.number() },
+  handler: async (ctx, { runId, count }) => {
+    const run = await ctx.db.get(runId);
+    if (!run) return;
+    await ctx.db.patch(runId, { emailedCount: run.emailedCount + count });
   },
 });
 
@@ -329,29 +393,112 @@ export const getListingInternal = internalQuery({
 export const keepersToEmail = internalQuery({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
+    // Index-bounded: only keeper rows never emailed (the digest stamps emailedAt,
+    // so this set stays small regardless of how many keepers accumulate).
     const rows = await ctx.db
       .query("monitorListings")
-      .withIndex("by_keeper", (q) => q.eq("keeper", true))
+      .withIndex("by_keeper_emailed", (q) => q.eq("keeper", true).eq("emailedAt", undefined))
       .collect();
-    const unemailed = rows.filter((r) => r.emailedAt === undefined);
-    unemailed.sort((a, b) => (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity));
-    return unemailed.slice(0, limit ?? 50);
+    const active = rows.filter((r) => r.archivedAt === undefined);
+    active.sort((a, b) => (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity));
+    return active.slice(0, limit ?? 50);
+  },
+});
+
+/**
+ * Nightly retire pass: keepers older than `days` (by firstSeen) get archivedAt
+ * stamped so the /monitor board and its queries stay bounded to the active
+ * market. `keeper` itself is untouched (history preserved). Returns the count.
+ */
+export const archiveStaleKeepers = internalMutation({
+  args: { days: v.number() },
+  handler: async (ctx, { days }) => {
+    const now = Date.now();
+    const cutoff = now - days * 24 * 60 * 60 * 1000;
+    const active = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_keeper_archived", (q) => q.eq("keeper", true).eq("archivedAt", undefined))
+      .collect();
+    let archived = 0;
+    for (const row of active) {
+      if (row.firstSeen < cutoff) {
+        await ctx.db.patch(row._id, { archivedAt: now, updatedAt: now });
+        archived++;
+      }
+    }
+    return archived;
+  },
+});
+
+/**
+ * Sweep rows stuck `pending` (an analyzeOne killed by the action time limit never
+ * reaches its catch) to `failed` with an honest lastError, so a blocked night is
+ * visible instead of green. Returns the swept count for the caller to log.
+ */
+export const sweepStalePending = internalMutation({
+  args: { olderThanMs: v.optional(v.number()) },
+  handler: async (ctx, { olderThanMs }) => {
+    const cutoff = Date.now() - (olderThanMs ?? 6 * 60 * 60 * 1000);
+    const pending = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .collect();
+    let swept = 0;
+    for (const row of pending) {
+      if (row.updatedAt < cutoff) {
+        await ctx.db.patch(row._id, {
+          status: "failed" as const,
+          lastError: "analysis timed out (swept by the next scan)",
+          updatedAt: Date.now(),
+        });
+        swept++;
+      }
+    }
+    return swept;
+  },
+});
+
+/** Fresh comps for a zip from the shared nightly cache, or null on miss/stale. */
+export const getZipComps = internalQuery({
+  args: { zip: v.string(), maxAgeMs: v.number() },
+  handler: async (ctx, { zip, maxAgeMs }) => {
+    const row = await ctx.db
+      .query("zipComps")
+      .withIndex("by_zip", (q) => q.eq("zip", zip))
+      .first();
+    if (!row || Date.now() - row.fetchedAt > maxAgeMs) return null;
+    return row.comps;
+  },
+});
+
+/** Upsert the shared per-zip comps cache (one row per zip). */
+export const storeZipComps = internalMutation({
+  args: { zip: v.string(), comps: v.array(v.any()) },
+  handler: async (ctx, { zip, comps }) => {
+    const now = Date.now();
+    const row = await ctx.db
+      .query("zipComps")
+      .withIndex("by_zip", (q) => q.eq("zip", zip))
+      .first();
+    if (row) await ctx.db.patch(row._id, { comps, fetchedAt: now });
+    else await ctx.db.insert("zipComps", { zip, comps, fetchedAt: now });
   },
 });
 
 // ---- browser-facing (requireUser-gated) reads for /monitor ----
 
-/** Keepers, best deal on top. Small set — collect + sort by dealScore desc. */
+/** Active (un-archived) keepers, best deal on top — index-ordered, bounded. */
 export const listKeepers = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
     await requireUser(ctx);
-    const rows = await ctx.db
+    // by_keeper_archived is ["keeper","archivedAt","dealScore"]: eq+eq then
+    // desc-order walks dealScore high→low (score-less rows sort last).
+    return await ctx.db
       .query("monitorListings")
-      .withIndex("by_keeper", (q) => q.eq("keeper", true))
-      .collect();
-    rows.sort((a, b) => (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity));
-    return typeof limit === "number" ? rows.slice(0, limit) : rows;
+      .withIndex("by_keeper_archived", (q) => q.eq("keeper", true).eq("archivedAt", undefined))
+      .order("desc")
+      .take(limit ?? 100);
   },
 });
 

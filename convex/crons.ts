@@ -6,9 +6,12 @@ import { internal } from "./_generated/api";
 // reaches Firecrawl when the county posts a new PDF.
 const crons = cronJobs();
 
+// Mon/Wed/Fri (not every weekday): the sheriff PDF is MONTHLY, and each check
+// costs a Firecrawl scrape just to learn "already scraped" — a ≤2-day detection
+// delay on a monthly list with auctions weeks out is immaterial.
 crons.cron(
   "sheriff weekday check",
-  "0 11 * * 1-5",
+  "0 11 * * 1,3,5",
   internal.sheriffActions.runSheriffScrape,
   { triggeredBy: "cron", force: false },
 );
