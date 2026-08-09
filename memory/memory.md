@@ -2,6 +2,17 @@
 
 _Read this first. It's the "what & why" so you don't have to reverse-engineer the codebase._
 
+## ★★ Deep-dive items 1–3 SHIPPED (2026-08-08 later, `664ea0e` → prod, live-verified)
+The three P0/P1 architecture items from the deep dive are LIVE: (1) **bounded keeper set** — `archivedAt` +
+nightly `archiveStaleKeepers` (30d) + `by_keeper_emailed`/`by_keeper_archived` indexes (first prod run archived
+60; board now ~125 active); (2) **truthful fan-out** — real run counters via `noteAnalyzeDone` (pendingCount set
+BEFORE scheduling), **completion-triggered digest** + 30-min idempotent fallback, capped scrape budgets under the
+10-min action limit, `sweepStalePending` (first prod run swept **8 real stuck rows**), 0-analyzed alert;
+(3) **credit leaks** — `zipComps` shared cache (once/zip not once/listing), legal LLM call now behind the
+idempotency check, rawHtml-only Zillow scrapes, sheriff cron Mon/Wed/Fri. `finishRun` no longer takes analysis
+counters (they'd clobber racing bumps). Tonight's 8 PM run = first live end-to-end proof of the counter/digest
+chain. Remaining from the dive: `leadScores` projection (A25-2, the big one) + security pair + spine freshness.
+
 ## ★★ Deep dive + monitor fixes (2026-08-08) — SHIPPED TO PROD
 Three fixes shipped (`3cc764b`, `4a6dccc`, prod backend deployed, CF push): (1) **digest email now goes to
 ALL active users** (`users.activeEmailsInternal` + pure `digestRecipients()`; was RESEND_TO=admin only;

@@ -5,13 +5,21 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 
 ## ★ NEXT — Deep-dive follow-ups (2026-08-08, full detail in `memory/deep-dive-2026-08-08.md`)
 - [x] **Digest → all active users** + **apartment/MF/condo exclusion** + prod keeper cleanup (SHIPPED 2026-08-08).
-- [ ] **P0-arch (½ day):** bound the /monitor keeper set — nightly retire pass (stale `lastSeen` → keeper=false)
-  + `["keeper","emailedAt"]` / `["keeper","dealScore"]` indexes + `take(N)` (A25-1; digest+page hard-fail otherwise).
-- [ ] **P0-arch (1-2 d):** truthful monitor fan-out — retry budget capped under the action limit, pending-row
-  sweeper + "0 analyzed" alert, real run counters, completion-triggered digest (A25-3 + A25-5).
+- [x] **P0-arch A25-1 — SHIPPED 2026-08-08 (`664ea0e` → prod):** keeper set bounded — `archivedAt` +
+  `archiveStaleKeepers` nightly retire (`MONITOR.keeperRetireDays` 30d; first prod run archived 60),
+  `by_keeper_emailed`/`by_keeper_archived` indexes, `listKeepers`/`keepersToEmail` index-bounded + take(N).
+- [x] **P0-arch A25-3+A25-5 — SHIPPED 2026-08-08 (`664ea0e` → prod):** truthful fan-out — real run counters
+  (`noteAnalyzeDone`: analyzed/failed/keeper/pending; `noteEmailed`), pendingCount set BEFORE scheduling,
+  **completion-triggered digest** (fires at pendingCount 0) + 30-min fallback (idempotent), capped scrape
+  budgets (`ANALYZE_SCRAPE_BUDGET` 2×60s, `SEARCH_SCRAPE_BUDGET` 3×90s — worst case under the 10-min action
+  kill), `sweepStalePending` 6h sweeper (first prod run swept 8 real stuck rows) + 0-analyzed errorLog alert.
+  finishRun no longer takes/clobbers analysis counters. NOTE: tonight's run is the first live end-to-end proof.
 - [ ] **P0-arch (2-4 d):** materialized `leadScores` projection; /leads reads indexed top-N (A25-2 / A-C1).
-- [ ] **P1-cost (~1 d):** Firecrawl credit batch — `zipComps` nightly cache table, legal idempotency check before
-  the LLM call, forward webhook page-1 content, drop markdown from Zillow scrapes, thin the sheriff cron (A25-4).
+- [x] **P1-cost A25-4 — SHIPPED 2026-08-08 (`664ea0e` → prod):** `zipComps` shared cache table (12h TTL,
+  non-empty only; comps once per ZIP not per listing), legal idempotency check moved BEFORE the LLM call,
+  Zillow scrapes rawHtml-only, sheriff cron weekday→Mon/Wed/Fri. Webhook page-1 content forwarding SKIPPED
+  deliberately: `check.completed` deliveries carry no page content; registering `monitor.page` events would
+  double-trigger scans (would need re-registration + dedup rework for ~5 credits/night — not worth it).
 - [ ] **P1-data (1-2 d):** spine freshness — `parcelKeys` CDC side table, monthly `seedSpine` cron, stale-"running"
   watchdog, one-time 365d foreclosure re-sweep + unmatched-ghost reconciliation (A25-6/A25-8).
 - [ ] **P1-security:** require `email_verified` before the byEmail account-link fallback (S25-1); split the Google
