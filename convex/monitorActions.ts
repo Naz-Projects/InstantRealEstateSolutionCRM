@@ -93,6 +93,9 @@ function upsertArgsFromCard(l: SearchListing) {
     ...(l.homeType ? { homeType: l.homeType } : {}),
     ...(l.daysOnZillow != null ? { daysOnZillow: l.daysOnZillow } : {}),
     ...(l.zestimate != null ? { zestimate: l.zestimate } : {}),
+    ...(l.homeStatus ? { homeStatus: l.homeStatus } : {}),
+    ...(l.priceChange != null ? { priceChange: l.priceChange } : {}),
+    ...(l.datePriceChanged != null ? { datePriceChanged: l.datePriceChanged } : {}),
   };
 }
 
@@ -258,7 +261,7 @@ export const runMonitorScan = internalAction({
       for (const l of survivors) {
         const up = await ctx.runMutation(internal.monitorData.upsertListing, upsertArgsFromCard(l));
         if (up.isNew) newCount++;
-        if (up.isNew || up.priceDropped) toAnalyze.push(up.id);
+        if (up.isNew || up.priceDropped || up.backOnMarket) toAnalyze.push(up.id);
       }
       await ctx.runMutation(internal.monitorData.setPendingCount, {
         id: runId,

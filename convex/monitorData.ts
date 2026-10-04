@@ -8,6 +8,7 @@ import { requireAdmin } from "./lib/getAuthUser";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
 import { partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
 import { applyTriage, scanBlockedReason, type TriageState } from "../src/scraper/monitorTriage";
+import { sightingPatch, cardCutFields, nextRecheckAt } from "../src/scraper/monitorRecheck";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -46,6 +47,9 @@ const listingUpsertArgs = {
   mlsId: v.optional(v.string()),
   zestimate: v.optional(v.number()),
   rentZestimate: v.optional(v.number()),
+  homeStatus: v.optional(v.string()),
+  priceChange: v.optional(v.number()),      // card-only (not a column): seeds lastPriceCut on insert
+  datePriceChanged: v.optional(v.number()), // card-only (not a column)
 };
 
 // Everything the analyze step may write. Every key optional so a partial (VERIFY)
@@ -150,15 +154,15 @@ const analysisFields = v.object({
 
 /**
  * Upsert a discovered listing by zpid. New zpid → insert a `pending` row (stamp
- * firstSeen/lastSeen/updatedAt). Repeat zpid → bump lastSeen; if this scan's
- * listPrice is strictly below the stored one, record the drop (prevListPrice =
- * old, listPrice = new) so the analyze step can re-surface it as a motivated
- * seller. On a repeat we do NOT overwrite the analyzed fields with card data.
+ * firstSeen/lastSeen/updatedAt). Repeat zpid: `sightingPatch` decides cut /
+ * back-on-market / revive. On a repeat we do NOT overwrite the analyzed fields
+ * with card data.
  */
 export const upsertListing = internalMutation({
   args: listingUpsertArgs,
   handler: async (ctx, args) => {
     const now = Date.now();
+    const { priceChange, datePriceChanged, ...fields } = args;
     const existing = await ctx.db
       .query("monitorListings")
       .withIndex("by_zpid", (q) => q.eq("zpid", args.zpid))
@@ -166,34 +170,28 @@ export const upsertListing = internalMutation({
 
     if (!existing) {
       const id = await ctx.db.insert("monitorListings", {
-        ...args,
+        ...fields,
+        ...cardCutFields({ priceChange, datePriceChanged }, now),
         status: "pending" as const,
         firstSeen: now,
         lastSeen: now,
         updatedAt: now,
       });
-      return { id, isNew: true, priceDropped: false };
+      return { id, isNew: true, priceDropped: false, backOnMarket: false };
     }
 
-    const patch: {
-      lastSeen: number;
-      updatedAt: number;
-      prevListPrice?: number;
-      listPrice?: number;
-    } = { lastSeen: now, updatedAt: now };
-
-    let priceDropped = false;
-    if (
-      args.listPrice != null &&
-      existing.listPrice != null &&
-      args.listPrice < existing.listPrice
-    ) {
-      priceDropped = true;
-      patch.prevListPrice = existing.listPrice;
-      patch.listPrice = args.listPrice; // move current price down so the drop can't re-fire daily
-    }
-    await ctx.db.patch(existing._id, patch);
-    return { id: existing._id, isNew: false, priceDropped };
+    // Cut detection (moves listPrice down so it can't re-fire), back-on-market, and
+    // revive-on-new-cut all live in the pure sightingPatch (tests/monitorRecheck.test.ts).
+    // We do NOT overwrite analyzed fields with card data.
+    const s = sightingPatch(existing, { price: args.listPrice ?? null, homeStatus: args.homeStatus, datePriceChanged }, now);
+    // A revived row (archive keys present = cleared) re-enters the rotation here, not
+    // only in analyzeOne: a failed re-analysis must not leave a revived keeper unscheduled.
+    const revived = "archivedAt" in s.patch;
+    const recheck = revived
+      ? { recheckAt: nextRecheckAt({ keeper: existing.keeper, archivedAt: undefined, archivedReason: undefined, lastSeen: now }, now) ?? undefined }
+      : {};
+    await ctx.db.patch(existing._id, { ...s.patch, ...recheck });
+    return { id: existing._id, isNew: false, priceDropped: s.priceDropped, backOnMarket: s.backOnMarket };
   },
 });
 
@@ -460,7 +458,7 @@ export const activeKeeperCount = internalQuery({
 });
 
 /**
- * Nightly retire pass: keepers older than `days` (by firstSeen) get archivedAt
+ * Nightly retire pass: keepers not seen in a Zillow search for `days` (by lastSeen) get archivedAt
  * stamped so the /monitor board and its queries stay bounded to the active
  * market. `keeper` itself is untouched (history preserved). Returns the count.
  */
@@ -475,8 +473,10 @@ export const archiveStaleKeepers = internalMutation({
       .collect();
     let archived = 0;
     for (const row of active) {
-      if (row.firstSeen < cutoff) {
-        await ctx.db.patch(row._id, { archivedAt: now, updatedAt: now });
+      // lastSeen (last appearance in ANY Zillow search) — a keeper the price-cut sweep
+      // keeps seeing stays on the board; the rotation (recheckAt) ends with it.
+      if (row.lastSeen < cutoff) {
+        await ctx.db.patch(row._id, { archivedAt: now, archivedReason: "stale", recheckAt: undefined, updatedAt: now });
         archived++;
       }
     }

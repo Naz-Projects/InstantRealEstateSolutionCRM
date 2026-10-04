@@ -705,6 +705,16 @@ export default defineSchema({
     // Retired off the /monitor board (aged out) — set by archiveStaleKeepers.
     // Keeps `keeper` history intact while bounding the active-keeper read set.
     archivedAt: v.optional(v.number()),
+    // Phase 4 (wider net): status tracking + re-alerts (src/scraper/monitorRecheck.ts).
+    homeStatus: v.optional(v.string()),     // Zillow homeStatus as last seen (card or detail)
+    archivedReason: v.optional(v.string()), // "stale" | "PENDING" | "SOLD" | "OFF_MARKET"
+    lastPriceCut: v.optional(v.number()),   // $ amount of the most recent detected cut
+    lastPriceCutAt: v.optional(v.number()),
+    backOnMarketAt: v.optional(v.number()),
+    alertTag: v.optional(v.string()),       // "PRICE CUT $12,000" | "BACK ON MARKET"
+    alertedEventAt: v.optional(v.number()), // event time already re-alerted (loop guard)
+    recheckAt: v.optional(v.number()),      // next detail re-check due; unset = not in rotation
+    lastRecheckAt: v.optional(v.number()),
     firstSeen: v.number(),
     lastSeen: v.number(),
     updatedAt: v.number(),
@@ -714,7 +724,8 @@ export default defineSchema({
     .index("by_keeper_emailed", ["keeper", "emailedAt"])
     .index("by_keeper_archived", ["keeper", "archivedAt", "dealScore"])
     .index("by_status", ["status"])
-    .index("by_firstSeen", ["firstSeen"]),
+    .index("by_firstSeen", ["firstSeen"])
+    .index("by_recheck", ["recheckAt"]),
 
   // Observability counter row per monitor run (mirrors parcelSync).
   // analyzedCount/keeperCount/failedCount/emailedCount are bumped LIVE by the
