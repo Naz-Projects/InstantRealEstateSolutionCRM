@@ -52,6 +52,11 @@ with the account webhook secret synced; proven end-to-end (self-signed HMAC POST
 42 keepers, 0 gate violations; new top finds 18 S Pennewell + 212 Bohemia Mill Pond, score-90 FLIPs at 43%/51% spreads). The
 ANNUAL 100k key (`fc-3f8…`) stays local-only in `.env.local`. The feature is fully operational — nothing blocking. Full detail: `memory/next-session-prompt.md` (top) + spec `docs/superpowers/specs/2026-06-30-monitor-web-zillow-design.md`
 + ledger `.superpowers/sdd/progress.md`.
+**Phase 3 (branch `feat/monitor-critique`, 2026-10-04):** `/monitor` is a per-user triage inbox — tables `monitorTriage`
+(per user+listing: shortlist/pass+reason/snooze 7d) and `monitorSeen` (last-looked watermark); functions `board` (slim keeper
+projection), `boardState`, `listingForMe` (normalizeId; garbage id -> "no longer available"), `setTriage`, `markSeen`, admin `requestScan`.
+The digest is built by `src/scraper/monitorDigest.ts` (deep link `/monitor?id=<id>`, light AA palette, cards <= 300px at 390).
+Shared presentation (verdict cell, humanizeFlag/displayFlags, safeHref, numberGroups) lives in `src/scraper/monitorPresent.ts`.
 
 ## ★ Active initiative (2026-06-06..08) — Wholesaling Lead Engine
 Current build focus: turn the CRM into a New Castle County **wholesaling lead engine** (ingest ALL parcels + attach
