@@ -447,6 +447,18 @@ export const keepersToEmail = internalQuery({
   },
 });
 
+/** Active (un-archived) keepers on the board, for the digest's "N more on the board". Bounded. */
+export const activeKeeperCount = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_keeper_archived", (q) => q.eq("keeper", true).eq("archivedAt", undefined))
+      .take(1000);
+    return rows.length;
+  },
+});
+
 /**
  * Nightly retire pass: keepers older than `days` (by firstSeen) get archivedAt
  * stamped so the /monitor board and its queries stay bounded to the active

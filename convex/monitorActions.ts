@@ -32,6 +32,7 @@ import {
 } from "../src/scraper/monitorListings";
 import { parseZip, parseRedfinComps, parseRedfinGisComps, isLegacyCompsCache, type Comp } from "../src/scraper/comps";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
+import { buildDigest } from "../src/scraper/monitorDigest";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — the "use node" action layer:
 // scan → per-listing enrich → keeper decision. ONE shared scan path (webhook /
@@ -635,232 +636,8 @@ export const analyzeOne = internalAction({
   },
 });
 
-// ---- digest formatting (pure helpers for sendDigest) ----
-// Mobile-first, minimal, branded email. Light ground (dark-mode inversion mangles
-// dark designs); brand carried through teal #2D9C84 accents, tight type, clean
-// badges. All CSS inline (Gmail strips <style>), single 600px column, big tap
-// targets. See .superpowers/sdd/r2-email-redesign-brief.md.
-
-type Keeper = Doc<"monitorListings">;
-
-const money = (n: number | null | undefined): string =>
-  n == null ? "n/a" : `$${Math.round(n).toLocaleString("en-US")}`;
-const pct = (n: number | null | undefined): string =>
-  n == null ? "n/a" : `${n.toFixed(1)}%`;
-const esc = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-// matchedRequirement tokens (below_market/fixer/distressed) → "Below market" etc.
-const chipLabel = (s: string): string => {
-  const words = s.replace(/_/g, " ").trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-};
-
-// Rental → cap + monthly cash flow; flip → MAO + margin. Mirrors the field
-// fallbacks the row actually carries (capRate/flipMargin are stored as fractions).
-function exitDetail(row: Keeper): string {
-  if (row.bestExit === "RENTAL" || (row.capRate != null && row.flipMao == null)) {
-    if (row.capRate == null) return "";
-    const cap = `Cap ${(row.capRate * 100).toFixed(1)}%`;
-    if (row.cashFlow == null) return cap;
-    const cf = Math.abs(Math.round(row.cashFlow));
-    return `${cap} · ${row.cashFlow >= 0 ? "+" : "−"}$${cf.toLocaleString("en-US")}/mo cash flow`;
-  }
-  if (row.flipMao != null) {
-    const mao = `MAO ${money(row.flipMao)}`;
-    return row.flipMargin != null ? `${mao} · ${(row.flipMargin * 100).toFixed(1)}% margin` : mao;
-  }
-  if (row.capRate != null) return `Cap ${(row.capRate * 100).toFixed(1)}%`;
-  return "";
-}
-
-// Compact analyst "history": the ≤3 most-informative (already-humanized) motivation
-// signals plus the $/sqft-vs-comps discount. "" for a row that predates deep-analysis.
-function historyLine(row: Keeper): string {
-  const parts = [...(row.motivationSignals ?? []).slice(0, 3)];
-  if (row.ppsfDiscountPct != null) {
-    const p = Math.round(row.ppsfDiscountPct * 100);
-    parts.push(p >= 0 ? `${p}% under comps $/sqft` : `${-p}% over comps $/sqft`);
-  }
-  return parts.join(" · ");
-}
-
-// The LLM's exit call, surfaced only when it disagrees with the deterministic
-// bestExit (both stored uppercase). "" otherwise. Fallbacks appended when present.
-function analystExitNote(row: Keeper): string {
-  const triage = row.exitTriage;
-  if (!triage) return "";
-  if (row.bestExit && triage.toUpperCase() === row.bestExit.toUpperCase()) return "";
-  const fallbacks = row.exitFallbacks ?? [];
-  return fallbacks.length
-    ? `Analyst: ${triage} → fallback ${fallbacks.join(", ")}`
-    : `Analyst: ${triage}`;
-}
-
-// The score/exit pill tier color (>=70 teal, 35–69 amber, else gray).
-function scoreTier(score: number | null | undefined): string {
-  if (score != null && score >= 70) return "#2D9C84";
-  if (score != null && score >= 35) return "#B7791F";
-  return "#8b9196";
-}
-
-// beds/baths can be a number OR a string on the doc; sqft is numeric.
-function factsLine(row: Keeper): string {
-  const parts: string[] = [];
-  if (row.beds != null && row.beds !== "") parts.push(`${row.beds} bd`);
-  if (row.baths != null && row.baths !== "") parts.push(`${row.baths} ba`);
-  if (row.sqft != null) parts.push(`${row.sqft.toLocaleString("en-US")} sqft`);
-  return parts.join(" · ");
-}
-
-function keeperText(row: Keeper, monitorLink: string): string {
-  const nums = [
-    `${money(row.listPrice)} list`,
-    row.conservativeArv != null ? `ARV ${money(row.conservativeArv)}` : "",
-    factsLine(row),
-  ].filter(Boolean).join(" · ");
-  const badges: string[] = [];
-  if (row.dealScore != null) badges.push(`${row.dealScore}${row.bestExit ? ` · ${row.bestExit}` : ""}`);
-  if (row.spreadPct != null) {
-    badges.push(row.spreadPct < 0 ? `${pct(Math.abs(row.spreadPct))} above` : `${pct(row.spreadPct)} below`);
-  }
-  for (const m of row.matchedRequirements ?? []) badges.push(chipLabel(m));
-  if (row.riskFlags?.some((f) => f.startsWith("RENOVATED"))) badges.push("RENOVATED");
-
-  const lines = [`${row.address} — ${nums}`];
-  if (badges.length) lines.push(`   ${badges.join(" · ")}`);
-  if (row.offMarketSignals?.length) lines.push(`   OWNER: ${row.offMarketSignals.join(", ")}`);
-  const exit = exitDetail(row);
-  if (exit) lines.push(`   ${exit}`);
-  const history = historyLine(row);
-  if (history) lines.push(`   ${history}`);
-  const exitNote = analystExitNote(row);
-  if (exitNote) lines.push(`   ${exitNote}`);
-  const flags = (row.redFlags ?? []).slice(0, 2);
-  if (flags.length) lines.push(`   RED FLAGS: ${flags.join(" · ")}`);
-  if (row.aiReason) lines.push(`   ${row.aiReason}`);
-  lines.push(`   Monitor: ${monitorLink}   Zillow: ${row.url}`);
-  return lines.join("\n");
-}
-
-function keeperHtml(row: Keeper, monitorLink: string): string {
-  const photo = row.photoUrls?.[0]
-    ? `<img src="${esc(row.photoUrls[0])}" width="560" alt="" style="width:100%;height:auto;max-height:220px;border-radius:8px 8px 0 0;display:block;object-fit:cover;">`
-    : "";
-
-  // Badge row (score pill · spread · req chips · RENOVATED · OWNER moat signal).
-  const badges: string[] = [];
-  if (row.dealScore != null) {
-    const label = esc(`${row.dealScore}${row.bestExit ? ` · ${row.bestExit}` : ""}`);
-    badges.push(
-      `<span style="display:inline-block;background:${scoreTier(row.dealScore)};color:#ffffff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;">${label}</span>`,
-    );
-  }
-  if (row.spreadPct != null) {
-    const above = row.spreadPct < 0;
-    const txt = esc(above ? `${pct(Math.abs(row.spreadPct))} above` : `${pct(row.spreadPct)} below`);
-    const style = above ? "background:#f0f1f2;color:#4a5156;" : "background:#e6f4f0;color:#2D9C84;";
-    badges.push(`<span style="display:inline-block;${style}font-size:12px;font-weight:600;padding:4px 10px;border-radius:12px;">${txt}</span>`);
-  }
-  for (const m of row.matchedRequirements ?? []) {
-    badges.push(`<span style="display:inline-block;background:#f0f1f2;color:#4a5156;font-size:12px;padding:4px 10px;border-radius:12px;">${esc(chipLabel(m))}</span>`);
-  }
-  if (row.riskFlags?.some((f) => f.startsWith("RENOVATED"))) {
-    badges.push(`<span style="display:inline-block;background:#fdf3e3;color:#8a5a00;font-size:12px;font-weight:600;padding:4px 10px;border-radius:12px;">RENOVATED</span>`);
-  }
-  if (row.offMarketSignals?.length) {
-    badges.push(`<span style="display:inline-block;background:#fdecec;color:#a33333;font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;">OWNER: ${esc(row.offMarketSignals.join(", "))}</span>`);
-  }
-  const badgeRow = badges.length
-    ? `<div style="margin:0 0 10px;line-height:1.9;">${badges.join(" ")}</div>` : "";
-
-  // Numbers line: "$X list" bold · ARV $Y · facts (secondary), no dangling seps.
-  const numParts = [
-    `<span style="color:#17191a;font-weight:700;">${esc(money(row.listPrice))} list</span>`,
-    row.conservativeArv != null ? `<span style="color:#6a7176;">ARV ${esc(money(row.conservativeArv))}</span>` : "",
-    factsLine(row) ? `<span style="color:#6a7176;">${esc(factsLine(row))}</span>` : "",
-  ].filter(Boolean).join('<span style="color:#c4c8ca;"> &middot; </span>');
-  const numbers = `<div style="font-size:13px;margin:0 0 6px;">${numParts}</div>`;
-
-  const exit = exitDetail(row);
-  const exitLine = exit
-    ? `<div style="color:#4a5156;font-size:13px;margin:0 0 6px;">${esc(exit)}</div>` : "";
-
-  // Analyst essentials (deep-analysis fields) — all optional; pre-upgrade rows
-  // carry none of them and render exactly as before (fragments are "").
-  const history = historyLine(row);
-  const historyDiv = history
-    ? `<div style="color:#4a5156;font-size:13px;margin:0 0 6px;">${esc(history)}</div>` : "";
-  const exitNote = analystExitNote(row);
-  const exitNoteDiv = exitNote
-    ? `<div style="color:#4a5156;font-size:13px;margin:0 0 6px;">${esc(exitNote)}</div>` : "";
-  const flagChips = (row.redFlags ?? []).slice(0, 2).map((f) =>
-    `<span style="display:inline-block;background:#fdecec;color:#a33333;font-size:12px;font-weight:600;padding:4px 10px;border-radius:12px;">${esc(f)}</span>`);
-  const flagRow = flagChips.length
-    ? `<div style="margin:0 0 10px;line-height:1.9;">${flagChips.join(" ")}</div>` : "";
-
-  const reason = row.aiReason
-    ? `<div style="color:#4a5156;font-size:13px;line-height:1.45;margin:0 0 12px;">${esc(row.aiReason)}</div>` : "";
-
-  // Big tap-target buttons: primary solid teal, secondary teal-outline; wrap OK.
-  const buttons = `<div style="line-height:2.4;">
-      <a href="${esc(monitorLink)}" style="display:inline-block;background:#2D9C84;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:10px 18px;border-radius:8px;margin-right:10px;">Open in Monitor</a>
-      <a href="${esc(row.url)}" style="display:inline-block;background:#ffffff;color:#2D9C84;font-size:14px;font-weight:600;text-decoration:none;padding:10px 18px;border-radius:8px;border:1px solid #2D9C84;">Zillow</a>
-    </div>`;
-
-  const bodyPad = photo ? "16px 20px 20px" : "20px";
-  return `<div style="background:#ffffff;border:1px solid #e6e8e8;border-radius:10px;overflow:hidden;margin:0 0 12px;">
-    ${photo}
-    <div style="padding:${bodyPad};">
-      ${badgeRow}
-      <div style="font-size:17px;font-weight:700;color:#17191a;line-height:1.3;margin:0 0 8px;">${esc(row.address)}</div>
-      ${numbers}
-      ${exitLine}${historyDiv}${exitNoteDiv}${flagRow}
-      ${reason}
-      ${buttons}
-    </div>
-  </div>`;
-}
-
-function buildDigest(keepers: Keeper[], monitorLink: string): { subject: string; text: string; html: string } {
-  const n = keepers.length;
-  const plural = n === 1 ? "" : "s";
-  const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-  // Subject: append the top keeper when it has a strong (>=15%) below-market spread.
-  let subject = `IRES Monitor: ${n} new deal${plural} (Zillow NCC)`;
-  const top = keepers[0];
-  if (top && top.spreadPct != null && top.spreadPct >= 15) {
-    const shortAddr = top.address.split(",")[0].trim();
-    subject += ` · top: ${shortAddr} ${pct(top.spreadPct)} below`;
-  }
-
-  const text =
-    `IRES MONITOR\n${n} new deal${plural}\nNew Castle County · ranked by deal score · ${date}\n\n` +
-    `${keepers.map((r) => keeperText(r, monitorLink)).join("\n\n")}\n\n` +
-    `Review everything in the Monitor: ${monitorLink}\nIRES CRM · automated nightly scan\n`;
-
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f6f7f7;">
-<div style="background:#f6f7f7;padding:24px 12px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="max-width:600px;margin:0 auto;">
-    <div style="padding:4px 4px 16px;">
-      <div style="color:#2D9C84;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin:0 0 6px;">IRES Monitor</div>
-      <div style="color:#17191a;font-size:22px;font-weight:800;line-height:1.2;margin:0 0 4px;">${n} new deal${plural}</div>
-      <div style="color:#6a7176;font-size:13px;">New Castle County &middot; ranked by deal score &middot; ${esc(date)}</div>
-    </div>
-    ${keepers.map((r) => keeperHtml(r, monitorLink)).join("\n")}
-    <div style="text-align:center;color:#6a7176;font-size:12px;line-height:1.7;padding:12px 4px 4px;">
-      Review everything in the <a href="${esc(monitorLink)}" style="color:#2D9C84;text-decoration:none;">Monitor</a><br>
-      IRES CRM &middot; automated nightly scan
-    </div>
-  </div>
-</div>
-</body></html>`;
-  return { subject, text, html };
-}
-
 /**
- * Email the un-emailed keepers as a ranked digest via Resend. Key-gated: with no
+ * Email the un-emailed FLIP/RENTAL keepers as a 5-second brief (src/scraper/monitorDigest.ts) via Resend. Key-gated: with no
  * RESEND_API_KEY it logs a note and returns {sent:false} (never throws) — the
  * /monitor page is the in-app review surface, so a missing key/failed send must
  * not break the run. Stamps emailedAt per row so a keeper is never emailed twice.
@@ -900,8 +677,11 @@ export const sendDigest = internalAction({
     }
     const base =
       (process.env.PORTAL_BASE_URL ?? "").trim() || "https://crm.instantrealestatesolution.com";
-    const monitorLink = `${base}/monitor`;
-    const { subject, text, html } = buildDigest(keepers, monitorLink);
+    // "N more on the board" = active keepers beyond the ones in this email.
+    const boardTotal = await ctx.runQuery(internal.monitorData.activeKeeperCount, {});
+    const moreOnBoard = Math.max(0, boardTotal - keepers.length);
+    const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+    const { subject, text, html } = buildDigest(keepers, { baseUrl: base, moreOnBoard, date });
 
     try {
       const res = await fetch(RESEND_URL, {
