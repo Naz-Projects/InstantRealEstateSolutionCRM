@@ -52,6 +52,15 @@ const leadsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/leads"
 const potentialRoute = createRoute({ getParentRoute: () => rootRoute, path: "/potential", component: PotentialPage });
 const buyersRoute = createRoute({ getParentRoute: () => rootRoute, path: "/buyers", component: BuyersPage });
 const conditionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/condition", component: ConditionTest });
-const monitorRoute = createRoute({ getParentRoute: () => rootRoute, path: "/monitor", component: MonitorPage });
+// `?id=<listingId>` = the open deal sheet (email "Review deal" deep link + in-app open state).
+type MonitorSearch = { id?: string };
+const monitorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/monitor",
+  component: MonitorPage,
+  validateSearch: (search: Record<string, unknown>): MonitorSearch => ({
+    id: typeof search.id === "string" && search.id ? search.id : undefined,
+  }),
+});
 
 export const routeTree = rootRoute.addChildren([indexRoute, sheriffRoute, legalRoute, flipRoute, propertiesRoute, propertyDetailRoute, parcelsRoute, leadsRoute, potentialRoute, buyersRoute, conditionRoute, monitorRoute, adminRoute]);
