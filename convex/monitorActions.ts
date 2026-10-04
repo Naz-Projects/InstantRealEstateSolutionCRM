@@ -35,7 +35,8 @@ import {
 import { parseZip, parseRedfinComps, parseRedfinGisComps, isLegacyCompsCache, type Comp } from "../src/scraper/comps";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
 import { buildDigest } from "../src/scraper/monitorDigest";
-import { reAlertDecision, nextRecheckAt } from "../src/scraper/monitorRecheck";
+import { reAlertDecision, nextRecheckAt, digestAlertTag } from "../src/scraper/monitorRecheck";
+import { planRecipientDigests, shouldStampDigest } from "../src/scraper/monitorBuyBox";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — the "use node" action layer:
 // scan → per-listing enrich → keeper decision. ONE shared scan path (webhook /
@@ -794,12 +795,10 @@ export const sendDigest = internalAction({
     if (keepers.length === 0) return { sent: false };
 
     const from = (process.env.RESEND_FROM ?? "").trim();
-    // Digest goes to EVERY active CRM user (not just the RESEND_TO admin);
-    // RESEND_TO stays merged in as a fallback so the digest still sends if the
-    // users table is ever empty. Deduped case-insensitively.
-    const userEmails = await ctx.runQuery(internal.users.activeEmailsInternal, {});
-    const to = digestRecipients(userEmails, process.env.RESEND_TO);
-    if (to.length === 0) {
+    // Who: every active CRM user + the RESEND_TO fallback (digestRecipients rules);
+    // what: each recipient's own buy box filters the set (no box = everything).
+    const audience = await ctx.runQuery(internal.monitorData.digestAudienceInternal, {});
+    if (digestRecipients(audience.map((a) => a.email), process.env.RESEND_TO).length === 0) {
       await ctx.runMutation(internal.errors.logServerError, {
         message: "monitor digest: no active-user emails and no RESEND_TO, skipped",
         context: "monitorActions.sendDigest",
@@ -808,35 +807,50 @@ export const sendDigest = internalAction({
     }
     const base =
       (process.env.PORTAL_BASE_URL ?? "").trim() || "https://crm.instantrealestatesolution.com";
-    // "N more on the board" = active keepers beyond the ones in this email.
+    const now = Date.now();
+    // Fresh PRICE CUT / BACK ON MARKET tags only (stale tags render nothing).
+    const rows = keepers.map((k) => ({ ...k, alertTag: digestAlertTag(k, now) }));
+    // "N more on the board" = active keepers beyond the ones in each email.
     const boardTotal = await ctx.runQuery(internal.monitorData.activeKeeperCount, {});
-    const moreOnBoard = Math.max(0, boardTotal - keepers.length);
-    const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
-    const { subject, text, html } = buildDigest(keepers, { baseUrl: base, moreOnBoard, date });
+    const date = new Date(now).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+    const plan = planRecipientDigests(rows, audience, process.env.RESEND_TO);
 
-    try {
-      const res = await fetch(RESEND_URL, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to, subject, text, html }),
-        signal: AbortSignal.timeout(30_000),
+    let succeeded = 0;
+    for (const p of plan) {
+      // Resend default rate limit is ~2 requests/s; a 429 here would still get the rows
+      // stamped (another recipient succeeded) and this user would silently miss them.
+      if (p !== plan[0]) await new Promise((r) => setTimeout(r, 600));
+      const { subject, text, html } = buildDigest(p.rows, {
+        baseUrl: base,
+        moreOnBoard: Math.max(0, boardTotal - p.rows.length),
+        date,
       });
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(`Resend ${res.status}: ${t.slice(0, 200)}`);
+      try {
+        const res = await fetch(RESEND_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ from, to: [p.to], subject, text, html }),
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!res.ok) {
+          const t = await res.text().catch(() => "");
+          throw new Error(`Resend ${res.status}: ${t.slice(0, 200)}`);
+        }
+        succeeded++;
+      } catch (e) {
+        await ctx.runMutation(internal.errors.logServerError, {
+          message: `sendDigest to ${p.to} failed: ${(e as Error).message}`,
+          context: "monitorActions.sendDigest",
+        });
       }
-      for (const k of keepers) {
-        await ctx.runMutation(internal.monitorData.markEmailed, { id: k._id });
-      }
-      await ctx.runMutation(internal.monitorData.noteEmailed, { runId, count: keepers.length });
-      return { sent: true };
-    } catch (e) {
-      await ctx.runMutation(internal.errors.logServerError, {
-        message: `sendDigest failed: ${(e as Error).message}`,
-        context: "monitorActions.sendDigest",
-      });
-      return { sent: false };
     }
+    // emailedAt is global "processed": see shouldStampDigest (tests/monitorBuyBox.test.ts).
+    if (!shouldStampDigest(plan.length, succeeded)) return { sent: false };
+    for (const k of keepers) {
+      await ctx.runMutation(internal.monitorData.markEmailed, { id: k._id });
+    }
+    if (succeeded > 0) await ctx.runMutation(internal.monitorData.noteEmailed, { runId, count: keepers.length });
+    return { sent: succeeded > 0 };
   },
 });
 

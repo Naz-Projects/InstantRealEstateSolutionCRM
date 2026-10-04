@@ -117,3 +117,18 @@ describe("buildDigest XSS + odd data", () => {
     expect(html).toContain(">Review deal<");
   });
 });
+
+describe("Phase 4 alert tag", () => {
+  const cut = { ...FLIP, alertTag: "PRICE CUT $15,000" };
+  it("renders the tag on the card (html + text), escaped", () => {
+    const d = buildDigest([cut, RENTAL], OPTS);
+    expect(d.html).toContain(">PRICE CUT $15,000<");
+    expect(d.text).toContain("PRICE CUT $15,000");
+    expect(buildDigest([{ ...FLIP, alertTag: `<b>x</b>` }], OPTS).html).toContain("&lt;b&gt;x&lt;/b&gt;");
+  });
+  it("subject counts re-alerts; untagged digests keep Phase 3's exact subject", () => {
+    expect(buildDigest([cut, RENTAL], OPTS).subject).toBe("IRES Monitor: 2 worth a look · 1 price cut / back on market");
+    expect(buildDigest([FLIP, RENTAL], OPTS).subject).toBe("IRES Monitor: 2 worth a look");
+    expect(buildDigest([{ ...FLIP, alertTag: null }], OPTS).subject).toBe("IRES Monitor: 1 worth a look");
+  });
+});

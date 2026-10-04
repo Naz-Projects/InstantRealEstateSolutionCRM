@@ -9,7 +9,10 @@ import {
 export const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-export interface DigestRow extends PresentRow { _id: string; address: string; photoUrls?: string[] | null }
+export interface DigestRow extends PresentRow {
+  _id: string; address: string; photoUrls?: string[] | null;
+  alertTag?: string | null; // Phase 4: an already-FRESH "PRICE CUT $X" / "BACK ON MARKET" (sendDigest computes it)
+}
 export interface DigestOpts { baseUrl: string; moreOnBoard: number; date: string }
 export interface DigestCell { label: string; value: string; tone: Tone }
 
@@ -55,6 +58,9 @@ function cardHtml(r: DigestRow, o: DigestOpts): string {
   const exit = normalizeExit(r.bestExit) ?? "FLIP";
   const pill = PILL[exit] ?? PILL.FLIP;
   const score = r.dealScore != null ? `<span style="color:${C.body};font-size:12px;font-weight:600;">&nbsp;Score ${esc(String(r.dealScore))}</span>` : "";
+  const tag = r.alertTag
+    ? `<span style="display:inline-block;background:${C.flagBg};color:${C.flagFg};font-size:11px;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:10px;margin-left:6px;">${esc(r.alertTag)}</span>`
+    : "";
   const photo = safeHref(r.photoUrls?.[0]);
   const thumb = photo
     ? `<td width="96" valign="top" style="width:96px;"><img src="${esc(photo)}" width="96" height="72" alt="" style="display:block;width:96px;height:72px;border:0;border-radius:6px;object-fit:cover;"></td>`
@@ -70,7 +76,7 @@ function cardHtml(r: DigestRow, o: DigestOpts): string {
 <tr><td style="padding:16px;">
   <table ${TABLE}><tr>
     <td valign="top" style="padding:0 12px 0 0;">
-      <div style="margin:0 0 6px;"><span style="display:inline-block;background:${pill.bg};color:${pill.fg};font-size:11px;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:10px;">${esc(exit)}</span>${score}</div>
+      <div style="margin:0 0 6px;"><span style="display:inline-block;background:${pill.bg};color:${pill.fg};font-size:11px;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:10px;">${esc(exit)}</span>${score}${tag}</div>
       <div style="font-size:16px;line-height:21px;font-weight:700;color:${C.ink};">${esc(r.address)}</div>
     </td>${thumb}
   </tr></table>
@@ -84,7 +90,7 @@ function cardHtml(r: DigestRow, o: DigestOpts): string {
 
 function cardText(r: DigestRow, o: DigestOpts): string {
   const lines = [
-    `${normalizeExit(r.bestExit) ?? "FLIP"}${r.dealScore != null ? ` ${r.dealScore}` : ""} · ${r.address}`,
+    `${normalizeExit(r.bestExit) ?? "FLIP"}${r.dealScore != null ? ` ${r.dealScore}` : ""}${r.alertTag ? ` · ${r.alertTag}` : ""} · ${r.address}`,
     `   ${digestCells(r).map((c) => `${c.label} ${c.value}`).join(" · ")}`,
   ];
   const reason = oneLineReason(r.aiReason);
@@ -101,7 +107,8 @@ export function buildDigest(rows: DigestRow[], o: DigestOpts): { subject: string
   const title = `${rows.length} worth a look`;
   const board = `${base(o.baseUrl)}/monitor`;
   const footerLabel = o.moreOnBoard > 0 ? `${o.moreOnBoard} more on the board` : "Open the board";
-  const subject = `IRES Monitor: ${title}`;
+  const alerts = rows.filter((r) => r.alertTag).length;
+  const subject = `IRES Monitor: ${title}${alerts > 0 ? ` · ${alerts} price cut / back on market` : ""}`;
   const text =
     `IRES MONITOR\n${title}\nNew Castle County · ${o.date}\n\n` +
     `${rows.map((r) => cardText(r, o)).join("\n\n")}\n\n` +
