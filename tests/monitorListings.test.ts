@@ -195,7 +195,7 @@ describe("analyzeRental", () => {
 // Base input for evaluateDeal tests: nothing known, rehab $0 known. Each case overrides.
 const DEAL: DealInput = { listPrice: null, zestimate: null, valueBasis: null, arv: null, rehabTotal: 0, rent: null, renovated: false };
 const flipOf = (profit: number, margin: number): FlipResult => ({ mao: 0, profit, margin, roi: null, roomVsList: 0 });
-const rentalOf = (capRate: number, cashFlow: number): RentalMetrics => ({ rent: 0, onePct: 0, capRate, cashFlow, cashOnCash: 0, allIn: 0 });
+const rentalOf = (capRate: number, cashFlow: number, dscr = 1.5): RentalMetrics => ({ rent: 0, onePct: 0, capRate, cashFlow, cashOnCash: 0, allIn: 0, dscr, taxEstimated: false });
 
 describe("scoreDeal (scores only — exit/keep live in evaluateDeal)", () => {
   it("max of the band scores", () => {
@@ -214,8 +214,9 @@ describe("keeper floors (user-approved 2026-10-03)", () => {
     expect(meetsFlipFloor(flipOf(80000, 0.1199))).toBe(false);
     expect(meetsFlipFloor(null)).toBe(false);
   });
-  it("RENTAL floor = cap >= 6% AND monthly cash flow >= 0 (both boundaries inclusive)", () => {
-    expect(meetsRentalFloor(rentalOf(0.06, 0))).toBe(true);
+  it("RENTAL floor = cap >= 6% AND cash flow >= 0 AND DSCR >= 1.2 (all boundaries inclusive)", () => {
+    expect(meetsRentalFloor(rentalOf(0.06, 0, 1.2))).toBe(true);
+    expect(meetsRentalFloor(rentalOf(0.09, 300, 1.19))).toBe(false);
     expect(meetsRentalFloor(rentalOf(0.0599, 500))).toBe(false);
     expect(meetsRentalFloor(rentalOf(0.09, -1))).toBe(false);
     expect(meetsRentalFloor(null)).toBe(false);
@@ -239,19 +240,32 @@ describe("evaluateDeal (the single keep/exit decision)", () => {
     expect(d.flip!.profit).toBe(24240);
     expect(d).toMatchObject({ bestExit: "PASS", keeper: false });
   });
-  it("RENTAL keeper: rent 2000, list 150k, rehab 20k -> cap 8.5%, +$314/mo", () => {
-    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 2000 });
-    expect(d.rental!.cashFlow).toBe(314);
+  it("RENTAL keeper: rent 2400, list 150k, rehab 20k -> cap 8.9%, +$374/mo, DSCR 1.42", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 2400 });
+    expect(d.rental!.cashFlow).toBe(374);
+    expect(d.rental!.dscr).toBeCloseTo(1.419, 3);
     expect(d).toMatchObject({ rentScore: 90, bestExit: "RENTAL", keeper: true });
   });
-  it("cap >= 6% but negative cash flow is not a RENTAL (rent 1500, list 150k -> cap 6.2%, -$9/mo)", () => {
-    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 10000, rent: 1500 });
-    expect(d.rental!.cashFlow).toBe(-9);
+  it("cap 7.1% and +$114/mo but DSCR 1.13 < 1.2 is not a RENTAL (rent 2000, est. 1.6% tax)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 2000 });
+    expect(d.rental!.cashFlow).toBe(114);
+    expect(d.rental!.dscr).toBeCloseTo(1.127, 3);
+    expect(d).toMatchObject({ bestExit: "PASS", keeper: false });
+  });
+  it("the listing's real tax rate (0.68%) flips that same deal to RENTAL (+$229/mo, DSCR 1.26)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 2000, taxRatePct: 0.68 });
+    expect(d.rental!.cashFlow).toBe(229);
+    expect(d.rental!.taxEstimated).toBe(false);
+    expect(d).toMatchObject({ bestExit: "RENTAL", keeper: true });
+  });
+  it("cap >= 6% but negative cash flow is not a RENTAL (rent 1780, list 150k -> cap 6.08%, -$29/mo)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 1780 });
+    expect(d.rental!.cashFlow).toBe(-29);
     expect(d).toMatchObject({ rentScore: 72, bestExit: "PASS", keeper: false });
   });
-  it("a 4% cap never labels RENTAL (old scoreDeal did)", () => {
-    const d = evaluateDeal({ ...DEAL, listPrice: 200000, rehabTotal: 20000, rent: 1500 });
-    expect(d.rental!.capRate).toBeCloseTo(0.0416, 3);
+  it("a 4.5% cap never labels RENTAL (old scoreDeal did)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 200000, rehabTotal: 20000, rent: 1830 });
+    expect(d.rental!.capRate).toBeCloseTo(0.0452, 3);
     expect(d).toMatchObject({ rentScore: 40, bestExit: "PASS", keeper: false });
   });
   it("both floors met -> higher score wins, tie goes to FLIP", () => {
@@ -636,7 +650,7 @@ describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip
 describe("dealInputFromStored (re-gate adapter)", () => {
   it("maps a normal stored row; rehab recomputed (moderate 42/sqft x 1500 x 1.10)", () => {
     expect(dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rentZestimate: 1900, description: "needs TLC", riskFlags: [] }))
-      .toEqual({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rehabTotal: 69300, rent: 1900, renovated: false, holdingMonths: 6 });
+      .toEqual({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rehabTotal: 69300, rent: 1900, taxRatePct: null, renovated: false, holdingMonths: 6 });
   });
   it("re-derives the keyword tier from the stored description (old fireplace rows were 'gut')", () => {
     const i = dealInputFromStored({ sqft: 1000, rehabTier: "gut", description: "Brick fireplace, needs TLC", yearBuilt: 1985 });
@@ -690,7 +704,9 @@ describe("decisionFields", () => {
   it("carries rounded flip profit and rental numbers", () => {
     const f = decisionFields(evaluateDeal({ ...DEAL, listPrice: 120000, arv: 250000, rehabTotal: 20000, rent: 1900 }));
     expect(f.flipProfit).toBe(73200);
-    expect(f.cashFlow).toBe(436);
+    expect(f.cashFlow).toBe(246);
+    expect(f.dscr).toBeCloseTo(1.335, 3);
+    expect(f.brrrrCashLeftIn).toBe(-47500); // all-in 140,000 - 0.75 x 250,000 refi
   });
 });
 

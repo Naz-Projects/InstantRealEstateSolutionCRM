@@ -95,6 +95,10 @@ const analysisFields = v.object({
   cashFlow: v.optional(v.number()),
   onePctRule: v.optional(v.number()),
   cashOnCash: v.optional(v.number()),
+  dscr: v.optional(v.number()),
+  brrrrCashLeftIn: v.optional(v.number()),
+  leaseRent: v.optional(v.number()),
+  propertyTaxRatePct: v.optional(v.number()),
   wholesaleSpread: v.optional(v.number()),
   // decision
   dealScore: v.optional(v.number()),
@@ -230,7 +234,7 @@ export const patchAnalysis = internalMutation({
         ? { flipMao: undefined, flipProfit: undefined, flipMargin: undefined, flipRoi: undefined, roomVsList: undefined }
         : {}),
       ...(clearRental
-        ? { capRate: undefined, cashFlow: undefined, onePctRule: undefined, cashOnCash: undefined }
+        ? { capRate: undefined, cashFlow: undefined, onePctRule: undefined, cashOnCash: undefined, dscr: undefined, brrrrCashLeftIn: undefined }
         : {}),
       updatedAt: Date.now(),
     });

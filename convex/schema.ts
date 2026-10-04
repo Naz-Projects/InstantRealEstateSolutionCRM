@@ -655,6 +655,10 @@ export default defineSchema({
     cashFlow: v.optional(v.number()),
     onePctRule: v.optional(v.number()),
     cashOnCash: v.optional(v.number()),
+    dscr: v.optional(v.number()), // NOI / debt service (RENTAL keeper needs >= 1.2)
+    brrrrCashLeftIn: v.optional(v.number()), // all-in minus a 75%-of-ARV refi
+    leaseRent: v.optional(v.number()), // stated lease/current rent parsed from the description
+    propertyTaxRatePct: v.optional(v.number()), // Zillow per-property tax rate (percent)
     wholesaleSpread: v.optional(v.number()),
     // decision
     dealScore: v.optional(v.number()), // max(flipScore, rentScore) — sort key

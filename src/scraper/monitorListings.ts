@@ -10,6 +10,9 @@ export const MONITOR = {
   // Rehab (Phase 2): systems tier + era add-ons (research §4) + longer gut hold.
   systemsPerSqft: 55, leadPaintBeforeYear: 1978, leadPaintAddOn: 3000,
   rewireBeforeYear: 1950, rewireAddOn: 15000, gutHoldingMonths: 9,
+  // Rental (Phase 2): opex reserve, tax fallback when the listing has no rate, DSCR bar,
+  // BRRRR refi LTV (research §5: post-refi DSCR >= ~1.15 at <= 75% LTV).
+  rentalOpexPct: 0.35, rentalTaxFallbackPct: 1.6, dscrBar: 1.2, brrrrRefiLtv: 0.75,
   keeperRetireDays: 30, // keepers older than this age off the /monitor board (archivedAt)
   // Firecrawl v2 cache: first attempt accepts a page cached <= 1h; retries force a live
   // scrape (maxAge 0). Unset, v2 defaults to a 2-day cache (lessons 2026-10-03).
@@ -77,6 +80,7 @@ export interface ListingDetail {
   monthlyHoaFee: number | null; foreclosure: boolean; daysOnZillow: number | null; mlsId?: string;
   agentName?: string; agentPhone?: string; brokerName?: string; lotSize: number | null;
   priceHistory: { date?: string; event?: string; price?: number; ppsf?: number }[]; photoUrls: string[];
+  propertyTaxRate: number | null; // percent (e.g. 0.68); Zillow's rate for this property
 }
 export function detailFromCache(nextData: any): ListingDetail | null {
   const cc = nextData?.props?.pageProps?.componentProps?.gdpClientCache;
@@ -97,6 +101,7 @@ export function detailFromCache(nextData: any): ListingDetail | null {
     agentPhone: ai.agentPhoneNumber ?? ai.agentPhone, brokerName: ai.brokerName, lotSize: p.lotSize ?? p.lotAreaValue ?? null,
     priceHistory: (p.priceHistory ?? []).slice(0, 6).map((h: any) => ({ date: h.date, event: h.event, price: h.price, ppsf: h.pricePerSquareFoot })),
     photoUrls: photos,
+    propertyTaxRate: typeof p.propertyTaxRate === "number" && p.propertyTaxRate > 0 ? p.propertyTaxRate : null,
   };
 }
 
@@ -277,7 +282,7 @@ export function monitorRehab(o: { sqft: number | null | undefined; keywordTier: 
   };
 }
 
-export interface RentalMetrics { rent: number; onePct: number; capRate: number; cashFlow: number; cashOnCash: number; allIn: number; }
+export interface RentalMetrics { rent: number; onePct: number; capRate: number; cashFlow: number; cashOnCash: number; allIn: number; dscr: number; taxEstimated: boolean; }
 
 // NCC/Delaware transfer-tax correction, applied ONLY to the monitor's underwriting
 // (the standalone /flip Analyzer keeps FLIP_DEFAULTS' generic math). Research
@@ -302,15 +307,43 @@ export function analyzeFlip(arv: number | null, list: number | null, rehab: numb
   const nccMao = Math.round((0.68 * arv - rehab) / 1.02);
   return { mao: nccMao, profit: m.profit, margin: m.margin ?? 0, roi: m.roi, roomVsList: nccMao - list };
 }
-export function analyzeRental({ rent, list, rehab, taxRatePct }: { rent: number | null; list: number; rehab: number; taxRatePct?: number }): RentalMetrics | null {
+// Opex reserve = rentalOpexPct of rent (vacancy + management + repairs + capex). Tax =
+// the listing's own rate (Zillow propertyTaxRate, a percent) else the 1.6% fallback,
+// flagged taxEstimated. DSCR = NOI / debt service on the existing loan assumptions
+// (75% LTV of all-in, 7.5%, 30 yr).
+export function analyzeRental({ rent, list, rehab, taxRatePct }: { rent: number | null; list: number; rehab: number; taxRatePct?: number | null }): RentalMetrics | null {
   if (!rent || !list) return null;
   const allIn = list + (rehab || 0);
-  const taxMo = (list * ((taxRatePct ?? 1.6) / 100)) / 12, ins = 95, opVar = 0.25 * rent;
+  const taxEstimated = taxRatePct == null || !(taxRatePct > 0);
+  const ratePct = taxEstimated ? MONITOR.rentalTaxFallbackPct : (taxRatePct as number);
+  const taxMo = (list * (ratePct / 100)) / 12, ins = 95, opVar = MONITOR.rentalOpexPct * rent;
   const noiMo = rent - taxMo - ins - opVar;
   const r = 0.075 / 12, loan = 0.75 * allIn, pi = loan * r / (1 - (1 + r) ** -360);
   const cashFlow = noiMo - pi, capRate = (noiMo * 12) / allIn;
   const invested = 0.25 * allIn + 0.03 * list;
-  return { rent, onePct: rent / list, capRate, cashFlow: Math.round(cashFlow), cashOnCash: (cashFlow * 12) / invested, allIn };
+  return { rent, onePct: rent / list, capRate, cashFlow: Math.round(cashFlow), cashOnCash: (cashFlow * 12) / invested, allIn, dscr: noiMo / pi, taxEstimated };
+}
+
+// Stated lease/current rent in the description ("rents for $1,450/mo", "current rent
+// is $1,250", "tenant pays $1,200"). Needs a $ sign or a per-month suffix (so years
+// like "rented 2024" never match), skips hypothetical rent ("market/potential/could
+// rent") and annual figures ("gross/annual rent", "/yr", "annually"), and only accepts
+// $300-$6,000. null when none.
+const LEASE_NOT_MONTHLY = String.raw`(?![\d,])(?!\s*(?:\/\s*y(?:ea)?r\b|per\s+year|a\s+year|annual(?:ly)?\b|yearly))`;
+const LEASE_DOLLAR = new RegExp(String.raw`(?<!(?:potential|market|projected|estimated|could|can|would|should|fair|gross|annual|yearly|total)\s)\b(?:current(?:ly)?\s+)?(?:rent(?:s|ed)?|leased?|tenant\s+pays)(?:\s+(?:for|at|is|of))?[\s:]*\$\s?(\d{1,2},?\d{3}|\d{3})` + LEASE_NOT_MONTHLY, "i");
+const LEASE_PER_MONTH = /(?<!(?:potential|market|projected|estimated|could|can|would|should|fair)\s)\b(?:rent(?:s|ed)?|leased?)\s+(?:for|at)\s+(\d{1,2},?\d{3}|\d{3})\s*(?:\/\s*mo(?:nth)?\b|per\s+month|a\s+month|monthly)/i;
+export function parseLeaseRent(description: string | null | undefined): number | null {
+  const d = description || "";
+  const m = d.match(LEASE_DOLLAR) ?? d.match(LEASE_PER_MONTH);
+  if (!m) return null;
+  const n = parseInt(m[1].replace(/,/g, ""), 10);
+  return n >= 300 && n <= 6000 ? n : null;
+}
+// Rent used for underwriting: a stated lease caps the rentZestimate (min of both).
+export function rentForListing(description: string | null | undefined, rentZestimate: number | null | undefined): { rent: number | null; leaseRent: number | null } {
+  const leaseRent = parseLeaseRent(description);
+  const z = rentZestimate ?? null;
+  return { rent: leaseRent != null ? (z != null ? Math.min(leaseRent, z) : leaseRent) : z, leaseRent };
 }
 export type FlipResult = NonNullable<ReturnType<typeof analyzeFlip>>;
 export function scoreDeal(flip: FlipResult | null, rental: RentalMetrics | null) {
@@ -323,7 +356,7 @@ export function meetsFlipFloor(flip: FlipResult | null): boolean {
   return !!flip && flip.profit != null && flip.profit >= MONITOR.flipProfitFloor && flip.margin >= MONITOR.flipMarginBar;
 }
 export function meetsRentalFloor(rental: RentalMetrics | null): boolean {
-  return !!rental && rental.capRate >= MONITOR.capRateBar && rental.cashFlow >= MONITOR.cashFlowFloor;
+  return !!rental && rental.capRate >= MONITOR.capRateBar && rental.cashFlow >= MONITOR.cashFlowFloor && rental.dscr >= MONITOR.dscrBar;
 }
 
 export type BestExit = "FLIP" | "RENTAL" | "WHOLESALE" | "PASS";
@@ -336,6 +369,7 @@ export interface DealInput {
   rent: number | null;
   renovated: boolean;        // already flipped by someone else -> no flip exit
   holdingMonths?: number;    // flip hold (monitorRehab: 9 for a gut, else the 6-month default)
+  taxRatePct?: number | null; // listing's property-tax rate (percent); null -> 1.6% estimate
 }
 export interface DealDecision {
   belowMarket: boolean;
@@ -348,6 +382,7 @@ export interface DealDecision {
   dealScore: number;
   bestExit: BestExit;
   keeper: boolean;
+  brrrrCashLeftIn: number | null; // all-in minus a 75%-of-ARV refi (negative = cash out)
 }
 // THE keeper decision — the only place keep/exit is decided (analyzeOne, the re-gate
 // mutation and the backtest script all call it). Deterministic: the LLM never keeps.
@@ -359,7 +394,7 @@ export function evaluateDeal(i: DealInput): DealDecision {
   const spreadPct = spread != null && basis ? +((spread / basis) * 100).toFixed(1) : null;
   const belowMarket = basis != null && basis > 0 && i.listPrice != null && i.listPrice <= basis * (1 - MONITOR.spreadThreshold);
   const flip = i.renovated || i.rehabTotal == null ? null : analyzeFlip(i.arv, i.listPrice, i.rehabTotal, i.holdingMonths);
-  const rental = i.rehabTotal == null || i.listPrice == null ? null : analyzeRental({ rent: i.rent, list: i.listPrice, rehab: i.rehabTotal });
+  const rental = i.rehabTotal == null || i.listPrice == null ? null : analyzeRental({ rent: i.rent, list: i.listPrice, rehab: i.rehabTotal, taxRatePct: i.taxRatePct });
   const s = scoreDeal(flip, rental);
   const flipOk = meetsFlipFloor(flip);
   const rentalOk = meetsRentalFloor(rental);
@@ -369,7 +404,8 @@ export function evaluateDeal(i: DealInput): DealDecision {
     : rentalOk ? "RENTAL"
     : belowMarket ? "WHOLESALE"
     : "PASS";
-  return { belowMarket, spread, spreadPct, flip, rental, ...s, bestExit, keeper: flipOk || rentalOk || belowMarket };
+  const brrrrCashLeftIn = rental && i.arv != null ? Math.round(rental.allIn - MONITOR.brrrrRefiLtv * i.arv) : null;
+  return { belowMarket, spread, spreadPct, flip, rental, ...s, bestExit, keeper: flipOk || rentalOk || belowMarket, brrrrCashLeftIn };
 }
 // Re-gate adapter: rebuild a DealInput from a STORED monitorListings row (no scraping).
 // Old-row rules: sqft unknown -> rehab unknown and ARV = Zestimate-or-null (the old
@@ -388,6 +424,7 @@ export interface StoredListing {
   rentZestimate?: number;
   description?: string;
   riskFlags?: string[];
+  propertyTaxRatePct?: number;
 }
 export function dealInputFromStored(r: StoredListing): DealInput {
   const sqftKnown = r.sqft != null && r.sqft > 0;
@@ -405,7 +442,8 @@ export function dealInputFromStored(r: StoredListing): DealInput {
     valueBasis: sqftKnown ? (r.asIsValue ?? arv) : arv,
     arv,
     rehabTotal: rehab.total,
-    rent: r.rentZestimate ?? null,
+    rent: rentForListing(r.description, r.rentZestimate).rent,
+    taxRatePct: r.propertyTaxRatePct ?? null,
     renovated: (r.riskFlags ?? []).some((f) => f.startsWith("RENOVATED")) || detectRenovated(r.description),
     holdingMonths: rehab.holdingMonths,
   };
@@ -431,6 +469,8 @@ export function decisionFields(d: DealDecision) {
     cashFlow: d.rental ? d.rental.cashFlow : undefined,
     onePctRule: d.rental ? d.rental.onePct : undefined,
     cashOnCash: d.rental ? d.rental.cashOnCash : undefined,
+    dscr: d.rental ? d.rental.dscr : undefined,
+    brrrrCashLeftIn: d.brrrrCashLeftIn ?? undefined,
   };
 }
 // Digest = actionable exits only: a keeper whose bestExit is WHOLESALE/PASS (or unset)

@@ -23,6 +23,7 @@ import {
   shouldReopenForDigest,
   detectRenovated,
   evaluateDeal,
+  rentForListing,
   riskFlags,
   buildJudgePrompt,
   parseJudgeResponse,
@@ -361,6 +362,9 @@ export const analyzeOne = internalAction({
       const description = detail?.description || row.description || "";
       const zestimate = detail?.zestimate ?? row.zestimate ?? null;
       const rentZestimate = detail?.rentZestimate ?? row.rentZestimate ?? null;
+      // Rent = min(stated lease, rentZestimate); tax = the listing's own rate when Zillow has one.
+      const { rent, leaseRent } = rentForListing(description, rentZestimate);
+      const taxRatePct = detail?.propertyTaxRate ?? row.propertyTaxRatePct ?? null;
       const zip = row.propZip ?? parseZip(row.address) ?? undefined;
 
       // 2b) LAND guard: house comps / rehab / rental math are meaningless on vacant
@@ -428,7 +432,8 @@ export const analyzeOne = internalAction({
         zestimate,
         valueBasis: arvRes.asIsValue,
         arv,
-        rent: rentZestimate,
+        rent,
+        taxRatePct,
       };
       const pre = evaluateDeal({
         ...dealInput,
@@ -504,6 +509,8 @@ export const analyzeOne = internalAction({
       const deal = evaluateDeal({ ...dealInput, rehabTotal: rehab.total, holdingMonths: rehab.holdingMonths, renovated });
       const { keeper, belowMarket, spread, spreadPct, rental } = deal;
       const flipFinal = deal.flip;
+      if (leaseRent != null) flags.push(`LEASED at $${leaseRent.toLocaleString("en-US")}/mo`);
+      if (rental?.taxEstimated) flags.push(`tax rate estimated ${MONITOR.rentalTaxFallbackPct}% (VERIFY)`);
 
       const matched = new Set<string>(verdict?.matchedRequirements ?? []);
       if (belowMarket) matched.add("below_market");
@@ -559,8 +566,12 @@ export const analyzeOne = internalAction({
                 cashFlow: rental.cashFlow,
                 onePctRule: rental.onePct,
                 cashOnCash: rental.cashOnCash,
+                dscr: rental.dscr,
+                ...(deal.brrrrCashLeftIn != null ? { brrrrCashLeftIn: deal.brrrrCashLeftIn } : {}),
               }
             : {}),
+          ...(leaseRent != null ? { leaseRent } : {}),
+          ...(taxRatePct != null ? { propertyTaxRatePct: taxRatePct } : {}),
           ...(verdict
             ? {
                 aiReason: verdict.reason,
