@@ -161,9 +161,10 @@ const analysisFields = v.object({
 
 /**
  * Upsert a discovered listing by zpid. New zpid → insert a `pending` row (stamp
- * firstSeen/lastSeen/updatedAt). Repeat zpid: `sightingPatch` decides cut /
- * back-on-market / revive. On a repeat we do NOT overwrite the analyzed fields
- * with card data.
+ * firstSeen/lastSeen/updatedAt). Repeat zpid: `sightingPatch` decides cut / revive /
+ * a detail confirm for a status-archived row (`confirmQueued`: recheckAt = now, never
+ * analyzed from the card). On a repeat we do NOT overwrite the analyzed fields with
+ * card data.
  */
 export const upsertListing = internalMutation({
   args: listingUpsertArgs,
@@ -184,16 +185,16 @@ export const upsertListing = internalMutation({
         lastSeen: now,
         updatedAt: now,
       });
-      return { id, isNew: true, priceDropped: false, backOnMarket: false };
+      return { id, isNew: true, priceDropped: false, confirmQueued: false };
     }
 
-    // Cut detection (moves listPrice down so it can't re-fire), back-on-market, and
+    // Cut detection (moves listPrice down so it can't re-fire), the detail-confirm queue, and
     // revive-on-new-cut (+ the revived row's rotation slot) all live in the pure
     // sightingPatch (tests/monitorRecheck.test.ts). We do NOT overwrite analyzed fields
     // with card data.
     const s = sightingPatch(existing, { price: args.listPrice ?? null, homeStatus: args.homeStatus, datePriceChanged, statusText }, now);
     await ctx.db.patch(existing._id, s.patch);
-    return { id: existing._id, isNew: false, priceDropped: s.priceDropped, backOnMarket: s.backOnMarket };
+    return { id: existing._id, isNew: false, priceDropped: s.priceDropped, confirmQueued: s.confirm };
   },
 });
 

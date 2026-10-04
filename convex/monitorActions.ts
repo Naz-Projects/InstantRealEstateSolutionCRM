@@ -265,7 +265,9 @@ export const runMonitorScan = internalAction({
       for (const l of survivors) {
         const up = await ctx.runMutation(internal.monitorData.upsertListing, upsertArgsFromCard(l));
         if (up.isNew) newCount++;
-        if (up.isNew || up.priceDropped || up.backOnMarket) toAnalyze.push(up.id);
+        // confirmQueued = a status-archived row's card says for sale: Lane B confirms it
+        // from the detail page (and analyzes on a confirmed back-on-market); never here.
+        if (up.isNew || up.priceDropped) toAnalyze.push(up.id);
       }
       await ctx.runMutation(internal.monitorData.setPendingCount, {
         id: runId,
@@ -317,13 +319,14 @@ export const runMonitorScan = internalAction({
   },
 });
 
-type RecheckResult = { cutPages: number; cutCards: number; newCount: number; cutEvents: number; backOnMarket: number; sweepShort: boolean };
+type RecheckResult = { cutPages: number; cutCards: number; newCount: number; cutEvents: number; confirmQueued: number; sweepShort: boolean };
 
 /**
  * Phase 4 re-check lane (daily cron, or manual via CLI). Lane A: Zillow's price-cut
  * search over ALL of NCC <= $500K at any days on market (~6 pages) through the SAME
  * upsertListing as the nightly scan, so older listings with cuts are discovered and
- * tracked rows' cuts / back-on-market are detected in one place. Lane B
+ * tracked rows' cuts are detected in one place (a status-archived row seen for sale is
+ * only queued for Lane B's detail confirm: the detail page owns back-on-market). Lane B
  * (dispatchDueRechecks) is scheduled FIRST, as its own action, so a sweep killed by a
  * Zillow block can never take the detail rotation down with it; its delay lets Lane A's
  * analyses move recheckAt before the due read. Deliberately writes NO monitorRuns row:
@@ -334,7 +337,7 @@ type RecheckResult = { cutPages: number; cutCards: number; newCount: number; cut
 export const runMonitorRecheck = internalAction({
   args: { trigger: v.union(v.literal("cron"), v.literal("manual")) },
   handler: async (ctx, { trigger }): Promise<RecheckResult> => {
-    const res: RecheckResult = { cutPages: 0, cutCards: 0, newCount: 0, cutEvents: 0, backOnMarket: 0, sweepShort: false };
+    const res: RecheckResult = { cutPages: 0, cutCards: 0, newCount: 0, cutEvents: 0, confirmQueued: 0, sweepShort: false };
     if (trigger === "cron" && !cronScanEnabled(process.env.MONITOR_SCAN_ENABLED)) return res;
     const started = Date.now();
     try {
@@ -363,8 +366,8 @@ export const runMonitorRecheck = internalAction({
           const up = await ctx.runMutation(internal.monitorData.upsertListing, upsertArgsFromCard(l));
           if (up.isNew) res.newCount++;
           if (up.priceDropped) res.cutEvents++;
-          if (up.backOnMarket) res.backOnMarket++;
-          if (up.isNew || up.priceDropped || up.backOnMarket) {
+          if (up.confirmQueued) res.confirmQueued++; // detail-confirmed by Lane B, not analyzed here
+          if (up.isNew || up.priceDropped) {
             await ctx.scheduler.runAfter(scheduled++ * STAGGER_MS, internal.monitorActions.analyzeOne, { id: up.id });
           }
         }
@@ -499,6 +502,7 @@ export const analyzeOne = internalAction({
           id,
           clearFlip: true, // a re-analyzed pre-guard land row may carry stale flip fields
           clearRental: true,
+          clearRecheck: true, // never a keeper -> out of the detail re-check rotation
           fields: {
             status: "analyzed" as const,
             arvSource: "none",
@@ -524,6 +528,7 @@ export const analyzeOne = internalAction({
           id,
           clearFlip: true,
           clearRental: true,
+          clearRecheck: true,
           fields: {
             status: "analyzed" as const,
             arvSource: "none",

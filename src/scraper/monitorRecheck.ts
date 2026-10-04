@@ -19,6 +19,8 @@ export interface TrackedRow {
   lastPriceCutAt?: number;
   backOnMarketAt?: number;
   alertedEventAt?: number;
+  recheckAt?: number;
+  lastRecheckAt?: number;
 }
 
 export interface TrackingPatch {
@@ -45,7 +47,7 @@ export function statusBucket(homeStatus: string | null | undefined, isPending = 
   if (/SOLD/.test(s)) return "sold"; // SOLD, RECENTLY_SOLD
   if (isPending || /PENDING|UNDER_CONTRACT|CONTINGENT/.test(s)) return "pending";
   if (s === "OTHER" || /OFF_MARKET|FOR_RENT|REMOVED|WITHDRAWN/.test(s)) return "off_market";
-  if (/FOR_SALE|COMING_SOON|AUCTION|ACTIVE/.test(s)) return "active";
+  if (/FOR_SALE|COMING_SOON|AUCTION|(^|_)ACTIVE(_|$)/.test(s)) return "active"; // INACTIVE is not ACTIVE
   return null;
 }
 
@@ -74,28 +76,31 @@ export function cardCutFields(card: { priceChange?: number; datePriceChanged?: n
     : {};
 }
 
-// An existing row seen on a FOR-SALE search card (nightly scan or price-cut sweep).
-// Status-archived (PENDING/SOLD/OFF_MARKET) + an active card = back on market (deal fell
-// through, or a relist under the same per-property zpid). An aged-out row ("stale" or a
-// legacy reason-less archive) is revived only by a NEW cut. Back on market needs the card
-// to SAY active: a status-less card is no evidence the pending deal fell through, and a
-// FOR_SALE card whose status text says under contract is not active (the detail page
-// would say isPending again -> archive / revive / false BACK ON MARKET flip-flop).
-// A revived row re-enters (keeper) or leaves (non-keeper) the rotation right here, so a
-// failed re-analysis can't leave a revived keeper unscheduled.
-export function sightingPatch(row: TrackedRow, card: { price: number | null; homeStatus?: string; datePriceChanged?: number; statusText?: string }, now: number): { patch: TrackingPatch; priceDropped: boolean; backOnMarket: boolean } {
-  const cardActive = statusBucket(card.homeStatus) === "active" && !/pending|contingent|backup|under contract/i.test(card.statusText ?? "");
+// An existing row seen on a search card (nightly scan or price-cut sweep).
+// Status-archived (PENDING/SOLD/OFF_MARKET) rows are owned by the DETAIL page: a card can
+// say FOR_SALE while the detail says isPending, and trusting the card looped archive ->
+// revive -> BACK ON MARKET email forever. So a card that SAYS active (a status-less card,
+// or one whose text reads under contract, is no evidence) only queues a detail confirm
+// (recheckAt = now; recheckPatch revives + stamps backOnMarketAt), at most once per
+// recheckEveryDays of detail checks. No cut, revive, homeStatus or analysis from the card.
+// An aged-out row ("stale" or a legacy reason-less archive) is revived by a NEW cut; it
+// re-enters (keeper) or leaves (non-keeper) the rotation right here, so a failed
+// re-analysis can't leave a revived keeper unscheduled.
+export function sightingPatch(row: TrackedRow, card: { price: number | null; homeStatus?: string; datePriceChanged?: number; statusText?: string }, now: number): { patch: TrackingPatch; priceDropped: boolean; confirm: boolean } {
+  if (row.archivedAt != null && isStatusArchive(row.archivedReason)) {
+    const cardActive = statusBucket(card.homeStatus) === "active" && !/pending|contingent|backup|under contract/i.test(card.statusText ?? "");
+    const checkedRecently = row.lastRecheckAt != null && now - row.lastRecheckAt < MONITOR.recheckEveryDays * DAY_MS - MONITOR.recheckGraceMs;
+    const confirm = cardActive && !checkedRecently;
+    return { patch: { lastSeen: now, updatedAt: now, ...(confirm ? { recheckAt: now } : {}) }, priceDropped: false, confirm };
+  }
   const cut = cutFields(row, card.price, card.datePriceChanged ?? now);
   const priceDropped = "lastPriceCut" in cut;
-  const archived = row.archivedAt != null;
-  const backOnMarket = archived && cardActive && isStatusArchive(row.archivedReason);
-  const revive = backOnMarket || (archived && !isStatusArchive(row.archivedReason) && priceDropped);
+  const revive = row.archivedAt != null && priceDropped;
   const patch: TrackingPatch = {
     lastSeen: now,
     updatedAt: now,
     ...(card.homeStatus ? { homeStatus: card.homeStatus } : {}),
     ...cut,
-    ...(backOnMarket ? { backOnMarketAt: now } : {}),
     ...(revive
       ? {
           archivedAt: undefined,
@@ -104,7 +109,7 @@ export function sightingPatch(row: TrackedRow, card: { price: number | null; hom
         }
       : {}),
   };
-  return { patch, priceDropped, backOnMarket };
+  return { patch, priceDropped, confirm: false };
 }
 
 // Rotation membership: the next detail re-check time, or null = leave the rotation.
