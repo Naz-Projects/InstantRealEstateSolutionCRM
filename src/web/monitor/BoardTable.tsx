@@ -181,7 +181,6 @@ export function BoardTable(p: BoardTableProps) {
                   </div>
                   <div className="flex min-w-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
                     <ExitBadge exit={r.bestExit} />
-                    <AlertTagChip alertTag={r.alertTag} alertedEventAt={r.alertedEventAt} />
                     <span>{r.dealScore ?? "—"}</span>
                     <span className="truncate">List {money(r.listPrice)}</span>
                   </div>
@@ -189,6 +188,8 @@ export function BoardTable(p: BoardTableProps) {
                     <span className={cn("font-semibold", TONE_TEXT[v.tone])}>{v.value}</span>
                     {v.caption && <span className="truncate text-muted-foreground">{v.caption}</span>}
                   </div>
+                  {/* Own line so the chip never crowds the list price (null when no fresh event). */}
+                  <AlertTagChip alertTag={r.alertTag} alertedEventAt={r.alertedEventAt} className="mt-0.5 self-start" />
                 </div>
               </button>
             </li>
