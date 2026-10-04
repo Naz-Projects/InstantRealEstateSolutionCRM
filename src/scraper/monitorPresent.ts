@@ -20,7 +20,9 @@ export const MINUS = "−"; // typographic minus for signed money
 const ok = (n: N | undefined): n is number => n != null && Number.isFinite(n);
 
 export function money(n: N | undefined): string {
-  return ok(n) ? `$${Math.round(n).toLocaleString("en-US")}` : "—";
+  if (!ok(n)) return "—";
+  const r = Math.round(n);
+  return `${r < 0 ? MINUS : ""}$${Math.abs(r).toLocaleString("en-US")}`;
 }
 export function signedMoney(n: number): string {
   const r = Math.round(n);
@@ -133,11 +135,23 @@ export function safeHref(u: string | null | undefined): string | undefined {
   return /^https?:\/\//i.test(t) ? t : undefined;
 }
 
+// A "." after one of these does not end a sentence ("Est. ARV $240k").
+const ABBREV_END = /(?:^|[\s(])(?:est|approx|vs|st|no|ave|rd|dr|mr|mrs|ms|jr|sr|e\.g|i\.e)\.$/i;
+function firstSentence(t: string): string {
+  const end = /[.!?](?=\s|$)/g;
+  for (let m = end.exec(t); m; m = end.exec(t)) {
+    const head = t.slice(0, m.index + 1);
+    if (m[0] !== "." || !ABBREV_END.test(head)) return head;
+  }
+  return t;
+}
+
 // ~50 chars of 13px text fit one line of the 390px email card (about 330px of content).
 export function oneLineReason(s: string | null | undefined, max = 55): string {
   const t = (s ?? "").trim();
   if (!t) return "";
-  const first = t.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? t;
+  const head = firstSentence(t);
+  const first = head.length < 12 ? t : head;
   return first.length <= max ? first : `${first.slice(0, max - 1).trimEnd()}…`;
 }
 

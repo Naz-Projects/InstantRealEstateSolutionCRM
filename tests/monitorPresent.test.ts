@@ -12,6 +12,10 @@ describe("money / signedMoney / pct1 / toneOf", () => {
     expect(money(undefined)).toBe("—");
     expect(money(NaN)).toBe("—");
   });
+  it("renders negatives with the same true minus as signedMoney", () => {
+    expect(money(-5000)).toBe(`${MINUS}$5,000`);
+    expect(money(-0.4)).toBe("$0");
+  });
   it("signs with + and a true minus sign", () => {
     expect(signedMoney(5371)).toBe("+$5,371");
     expect(signedMoney(-14543)).toBe(`${MINUS}$14,543`);
@@ -119,6 +123,18 @@ describe("oneLineReason / analystNote / ownerSignal", () => {
     expect(oneLineReason(long)).toBe("A".repeat(54) + "…");
     expect(oneLineReason(long, 90)).toBe("A".repeat(89) + "…");
     expect(oneLineReason(null)).toBe("");
+  });
+  it("does not split after common abbreviations", () => {
+    expect(oneLineReason("Est. ARV $240k, deep rehab")).toBe("Est. ARV $240k, deep rehab");
+    expect(oneLineReason("Priced well below comps vs. Zestimate. More here.")).toBe("Priced well below comps vs. Zestimate.");
+    expect(oneLineReason("Needs everything, e.g. roof and HVAC. More.")).toBe("Needs everything, e.g. roof and HVAC.");
+    expect(oneLineReason("Corner lot on Market St. near the park. More.")).toBe("Corner lot on Market St. near the park.");
+    expect(oneLineReason("APPROX. 1,200 sqft fixer. More.")).toBe("APPROX. 1,200 sqft fixer.");
+  });
+  it("falls back to the truncated full text when the first sentence is under 12 chars", () => {
+    expect(oneLineReason("Fixer. Halted renovation, cash only.")).toBe("Fixer. Halted renovation, cash only.");
+    const long = "Fixer. " + "B".repeat(80);
+    expect(oneLineReason(long)).toBe(long.slice(0, 54) + "…");
   });
   it("analyst note only when it disagrees with bestExit and score >= 50", () => {
     expect(analystNote({ bestExit: "FLIP", exitTriage: "WHOLETAIL", dealScore: 72 })).toBe("Analyst leans Wholetail");
