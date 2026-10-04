@@ -89,6 +89,28 @@ describe("sightingPatch (search card seen for an existing row)", () => {
     const legacy = sightingPatch(row({ archivedAt: NOW - DAY }), { price: 280000 }, NOW);
     expect(has(legacy.patch, "archivedAt")).toBe(true);
   });
+  it("a status-less card never flags a status-archived row back on market", () => {
+    const r = sightingPatch(row({ archivedAt: NOW - DAY, archivedReason: "PENDING" }), { price: 300000 }, NOW);
+    expect(r.backOnMarket).toBe(false);
+    expect(has(r.patch, "archivedAt")).toBe(false);
+    expect(has(r.patch, "backOnMarketAt")).toBe(false);
+  });
+  it("a revived keeper re-enters the rotation (+3 days from this sighting)", () => {
+    const bom = sightingPatch(row({ archivedAt: NOW - DAY, archivedReason: "PENDING" }),{ price: 300000, homeStatus: "FOR_SALE" }, NOW);
+    expect(bom.patch.recheckAt).toBe(NOW + MONITOR.recheckEveryDays * DAY - G);
+    // aged out of trackDays before this sighting: lastSeen is now, so it still joins
+    const aged = sightingPatch(row({ archivedAt: NOW - DAY, archivedReason: "stale", lastSeen: NOW - 60 * DAY }), { price: 280000 }, NOW);
+    expect(aged.patch.recheckAt).toBe(NOW + MONITOR.recheckEveryDays * DAY - G);
+  });
+  it("a revived non-keeper leaves the rotation (recheckAt key present = deleted)", () => {
+    const r = sightingPatch(row({ keeper: false, archivedAt: NOW - DAY, archivedReason: "SOLD" }), { price: 300000, homeStatus: "FOR_SALE" }, NOW);
+    expect(r.backOnMarket).toBe(true);
+    expect(has(r.patch, "recheckAt")).toBe(true);
+    expect(r.patch.recheckAt).toBeUndefined();
+  });
+  it("no revive: recheckAt is left alone", () => {
+    expect(has(sightingPatch(row(), { price: 285000, homeStatus: "FOR_SALE" }, NOW).patch, "recheckAt")).toBe(false);
+  });
 });
 
 describe("nextRecheckAt (rotation membership)", () => {

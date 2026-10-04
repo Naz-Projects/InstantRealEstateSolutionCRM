@@ -71,4 +71,15 @@ crons.cron(
   { trigger: "cron" },
 );
 
+// Monitor re-check lane (Phase 4): daily price-cut search sweep (~6 credits) + detail
+// re-checks of due rotation rows (status / cut / back-on-market). 14:00 UTC (9-10 AM ET),
+// far from the 02:00 UTC nightly; it writes no monitorRuns row, so it never trips the
+// nightly's 20h guard. Respects MONITOR_SCAN_ENABLED="0" like the nightly cron.
+crons.cron(
+  "monitor recheck",
+  "0 14 * * *",
+  internal.monitorActions.runMonitorRecheck,
+  { trigger: "cron" },
+);
+
 export default crons;

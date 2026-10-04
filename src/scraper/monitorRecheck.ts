@@ -77,10 +77,12 @@ export function cardCutFields(card: { priceChange?: number; datePriceChanged?: n
 // An existing row seen on a FOR-SALE search card (nightly scan or price-cut sweep).
 // Status-archived (PENDING/SOLD/OFF_MARKET) + an active card = back on market (deal fell
 // through, or a relist under the same per-property zpid). An aged-out row ("stale" or a
-// legacy reason-less archive) is revived only by a NEW cut.
+// legacy reason-less archive) is revived only by a NEW cut. Back on market needs the card
+// to SAY active: a status-less card is no evidence the pending deal fell through.
+// A revived row re-enters (keeper) or leaves (non-keeper) the rotation right here, so a
+// failed re-analysis can't leave a revived keeper unscheduled.
 export function sightingPatch(row: TrackedRow, card: { price: number | null; homeStatus?: string; datePriceChanged?: number }, now: number): { patch: TrackingPatch; priceDropped: boolean; backOnMarket: boolean } {
-  const bucket = statusBucket(card.homeStatus);
-  const cardActive = bucket == null || bucket === "active";
+  const cardActive = statusBucket(card.homeStatus) === "active";
   const cut = cutFields(row, card.price, card.datePriceChanged ?? now);
   const priceDropped = "lastPriceCut" in cut;
   const archived = row.archivedAt != null;
@@ -92,7 +94,13 @@ export function sightingPatch(row: TrackedRow, card: { price: number | null; hom
     ...(card.homeStatus ? { homeStatus: card.homeStatus } : {}),
     ...cut,
     ...(backOnMarket ? { backOnMarketAt: now } : {}),
-    ...(revive ? { archivedAt: undefined, archivedReason: undefined } : {}),
+    ...(revive
+      ? {
+          archivedAt: undefined,
+          archivedReason: undefined,
+          recheckAt: nextRecheckAt({ keeper: row.keeper, archivedAt: undefined, archivedReason: undefined, lastSeen: now }, now) ?? undefined,
+        }
+      : {}),
   };
   return { patch, priceDropped, backOnMarket };
 }

@@ -315,6 +315,107 @@ export const runMonitorScan = internalAction({
   },
 });
 
+type RecheckResult = { cutPages: number; cutCards: number; newCount: number; cutEvents: number; backOnMarket: number; detailScheduled: number };
+
+/**
+ * Phase 4 re-check lane (daily cron, or manual via CLI). Lane A: Zillow's price-cut
+ * search over ALL of NCC <= $500K at any days on market (~6 pages) through the SAME
+ * upsertListing as the nightly scan, so older listings with cuts are discovered and
+ * tracked rows' cuts / back-on-market are detected in one place. Lane B: schedule a
+ * detail re-check for each row due in the rotation (staggered, one action each — the
+ * 10-min limit). Deliberately writes NO monitorRuns row: the nightly cron's 20h guard
+ * (mostRecentCompleteRun) would read it as tonight's scan and skip the nightly.
+ * Re-alerted rows go out in the next nightly digest.
+ */
+export const runMonitorRecheck = internalAction({
+  args: { trigger: v.union(v.literal("cron"), v.literal("manual")) },
+  handler: async (ctx, { trigger }): Promise<RecheckResult> => {
+    const res: RecheckResult = { cutPages: 0, cutCards: 0, newCount: 0, cutEvents: 0, backOnMarket: 0, detailScheduled: 0 };
+    if (trigger === "cron" && !cronScanEnabled(process.env.MONITOR_SCAN_ENABLED)) return res;
+    try {
+      const apiKey = fcKey();
+
+      // Lane A: price-cut sweep (sorted newest-listed, stable pages; a blocked page ends it).
+      const toAnalyze: Array<Doc<"monitorListings">["_id"]> = [];
+      let total: number | null = null;
+      for (let page = 1; page <= MONITOR.cutSearchMaxPages; page++) {
+        const nextData = await scrapeZillowJson(buildSearchUrl({ page, priceCutOnly: true }), apiKey, SEARCH_SCRAPE_BUDGET);
+        if (!nextData) break;
+        const listings = listingsFromSearch(nextData);
+        if (listings.length === 0) break;
+        res.cutPages++;
+        res.cutCards += listings.length;
+        if (total == null) total = totalResultCount(nextData);
+        for (const l of listings) {
+          if (!passesScanGate(l)) continue;
+          const up = await ctx.runMutation(internal.monitorData.upsertListing, upsertArgsFromCard(l));
+          if (up.isNew) res.newCount++;
+          if (up.priceDropped) res.cutEvents++;
+          if (up.backOnMarket) res.backOnMarket++;
+          if (up.isNew || up.priceDropped || up.backOnMarket) toAnalyze.push(up.id);
+        }
+        if (total != null && res.cutCards >= total) break;
+      }
+      // A short sweep must be visible, never silently partial.
+      if (total == null || res.cutCards < total) {
+        await ctx.runMutation(internal.errors.logServerError, {
+          message: `monitor recheck: price-cut sweep covered ${res.cutCards} of ${total ?? "unknown"} listings (${res.cutPages} page(s))`,
+          context: "monitorActions.runMonitorRecheck",
+        });
+      }
+      for (let i = 0; i < toAnalyze.length; i++) {
+        await ctx.scheduler.runAfter(i * STAGGER_MS, internal.monitorActions.analyzeOne, { id: toAnalyze[i] });
+      }
+
+      // Lane B: detail re-checks for rows due in the rotation (after Lane A's analyses).
+      const due = await ctx.runQuery(internal.monitorData.dueForRecheck, { now: Date.now(), limit: MONITOR.recheckDetailCap });
+      const offset = toAnalyze.length * STAGGER_MS;
+      for (let i = 0; i < due.length; i++) {
+        await ctx.scheduler.runAfter(offset + i * STAGGER_MS, internal.monitorActions.recheckOne, { id: due[i]._id });
+      }
+      res.detailScheduled = due.length;
+      return res;
+    } catch (e) {
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: `runMonitorRecheck failed: ${e instanceof Error ? e.message : String(e)}`,
+        context: "monitorActions.runMonitorRecheck",
+      });
+      return res;
+    }
+  },
+});
+
+/**
+ * One rotation row: detail re-scrape -> applyRecheck (pure recheckPatch) -> re-analyze on
+ * a cut / back-on-market. analyzeOne's first scrape attempt accepts a <=1h Firecrawl
+ * cache, so it normally re-reads this same page instead of a second live scrape.
+ */
+export const recheckOne = internalAction({
+  args: { id: v.id("monitorListings") },
+  handler: async (ctx, { id }): Promise<void> => {
+    try {
+      const row = await ctx.runQuery(internal.monitorData.getListingInternal, { id });
+      // Not due any more (left the rotation, or already re-checked by an earlier
+      // scheduled call, e.g. a manual run and the cron on the same day): spend nothing.
+      if (!row || row.recheckAt == null || row.recheckAt > Date.now()) return;
+      const data = await scrapeZillowJson(row.url, fcKey(), ANALYZE_SCRAPE_BUDGET);
+      const d = data ? detailFromCache(data) : null;
+      const r = await ctx.runMutation(internal.monitorData.applyRecheck, {
+        id,
+        ...(d
+          ? { detail: { isPending: d.isPending, ...(d.homeStatus ? { homeStatus: d.homeStatus } : {}), ...(d.price != null ? { price: d.price } : {}) } }
+          : {}),
+      });
+      if (r.reanalyze) await ctx.scheduler.runAfter(0, internal.monitorActions.analyzeOne, { id });
+    } catch (e) {
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: `recheckOne failed: ${e instanceof Error ? e.message : String(e)}`,
+        context: "monitorActions.recheckOne",
+      });
+    }
+  },
+});
+
 /**
  * Enrich one discovered listing: detail scrape → comps → conservative ARV →
  * rehab tier → multi-exit (flip + rental) → off-market cross-ref → DeepSeek

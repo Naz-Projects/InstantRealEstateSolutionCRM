@@ -6,9 +6,9 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
 import { requireAdmin } from "./lib/getAuthUser";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
-import { partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
+import { MONITOR, partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
 import { applyTriage, scanBlockedReason, type TriageState } from "../src/scraper/monitorTriage";
-import { sightingPatch, cardCutFields, nextRecheckAt } from "../src/scraper/monitorRecheck";
+import { sightingPatch, cardCutFields, recheckPatch } from "../src/scraper/monitorRecheck";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -186,16 +186,11 @@ export const upsertListing = internalMutation({
     }
 
     // Cut detection (moves listPrice down so it can't re-fire), back-on-market, and
-    // revive-on-new-cut all live in the pure sightingPatch (tests/monitorRecheck.test.ts).
-    // We do NOT overwrite analyzed fields with card data.
+    // revive-on-new-cut (+ the revived row's rotation slot) all live in the pure
+    // sightingPatch (tests/monitorRecheck.test.ts). We do NOT overwrite analyzed fields
+    // with card data.
     const s = sightingPatch(existing, { price: args.listPrice ?? null, homeStatus: args.homeStatus, datePriceChanged }, now);
-    // A revived row (archive keys present = cleared) re-enters the rotation here, not
-    // only in analyzeOne: a failed re-analysis must not leave a revived keeper unscheduled.
-    const revived = "archivedAt" in s.patch;
-    const recheck = revived
-      ? { recheckAt: nextRecheckAt({ keeper: existing.keeper, archivedAt: undefined, archivedReason: undefined, lastSeen: now }, now) ?? undefined }
-      : {};
-    await ctx.db.patch(existing._id, { ...s.patch, ...recheck });
+    await ctx.db.patch(existing._id, s.patch);
     return { id: existing._id, isNew: false, priceDropped: s.priceDropped, backOnMarket: s.backOnMarket };
   },
 });
@@ -564,6 +559,66 @@ export const sweepStalePending = internalMutation({
       }
     }
     return swept;
+  },
+});
+
+/**
+ * Rows due for a detail re-check (the rotation), oldest-due first, capped. The lower
+ * bound is load-bearing: Convex sorts undefined BEFORE numbers, so lte(now) alone would
+ * return every row outside the rotation.
+ */
+export const dueForRecheck = internalQuery({
+  args: { now: v.number(), limit: v.number() },
+  handler: async (ctx, { now, limit }) => {
+    const rows = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_recheck", (q) => q.gt("recheckAt", 0).lte("recheckAt", now))
+      .take(limit);
+    return rows.map((r) => ({ _id: r._id, url: r.url }));
+  },
+});
+
+/**
+ * Apply one detail re-check against the FRESH stored row (pure recheckPatch: archive on
+ * PENDING/SOLD/OFF_MARKET, revive on back-on-market, cut detection, next rotation slot).
+ * detail omitted = the scrape failed (shell page) -> retry tomorrow, nothing archived.
+ */
+export const applyRecheck = internalMutation({
+  args: {
+    id: v.id("monitorListings"),
+    detail: v.optional(v.object({ homeStatus: v.optional(v.string()), isPending: v.boolean(), price: v.optional(v.number()) })),
+  },
+  handler: async (ctx, { id, detail }): Promise<{ reanalyze: boolean; outcome: string }> => {
+    const row = await ctx.db.get(id);
+    if (!row) return { reanalyze: false, outcome: "missing" };
+    const r = recheckPatch(row, detail ? { homeStatus: detail.homeStatus, isPending: detail.isPending, price: detail.price ?? null } : null, Date.now());
+    await ctx.db.patch(id, r.patch);
+    return { reanalyze: r.reanalyze, outcome: r.outcome };
+  },
+});
+
+/**
+ * One-time (operator) seeding: put the CURRENT active keepers into the re-check rotation,
+ * spread over the cadence window so day one doesn't re-scrape all of them. New keepers
+ * join automatically via analyzeOne. Run on prod after deploy:
+ *   npx convex run monitorData:seedRecheck '{"dryRun":true}'
+ */
+export const seedRecheck = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { dryRun }) => {
+    const rows = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_keeper_archived", (q) => q.eq("keeper", true).eq("archivedAt", undefined))
+      .take(1000);
+    const now = Date.now();
+    let seeded = 0;
+    for (const r of rows) {
+      if (r.recheckAt != null) continue;
+      const at = now + (seeded % MONITOR.recheckEveryDays) * 86_400_000 + 60_000;
+      if (!dryRun) await ctx.db.patch(r._id, { recheckAt: at });
+      seeded++;
+    }
+    return { dryRun: !!dryRun, total: rows.length, seeded };
   },
 });
 
