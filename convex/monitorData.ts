@@ -4,9 +4,10 @@ import { query, mutation, internalQuery, internalMutation } from "./_generated/s
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
+import { requireAdmin } from "./lib/getAuthUser";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
 import { partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
-import { applyTriage, type TriageState } from "../src/scraper/monitorTriage";
+import { applyTriage, scanBlockedReason, type TriageState } from "../src/scraper/monitorTriage";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -763,6 +764,26 @@ export const markSeen = mutation({
     if (row) await ctx.db.patch(row._id, { lastSeenAt: now });
     else await ctx.db.insert("monitorSeen", { userId, lastSeenAt: now });
     return now;
+  },
+});
+
+/**
+ * Admin "Run now" on /monitor: schedule one manual scan. `runMonitorScan`'s manual
+ * trigger skips the cron/webhook guards, so this mutation guards itself (no fresh
+ * running run, nothing started in the last 10 min). Costs Firecrawl + LLM credits,
+ * so it is admin-only and the page confirms first.
+ */
+export const requestScan = mutation({
+  args: {},
+  // Explicit return type: references internal.monitorActions.* (circular-inference
+  // cycle with monitorActions, lessons 2026-06-01).
+  handler: async (ctx): Promise<{ scheduled: true }> => {
+    await requireAdmin(ctx);
+    const recent = await ctx.db.query("monitorRuns").withIndex("by_started").order("desc").first();
+    const blocked = scanBlockedReason(recent, Date.now());
+    if (blocked) throw new ConvexError({ code: "BUSY", message: blocked });
+    await ctx.scheduler.runAfter(0, internal.monitorActions.runMonitorScan, { trigger: "manual" });
+    return { scheduled: true };
   },
 });
 
