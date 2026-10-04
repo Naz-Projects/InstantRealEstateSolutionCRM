@@ -4,7 +4,7 @@ import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
-import { scrapeZillowJson, scrapeRedfinMarkdown } from "./monitorScrape";
+import { scrapeZillowJson, scrapeRedfinSold } from "./monitorScrape";
 import {
   MONITOR,
   buildSearchUrl,
@@ -28,7 +28,7 @@ import {
   type SearchListing,
   type JudgeVerdict,
 } from "../src/scraper/monitorListings";
-import { parseZip, parseRedfinComps, type Comp } from "../src/scraper/comps";
+import { parseZip, parseRedfinComps, parseRedfinGisComps, type Comp } from "../src/scraper/comps";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — the "use node" action layer:
@@ -140,8 +140,11 @@ async function compsForZip(ctx: ActionCtx, zip: string, apiKey: string): Promise
     return cached;
   }
 
-  const md = await scrapeRedfinMarkdown(zip, apiKey, ANALYZE_SCRAPE_BUDGET);
-  const comps = md ? parseRedfinComps(md) : [];
+  const page = await scrapeRedfinSold(zip, apiKey, ANALYZE_SCRAPE_BUDGET);
+  // Prefer the embedded gis payload (coords + home type + sold epoch, ~5x the rows);
+  // the markdown rows are the fallback if Redfin changes the embed.
+  const gis = page ? parseRedfinGisComps(page.rawHtml) : [];
+  const comps = gis.length > 0 ? gis : page ? parseRedfinComps(page.markdown) : [];
   compsCache.set(zip, { comps, at: Date.now() });
   // Only a NON-EMPTY scrape is worth sharing — caching [] would pin every other
   // listing in the zip to "no comps" for 12h on one transient block.

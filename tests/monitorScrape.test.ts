@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { scrapeZillowJson, scrapeRedfinMarkdown } from "../convex/monitorScrape";
+import { scrapeZillowJson, scrapeRedfinSold } from "../convex/monitorScrape";
 import { MONITOR } from "../src/scraper/monitorListings";
 
 // Every attempt returns a short "shell" page, so the helper retries through the
@@ -25,8 +25,17 @@ describe("monitorScrape maxAge (Firecrawl v2 cache freshness)", () => {
   });
   it("Redfin comps: same freshness rule", async () => {
     const bodies = stubShellFetch();
-    const out = await scrapeRedfinMarkdown("19805", "fc-test", { gaps: [0, 0], timeoutMs: 1000 });
+    const out = await scrapeRedfinSold("19805", "fc-test", { gaps: [0, 0], timeoutMs: 1000 });
     expect(out).toBeNull();
     expect(bodies.map((b) => b.maxAge)).toEqual([3_600_000, 0]);
+  });
+});
+
+describe("scrapeRedfinSold", () => {
+  it("returns both rawHtml and markdown from the first non-shell page", async () => {
+    const big = "x".repeat(60_000);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ success: true, data: { rawHtml: big, markdown: "md" } }) })));
+    const out = await scrapeRedfinSold("19805", "fc-test", { gaps: [0], timeoutMs: 1000 });
+    expect(out).toEqual({ rawHtml: big, markdown: "md" });
   });
 });

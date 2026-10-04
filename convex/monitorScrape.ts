@@ -37,7 +37,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-interface V2ScrapeData {
+export interface V2ScrapeData {
   rawHtml: string;
   markdown: string;
 }
@@ -126,17 +126,17 @@ export async function scrapeZillowJson(
 }
 
 /**
- * Scrape a ZIP's Redfin "recently sold" page (`buildRedfinSoldUrl`) and return its
- * markdown (the source `parseRedfinComps` parses; rawHtml only shell-checks).
- * Same spaced shell/transient retry as `scrapeZillowJson` (Firecrawl
- * `proxy:"auto"`, `waitFor:5000`). Returns the markdown string, or null after
- * the budget's retries are exhausted.
+ * Scrape a ZIP's Redfin "recently sold" page (`buildRedfinSoldUrl`) and return BOTH
+ * formats: rawHtml carries the embedded gis payload (`parseRedfinGisComps` — coords,
+ * home type, sold date) and markdown is the `parseRedfinComps` fallback. Same spaced
+ * shell/transient retry as `scrapeZillowJson` (Firecrawl `proxy:"auto"`,
+ * `waitFor:5000`). null after the budget's retries are exhausted.
  */
-export async function scrapeRedfinMarkdown(
+export async function scrapeRedfinSold(
   zip: string,
   apiKey: string,
   budget?: ScrapeBudget,
-): Promise<string | null> {
+): Promise<V2ScrapeData | null> {
   if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not set");
 
   const gaps = budget?.gaps ?? RETRY_GAPS_MS;
@@ -146,7 +146,7 @@ export async function scrapeRedfinMarkdown(
     if (gaps[i] > 0) await sleep(gaps[i] + Math.random() * 2000);
     const data = await firecrawlV2Scrape(url, apiKey, "auto", ["rawHtml", "markdown"], timeoutMs, attemptMaxAge(i));
     if (!data || data.rawHtml.length < SHELL_MIN_LEN) continue;
-    return data.markdown;
+    return data;
   }
   return null;
 }
