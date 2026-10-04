@@ -23,7 +23,7 @@ Evidence: prod monitorRuns Aug 6-Oct 3 + backtest of 1,225 rows + 30 live Zillow
   - [ ] Open: 0/10 RENTAL keepers in the 2026-10-04 prod export carry `dscr` (pre-Phase-2 rows) -> board/email show "DSCR —" until re-analyzed/regated; 19/49 keepers (WHOLESALE) have dealScore 0.
   - Original scope: /monitor inbox (New/Shortlist/Passed, pass-with-reason, snooze, filters, sort, side
   sheet, J/K/P/S); email 5-second brief with deep links, decision number (offer gap / cash flow) up front, AA contrast.
-- [ ] **Phase 4 — wider net (2 d):** re-check lane for tracked listings (price cuts, back-on-market, pending/sold → retire),
+- [x] **Phase 4 — SHIPPED 2026-10-04 (`19c936c` on origin/main; prod deployed; seedRecheck live 42 keepers; first manual sweep 18:33 UTC: 6 pages / 209 price-reduced cards / 121 missed cuts / 45 new rows). Lane A price-cut sweep (Zillow onlyPriceReduction) + Lane B detail re-check rotation (keepers every 3d, cap 25/day; own cron 0 14 * * * UTC, dispatch +15 min, 4-min sweep deadline), status retire (PENDING/SOLD/OFF_MARKET), card-side back-on-market only queues a detail confirm (repeat-email loop fixed pre-ship), re-alerts PRICE CUT / BACK ON MARKET, per-user buy box (monitorBuyBoxes + dialog) + per-recipient digest. Prod Firecrawl key = 100k ANNUAL plan (92k left 2026-10-04), not the 17.8k monthly. Plan: docs/superpowers/plans/2026-10-04-monitor-phase4-wider-net.md.** Original scope: re-check lane for tracked listings (price cuts, back-on-market, pending/sold → retire),
   re-alert on new cuts (clear emailedAt), per-user buy box.
 - Open user Qs: phase order; profit floors; send "0 worth a look" emails?; allow 2-4 unit for rentals?; digest to all 5 users?
 
