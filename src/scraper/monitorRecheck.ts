@@ -78,11 +78,13 @@ export function cardCutFields(card: { priceChange?: number; datePriceChanged?: n
 // Status-archived (PENDING/SOLD/OFF_MARKET) + an active card = back on market (deal fell
 // through, or a relist under the same per-property zpid). An aged-out row ("stale" or a
 // legacy reason-less archive) is revived only by a NEW cut. Back on market needs the card
-// to SAY active: a status-less card is no evidence the pending deal fell through.
+// to SAY active: a status-less card is no evidence the pending deal fell through, and a
+// FOR_SALE card whose status text says under contract is not active (the detail page
+// would say isPending again -> archive / revive / false BACK ON MARKET flip-flop).
 // A revived row re-enters (keeper) or leaves (non-keeper) the rotation right here, so a
 // failed re-analysis can't leave a revived keeper unscheduled.
-export function sightingPatch(row: TrackedRow, card: { price: number | null; homeStatus?: string; datePriceChanged?: number }, now: number): { patch: TrackingPatch; priceDropped: boolean; backOnMarket: boolean } {
-  const cardActive = statusBucket(card.homeStatus) === "active";
+export function sightingPatch(row: TrackedRow, card: { price: number | null; homeStatus?: string; datePriceChanged?: number; statusText?: string }, now: number): { patch: TrackingPatch; priceDropped: boolean; backOnMarket: boolean } {
+  const cardActive = statusBucket(card.homeStatus) === "active" && !/pending|contingent|backup|under contract/i.test(card.statusText ?? "");
   const cut = cutFields(row, card.price, card.datePriceChanged ?? now);
   const priceDropped = "lastPriceCut" in cut;
   const archived = row.archivedAt != null;

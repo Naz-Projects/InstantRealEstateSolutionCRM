@@ -50,6 +50,7 @@ const listingUpsertArgs = {
   homeStatus: v.optional(v.string()),
   priceChange: v.optional(v.number()),      // card-only (not a column): seeds lastPriceCut on insert
   datePriceChanged: v.optional(v.number()), // card-only (not a column)
+  statusText: v.optional(v.string()),       // card-only (not a column): blocks a false back-on-market
 };
 
 // Everything the analyze step may write. Every key optional so a partial (VERIFY)
@@ -167,7 +168,7 @@ export const upsertListing = internalMutation({
   args: listingUpsertArgs,
   handler: async (ctx, args) => {
     const now = Date.now();
-    const { priceChange, datePriceChanged, ...fields } = args;
+    const { priceChange, datePriceChanged, statusText, ...fields } = args;
     const existing = await ctx.db
       .query("monitorListings")
       .withIndex("by_zpid", (q) => q.eq("zpid", args.zpid))
@@ -189,7 +190,7 @@ export const upsertListing = internalMutation({
     // revive-on-new-cut (+ the revived row's rotation slot) all live in the pure
     // sightingPatch (tests/monitorRecheck.test.ts). We do NOT overwrite analyzed fields
     // with card data.
-    const s = sightingPatch(existing, { price: args.listPrice ?? null, homeStatus: args.homeStatus, datePriceChanged }, now);
+    const s = sightingPatch(existing, { price: args.listPrice ?? null, homeStatus: args.homeStatus, datePriceChanged, statusText }, now);
     await ctx.db.patch(existing._id, s.patch);
     return { id: existing._id, isNew: false, priceDropped: s.priceDropped, backOnMarket: s.backOnMarket };
   },

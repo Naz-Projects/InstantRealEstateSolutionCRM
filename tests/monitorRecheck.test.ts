@@ -95,6 +95,15 @@ describe("sightingPatch (search card seen for an existing row)", () => {
     expect(has(r.patch, "archivedAt")).toBe(false);
     expect(has(r.patch, "backOnMarketAt")).toBe(false);
   });
+  it("a FOR_SALE card whose status text says pending/contingent is not back on market", () => {
+    for (const statusText of ["Pending", "Contingent", "Accepting backup offers", "Active Under Contract"]) {
+      const r = sightingPatch(row({ archivedAt: NOW - DAY, archivedReason: "PENDING" }), { price: 300000, homeStatus: "FOR_SALE", statusText }, NOW);
+      expect(r.backOnMarket).toBe(false);
+      expect(has(r.patch, "archivedAt")).toBe(false);
+    }
+    const ok = sightingPatch(row({ archivedAt: NOW - DAY, archivedReason: "PENDING" }), { price: 300000, homeStatus: "FOR_SALE", statusText: "House for sale" }, NOW);
+    expect(ok.backOnMarket).toBe(true);
+  });
   it("a revived keeper re-enters the rotation (+3 days from this sighting)", () => {
     const bom = sightingPatch(row({ archivedAt: NOW - DAY, archivedReason: "PENDING" }),{ price: 300000, homeStatus: "FOR_SALE" }, NOW);
     expect(bom.patch.recheckAt).toBe(NOW + MONITOR.recheckEveryDays * DAY - G);

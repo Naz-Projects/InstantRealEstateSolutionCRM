@@ -63,6 +63,14 @@ describe("listingsFromSearch", () => {
     const b = rows[1];
     expect(b.isNewConstruction).toBe(true); // builderName or /community/
   });
+  it("statusText carries the card's status text + marketing status (pending guard input)", () => {
+    const rows = listingsFromSearch({ props: { pageProps: { searchPageState: { cat1: { searchResults: { listResults: [
+      { zpid: "1", statusText: "Pending", marketingStatusSimplifiedCd: "Foreclosure", hdpData: { homeInfo: { homeStatus: "FOR_SALE" } } },
+      { zpid: "2", hdpData: { homeInfo: {} } },
+    ] } } } } } });
+    expect(rows[0].statusText).toBe("Pending | Foreclosure");
+    expect(rows[1].statusText).toBeUndefined();
+  });
   it("totalResultCount reads the searchList", () => {
     expect(totalResultCount(FAKE_NEXT)).toBe(134);
   });

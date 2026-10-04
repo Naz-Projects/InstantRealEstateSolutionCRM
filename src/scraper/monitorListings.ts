@@ -24,6 +24,8 @@ export const MONITOR = {
   trackDays: 45,         // a row not seen in any Zillow search for this long leaves the rotation
   recheckDetailCap: 25,  // max detail re-checks scheduled per re-check run (~1 credit each)
   cutSearchMaxPages: 8,  // price-cut sweep page cap (6 needed today; a short sweep logs coverage)
+  cutSweepDeadlineMs: 4 * 60 * 1000,      // no new sweep page after this (one blocked page can take ~5 min; actions die at 10)
+  recheckDispatchDelayMs: 15 * 60 * 1000, // Lane B dispatch runs this long after the re-check starts, independent of the sweep
   alertTagFreshDays: 7,  // a PRICE CUT / BACK ON MARKET tag shows in the digest this long after the event
   recheckGraceMs: 12 * 60 * 60 * 1000, // due times are set minutes AFTER the 14:00 cron; without this grace a 3-day check drifts to 4
   ncc_bounds: { west: -75.97218944726562, east: -75.22237255273437, south: 39.36230086205304, north: 39.76777058263119 },
@@ -69,6 +71,7 @@ export interface SearchListing {
   homeStatus?: string;       // Zillow homeInfo.homeStatus, e.g. "FOR_SALE"
   priceChange?: number;      // Zillow's last price change in $ (negative = cut)
   datePriceChanged?: number; // epoch ms of that change
+  statusText?: string;       // card statusText + marketingStatusSimplifiedCd: a FOR_SALE card can still read "Pending"
 }
 export function totalResultCount(nextData: any): number | null {
   return nextData?.props?.pageProps?.searchPageState?.cat1?.searchList?.totalResultCount ?? null;
@@ -93,6 +96,7 @@ export function listingsFromSearch(nextData: any): SearchListing[] {
       homeStatus: typeof hi.homeStatus === "string" ? hi.homeStatus : undefined,
       priceChange: typeof hi.priceChange === "number" ? hi.priceChange : undefined,
       datePriceChanged: typeof hi.datePriceChanged === "number" ? hi.datePriceChanged : undefined,
+      statusText: [c.statusText, c.marketingStatusSimplifiedCd].filter((x) => typeof x === "string" && x).join(" | ") || undefined,
     };
   });
 }
