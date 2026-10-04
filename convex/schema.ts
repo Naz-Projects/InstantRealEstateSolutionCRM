@@ -744,4 +744,33 @@ export default defineSchema({
     comps: v.array(v.any()),
     fetchedAt: v.number(),
   }).index("by_zip", ["zip"]),
+
+  // Per-user /monitor triage (Phase 3). One row per (user, listing) the user acted on;
+  // states are mutually exclusive (src/scraper/monitorTriage.ts). Kept OFF
+  // monitorListings: that row is shared team-wide and patched by the scan pipeline.
+  // userId = Clerk subject (requireUser's return).
+  monitorTriage: defineTable({
+    userId: v.string(),
+    listingId: v.id("monitorListings"),
+    passedAt: v.optional(v.number()),
+    // keep in sync with PASS_REASONS in src/scraper/monitorTriage.ts
+    passReason: v.optional(
+      v.union(
+        v.literal("bad_area"),
+        v.literal("arv_wrong"),
+        v.literal("rehab_heavy"),
+        v.literal("overpriced"),
+        v.literal("other"),
+      ),
+    ),
+    shortlistedAt: v.optional(v.number()),
+    snoozedUntil: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_user_listing", ["userId", "listingId"]),
+
+  // Per-user "new since you looked" watermark for /monitor.
+  monitorSeen: defineTable({
+    userId: v.string(),
+    lastSeenAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

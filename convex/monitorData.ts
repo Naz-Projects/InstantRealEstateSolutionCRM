@@ -1,11 +1,12 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
 import { partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
+import { applyTriage, type TriageState } from "../src/scraper/monitorTriage";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -603,12 +604,165 @@ export const listRecent = query({
   },
 });
 
-/** One listing (the /monitor card drawer). */
-export const getListing = query({
-  args: { id: v.id("monitorListings") },
-  handler: async (ctx, { id }) => {
+// ---- Phase 3: per-user triage (board / sheet / triage writes) ----
+
+const passReasonV = v.union(
+  v.literal("bad_area"),
+  v.literal("arv_wrong"),
+  v.literal("rehab_heavy"),
+  v.literal("overpriced"),
+  v.literal("other"),
+);
+const BOARD_LIMIT = 300;
+
+async function triageFor(ctx: QueryCtx | MutationCtx, userId: string, listingId: Id<"monitorListings">) {
+  return await ctx.db
+    .query("monitorTriage")
+    .withIndex("by_user_listing", (q) => q.eq("userId", userId).eq("listingId", listingId))
+    .unique();
+}
+function pickTriage(t: Doc<"monitorTriage"> | null): TriageState | null {
+  if (!t) return null;
+  return { passedAt: t.passedAt, passReason: t.passReason, shortlistedAt: t.shortlistedAt, snoozedUntil: t.snoozedUntil };
+}
+
+/**
+ * The /monitor board: active keepers (best score first) as a SLIM projection.
+ * Reads ONLY monitorListings, so a triage write or markSeen never re-runs it
+ * (Convex bills documents read; 06-08 quota lesson). Per-user state comes from
+ * boardState and is merged on the client. The sheet reads the full doc via listingForMe.
+ */
+export const board = query({
+  args: {},
+  handler: async (ctx) => {
     await requireUser(ctx);
-    return await ctx.db.get(id);
+    const keepers = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_keeper_archived", (q) => q.eq("keeper", true).eq("archivedAt", undefined))
+      .order("desc")
+      .take(BOARD_LIMIT);
+    return keepers.map((r) => ({
+      _id: r._id,
+      address: r.address,
+      propCity: r.propCity,
+      propZip: r.propZip,
+      beds: r.beds,
+      baths: r.baths,
+      sqft: r.sqft,
+      listPrice: r.listPrice,
+      photo: r.photoUrls?.[0],
+      bestExit: r.bestExit,
+      dealScore: r.dealScore,
+      roomVsList: r.roomVsList,
+      flipMao: r.flipMao,
+      flipMargin: r.flipMargin,
+      cashFlow: r.cashFlow,
+      dscr: r.dscr,
+      capRate: r.capRate,
+      spread: r.spread,
+      zestimate: r.zestimate,
+      firstSeen: r.firstSeen,
+      promotedDealId: r.promotedDealId,
+      hasOwnerSignal:
+        (r.offMarketSignals?.length ?? 0) > 0 || r.offMarketBalances != null || r.offMarketConditionScore != null,
+    }));
+  },
+});
+
+/**
+ * The caller's per-user board state: every triage row (prefix scan on
+ * by_user_listing; rows are ~100 bytes) plus the "last looked" watermark. This is
+ * the only board query a P/S keystroke or markSeen invalidates.
+ */
+export const boardState = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUser(ctx);
+    const rows = await ctx.db
+      .query("monitorTriage")
+      .withIndex("by_user_listing", (q) => q.eq("userId", userId))
+      .collect();
+    const seen = await ctx.db
+      .query("monitorSeen")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    return {
+      triage: rows.map((t) => ({ listingId: t.listingId, ...pickTriage(t)! })),
+      lastSeenAt: seen?.lastSeenAt ?? null,
+    };
+  },
+});
+
+/**
+ * One listing + the caller's triage, for the deal sheet and the email deep link
+ * (/monitor?id=...). Takes a plain string: a garbage or foreign id returns null
+ * instead of throwing a validator error. Archived/non-keeper listings still open.
+ */
+export const listingForMe = query({
+  args: { id: v.string() },
+  handler: async (ctx, { id }) => {
+    const userId = await requireUser(ctx);
+    const lid = ctx.db.normalizeId("monitorListings", id);
+    if (!lid) return null;
+    const listing = await ctx.db.get(lid);
+    if (!listing) return null;
+    return { listing, triage: pickTriage(await triageFor(ctx, userId, lid)) };
+  },
+});
+
+/** Shortlist / unshortlist / pass(reason) / snooze 7d / restore — for the caller only. */
+export const setTriage = mutation({
+  args: {
+    listingId: v.id("monitorListings"),
+    action: v.union(
+      v.literal("shortlist"),
+      v.literal("unshortlist"),
+      v.literal("pass"),
+      v.literal("snooze"),
+      v.literal("restore"),
+    ),
+    reason: v.optional(passReasonV),
+  },
+  handler: async (ctx, { listingId, action, reason }): Promise<TriageState> => {
+    const userId = await requireUser(ctx);
+    if (!(await ctx.db.get(listingId))) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "That listing no longer exists." });
+    }
+    if (action === "pass" && !reason) {
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Pick a reason to pass." });
+    }
+    const now = Date.now();
+    const next = applyTriage(action === "pass" ? { kind: "pass", reason: reason! } : { kind: action }, now);
+    const existing = await triageFor(ctx, userId, listingId);
+    if (existing) {
+      // Write every field: keys absent from `next` become undefined = removed.
+      await ctx.db.patch(existing._id, {
+        passedAt: next.passedAt,
+        passReason: next.passReason,
+        shortlistedAt: next.shortlistedAt,
+        snoozedUntil: next.snoozedUntil,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("monitorTriage", { userId, listingId, ...next, updatedAt: now });
+    }
+    return next;
+  },
+});
+
+/** Stamp the caller's "last looked at the board" time (drives "N new since you looked"). */
+export const markSeen = mutation({
+  args: {},
+  handler: async (ctx): Promise<number> => {
+    const userId = await requireUser(ctx);
+    const now = Date.now();
+    const row = await ctx.db
+      .query("monitorSeen")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    if (row) await ctx.db.patch(row._id, { lastSeenAt: now });
+    else await ctx.db.insert("monitorSeen", { userId, lastSeenAt: now });
+    return now;
   },
 });
 
