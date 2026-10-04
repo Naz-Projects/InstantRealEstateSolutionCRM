@@ -28,6 +28,8 @@ export const MONITOR = {
   recheckDispatchDelayMs: 15 * 60 * 1000, // Lane B dispatch runs this long after the re-check starts, independent of the sweep
   alertTagFreshDays: 7,  // a PRICE CUT / BACK ON MARKET tag shows in the digest this long after the event
   recheckGraceMs: 12 * 60 * 60 * 1000, // due times are set minutes AFTER the 14:00 cron; without this grace a 3-day check drifts to 4
+  buyBoxMaxZips: 40,     // per-user buy box ZIP list cap (NCC has ~30 ZIPs)
+  buyBoxReadCap: 500,    // digest audience read cap on monitorBuyBoxes (one row per CRM user)
   ncc_bounds: { west: -75.97218944726562, east: -75.22237255273437, south: 39.36230086205304, north: 39.76777058263119 },
 } as const;
 
