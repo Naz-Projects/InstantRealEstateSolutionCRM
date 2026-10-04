@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { money, safeHref, verdictFor, type Tone } from "../../scraper/monitorPresent";
 import { triageStatus, type PassReason, type TriageState } from "../../scraper/monitorTriage";
 import { isNewSince } from "../lib/monitorBoard";
+import { AlertTagChip } from "./AlertTagChip";
 import { ExitBadge } from "./ExitBadge";
 import { PassMenu } from "./PassMenu";
 
@@ -107,6 +108,7 @@ export function BoardTable(p: BoardTableProps) {
                     <div className="flex items-center gap-2">
                       <span className="text-base font-semibold tabular-nums text-foreground">{r.dealScore ?? "—"}</span>
                       <ExitBadge exit={r.bestExit} />
+                      <AlertTagChip alertTag={r.alertTag} alertedEventAt={r.alertedEventAt} />
                     </div>
                   </TableCell>
                   <TableCell className="max-w-0">
@@ -179,6 +181,7 @@ export function BoardTable(p: BoardTableProps) {
                   </div>
                   <div className="flex min-w-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
                     <ExitBadge exit={r.bestExit} />
+                    <AlertTagChip alertTag={r.alertTag} alertedEventAt={r.alertedEventAt} />
                     <span>{r.dealScore ?? "—"}</span>
                     <span className="truncate">List {money(r.listPrice)}</span>
                   </div>

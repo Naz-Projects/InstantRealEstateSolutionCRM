@@ -13,6 +13,13 @@ export interface BoardRow extends PresentRow {
   firstSeen: number;
   propZip?: string | null;
   triage?: TriageState | null;
+  alertTag?: string;
+  alertedEventAt?: number;
+}
+
+// Phase 4 chip text from the digest tag: "PRICE CUT $10,000" -> "Price cut $10,000".
+export function alertChipLabel(tag: string): string {
+  return tag === "BACK ON MARKET" ? "Back on market" : tag.replace(/^PRICE CUT/, "Price cut");
 }
 
 export function inTab(r: BoardRow, tab: BoardTab, now: number): boolean {

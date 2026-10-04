@@ -18,6 +18,7 @@ import {
   analystNote, displayFlags, humanizeFlag, numberGroups, ownerSignal, safeHref, sellerMotivation,
 } from "../../scraper/monitorPresent";
 import { passReasonLabel, triageStatus, type PassReason } from "../../scraper/monitorTriage";
+import { AlertTagChip } from "./AlertTagChip";
 import { ExitBadge } from "./ExitBadge";
 import { PassMenu } from "./PassMenu";
 import { TONE_TEXT } from "./BoardTable";
@@ -133,6 +134,7 @@ export function DealSheet({
             <SheetHeader className="border-b border-border pr-12">
               <div className="flex flex-wrap items-center gap-2">
                 <ExitBadge exit={l.bestExit} />
+                <AlertTagChip alertTag={l.alertTag} alertedEventAt={l.alertedEventAt} />
                 <span className="text-sm font-semibold tabular-nums">{l.dealScore ?? "—"}</span>
                 {status === "passed" && <span className="text-xs text-muted-foreground">Passed: {passReasonLabel(data.triage?.passReason)}</span>}
                 {status === "snoozed" && data.triage?.snoozedUntil && (

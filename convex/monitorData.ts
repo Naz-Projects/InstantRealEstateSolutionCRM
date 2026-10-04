@@ -740,6 +740,8 @@ export const board = query({
       capRate: r.capRate,
       spread: r.spread,
       zestimate: r.zestimate,
+      alertTag: r.alertTag,             // Phase 4: PRICE CUT $X / BACK ON MARKET
+      alertedEventAt: r.alertedEventAt, // the client shows the tag only while fresh
       firstSeen: r.firstSeen,
       promotedDealId: r.promotedDealId,
       hasOwnerSignal:

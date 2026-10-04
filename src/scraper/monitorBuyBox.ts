@@ -71,6 +71,34 @@ export function normalizeBuyBox(i: BuyBoxInput): { ok: true; box: BuyBox } | { o
   };
 }
 
+// The /monitor buy box dialog's text fields. The form only parses text; normalizeBuyBox
+// on the server stays authoritative (e.g. min price above max price).
+export interface BuyBoxForm { zips: string; priceMin: string; priceMax: string; minBeds: string; minFlipProfit: string; minCashFlow: string }
+const FORM_NUMS = ["priceMin", "priceMax", "minBeds", "minFlipProfit", "minCashFlow"] as const;
+
+export function buyBoxToForm(b: BuyBox | null): BuyBoxForm {
+  const s = (n: number | undefined) => (n == null ? "" : String(n));
+  return {
+    zips: b ? b.zips.join(", ") : "", priceMin: s(b?.priceMin), priceMax: s(b?.priceMax), minBeds: s(b?.minBeds),
+    minFlipProfit: s(b?.minFlipProfit), minCashFlow: s(b?.minCashFlow),
+  };
+}
+
+// Form text -> saveMyBuyBox args: "" = any (omitted), "$250,000" -> 250000, junk rejected.
+export function buyBoxFormArgs(f: BuyBoxForm, exits: BuyBoxExit[]): { ok: true; args: BuyBoxInput } | { ok: false; error: string } {
+  const z = parseZipList(f.zips);
+  if (z.invalid.length) return { ok: false, error: `Not a 5-digit ZIP: ${z.invalid[0]}` };
+  const args: BuyBoxInput = { zips: z.zips, exits };
+  for (const k of FORM_NUMS) {
+    const t = f[k].replace(/[$,\s]/g, "");
+    if (t === "") continue;
+    const n = Number(t);
+    if (!Number.isFinite(n)) return { ok: false, error: "Enter numbers only." };
+    args[k] = n;
+  }
+  return { ok: true, args };
+}
+
 export function isEmptyBuyBox(b: BuyBox): boolean {
   return b.zips.length === 0 && b.exits.length === 0 && b.priceMin == null && b.priceMax == null &&
     b.minBeds == null && b.minFlipProfit == null && b.minCashFlow == null;

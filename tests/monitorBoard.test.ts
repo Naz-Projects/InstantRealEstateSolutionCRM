@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   inTab, tabCounts, filterRows, sortRows, zipOptions, isNewSince, newSinceCount,
-  clampIndex, nextIndex, sheetStepIndex, boardKeyAction, type BoardRow,
+  clampIndex, nextIndex, sheetStepIndex, boardKeyAction, alertChipLabel, type BoardRow,
 } from "../src/web/lib/monitorBoard";
 
 const NOW = 1_800_000_000_000;
@@ -126,5 +126,12 @@ describe("boardKeyAction", () => {
   it("Enter on a focused button or link is left to the browser", () => {
     expect(boardKeyAction({ key: "Enter", target: { tagName: "BUTTON", closest: () => null } })).toBeNull();
     expect(boardKeyAction({ key: "Enter", target: { tagName: "A", closest: () => null } })).toBeNull();
+  });
+});
+
+describe("alertChipLabel", () => {
+  it("sentence-cases the digest tag for the board chip", () => {
+    expect(alertChipLabel("BACK ON MARKET")).toBe("Back on market");
+    expect(alertChipLabel("PRICE CUT $10,000")).toBe("Price cut $10,000");
   });
 });

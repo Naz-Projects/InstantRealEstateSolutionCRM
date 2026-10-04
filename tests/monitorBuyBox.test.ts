@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   parseZipList, normalizeBuyBox, isEmptyBuyBox, matchesBuyBox, planRecipientDigests, shouldStampDigest,
+  buyBoxFormArgs, buyBoxToForm,
   type BuyBox, type BuyBoxRow,
 } from "../src/scraper/monitorBuyBox";
 
@@ -98,5 +99,28 @@ describe("shouldStampDigest", () => {
     expect(shouldStampDigest(0, 0)).toBe(true);
     expect(shouldStampDigest(3, 1)).toBe(true);
     expect(shouldStampDigest(2, 0)).toBe(false);
+  });
+});
+
+describe("buy box form (dialog text <-> saveMyBuyBox args)", () => {
+  const blank = { zips: "", priceMin: "", priceMax: "", minBeds: "", minFlipProfit: "", minCashFlow: "" };
+  it("blank fields are omitted (= any); money text is parsed", () => {
+    expect(buyBoxFormArgs(blank, [])).toEqual({ ok: true, args: { zips: [], exits: [] } });
+    expect(buyBoxFormArgs({ ...blank, zips: "19805, 19806", priceMax: "$250,000", minBeds: " 3 ", minCashFlow: "-50" }, ["FLIP"]))
+      .toEqual({ ok: true, args: { zips: ["19805", "19806"], exits: ["FLIP"], priceMax: 250000, minBeds: 3, minCashFlow: -50 } });
+  });
+  it("reports a bad ZIP and non-numbers before sending", () => {
+    expect(buyBoxFormArgs({ ...blank, zips: "abc" }, [])).toEqual({ ok: false, error: "Not a 5-digit ZIP: abc" });
+    expect(buyBoxFormArgs({ ...blank, priceMin: "lots" }, [])).toEqual({ ok: false, error: "Enter numbers only." });
+  });
+  it("leaves min > max to the server (its message is authoritative)", () => {
+    expect(buyBoxFormArgs({ ...blank, priceMin: "300000", priceMax: "200000" }, []))
+      .toEqual({ ok: true, args: { zips: [], exits: [], priceMin: 300000, priceMax: 200000 } });
+  });
+  it("buyBoxToForm round-trips a saved box; null is a blank form", () => {
+    expect(buyBoxToForm(null)).toEqual(blank);
+    const f = buyBoxToForm(box({ zips: ["19805", "19711"], priceMin: 100000, minCashFlow: -50 }));
+    expect(f).toEqual({ ...blank, zips: "19805, 19711", priceMin: "100000", minCashFlow: "-50" });
+    expect(buyBoxFormArgs(f, [])).toEqual({ ok: true, args: { zips: ["19805", "19711"], exits: [], priceMin: 100000, minCashFlow: -50 } });
   });
 });

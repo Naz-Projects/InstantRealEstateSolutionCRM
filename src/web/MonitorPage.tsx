@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MonitorBuyBoxButton } from "./MonitorBuyBoxDialog";
 import { describeError } from "./lib/errorReporting";
 import {
   boardKeyAction, clampIndex, filterRows, inTab, newSinceCount, nextIndex, sheetStepIndex, sortRows, tabCounts, zipOptions,
@@ -142,7 +143,8 @@ export function MonitorPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // The custom ConfirmDialog (Run now) is role="dialog" aria-modal: no board keys behind it.
-      if (document.querySelector('[role="dialog"][aria-modal="true"]:not([data-slot="sheet-content"])')) return;
+      // Same for the Radix buy box dialog (no aria-modal, so matched by its slot).
+      if (document.querySelector('[role="dialog"][aria-modal="true"]:not([data-slot="sheet-content"]),[data-slot="dialog-content"]')) return;
       const a = boardKeyAction({ key: e.key, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, target: e.target as HTMLElement | null });
       if (!a) return;
       // With the sheet open (incl. a deep link), J/K start from the open deal; if P/S/
@@ -195,7 +197,10 @@ export function MonitorPage() {
             </>
           )}
         </p>
-        {me?.role === "admin" && <RunNow />}
+        <div className="flex items-center gap-2">
+          <MonitorBuyBoxButton />
+          {me?.role === "admin" && <RunNow />}
+        </div>
       </div>
 
       {/* Toolbar: tabs + filters + sort */}
