@@ -19,13 +19,19 @@
 // enough to give Firecrawl's proxy rotation a chance to clear the block before the
 // next attempt, unlike the tight backoff in src/scraper/firecrawl.ts's withRetry.
 
-import { extractNextData } from "../src/scraper/monitorListings";
+import { extractNextData, MONITOR } from "../src/scraper/monitorListings";
 import { buildRedfinSoldUrl } from "../src/scraper/comps";
 
 const FIRECRAWL_V2_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape";
 const RETRY_GAPS_MS = [0, 12_000, 28_000, 50_000];
 const SHELL_MIN_LEN = 50_000;
 const FETCH_TIMEOUT_MS = 150_000;
+
+// First attempt may reuse a <=1h Firecrawl cache hit; every retry forces a live scrape
+// (a cached bot-block shell would otherwise be served again).
+function attemptMaxAge(attempt: number): number {
+  return attempt === 0 ? MONITOR.scrapeMaxAgeMs : 0;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -58,6 +64,7 @@ async function firecrawlV2Scrape(
   proxy: "enhanced" | "auto",
   formats: string[],
   timeoutMs: number,
+  maxAge: number,
 ): Promise<V2ScrapeData | null> {
   try {
     const res = await fetch(FIRECRAWL_V2_SCRAPE_URL, {
@@ -71,6 +78,7 @@ async function firecrawlV2Scrape(
         formats,
         proxy,
         waitFor: 5000,
+        maxAge,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -106,9 +114,9 @@ export async function scrapeZillowJson(
 
   const gaps = budget?.gaps ?? RETRY_GAPS_MS;
   const timeoutMs = budget?.timeoutMs ?? FETCH_TIMEOUT_MS;
-  for (const gap of gaps) {
-    if (gap > 0) await sleep(gap + Math.random() * 2000);
-    const data = await firecrawlV2Scrape(url, apiKey, "enhanced", ["rawHtml"], timeoutMs);
+  for (let i = 0; i < gaps.length; i++) {
+    if (gaps[i] > 0) await sleep(gaps[i] + Math.random() * 2000);
+    const data = await firecrawlV2Scrape(url, apiKey, "enhanced", ["rawHtml"], timeoutMs, attemptMaxAge(i));
     if (!data || data.rawHtml.length < SHELL_MIN_LEN) continue;
     const nextData = extractNextData(data.rawHtml);
     if (!nextData) continue;
@@ -134,9 +142,9 @@ export async function scrapeRedfinMarkdown(
   const gaps = budget?.gaps ?? RETRY_GAPS_MS;
   const timeoutMs = budget?.timeoutMs ?? FETCH_TIMEOUT_MS;
   const url = buildRedfinSoldUrl(zip);
-  for (const gap of gaps) {
-    if (gap > 0) await sleep(gap + Math.random() * 2000);
-    const data = await firecrawlV2Scrape(url, apiKey, "auto", ["rawHtml", "markdown"], timeoutMs);
+  for (let i = 0; i < gaps.length; i++) {
+    if (gaps[i] > 0) await sleep(gaps[i] + Math.random() * 2000);
+    const data = await firecrawlV2Scrape(url, apiKey, "auto", ["rawHtml", "markdown"], timeoutMs, attemptMaxAge(i));
     if (!data || data.rawHtml.length < SHELL_MIN_LEN) continue;
     return data.markdown;
   }

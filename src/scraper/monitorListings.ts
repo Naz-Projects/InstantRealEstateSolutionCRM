@@ -3,6 +3,9 @@ export const MONITOR = {
   priceCeiling: 500000, minListPrice: 1000, dozDays: "7", sort: "days",
   spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06, distressScoreFloor: 30,
   keeperRetireDays: 30, // keepers older than this age off the /monitor board (archivedAt)
+  // Firecrawl v2 cache: first attempt accepts a page cached <= 1h; retries force a live
+  // scrape (maxAge 0). Unset, v2 defaults to a 2-day cache (lessons 2026-10-03).
+  scrapeMaxAgeMs: 60 * 60 * 1000,
   ncc_bounds: { west: -75.97218944726562, east: -75.22237255273437, south: 39.36230086205304, north: 39.76777058263119 },
 } as const;
 
