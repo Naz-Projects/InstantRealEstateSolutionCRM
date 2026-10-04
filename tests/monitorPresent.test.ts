@@ -99,6 +99,24 @@ describe("humanizeFlag / displayFlags", () => {
     expect(humanizeFlag("foundation_crack_risk")).toBe("Foundation crack risk");
     expect(humanizeFlag("stop-work order on file")).toBe("Stop-work order on file");
   });
+  it("never leaks camelCase keys or slug lists from prod judge output", () => {
+    expect(humanizeFlag("ownerTenureYears: 1 (recent purchase flag)")).toBe("Owner tenure years: 1 (recent purchase flag)");
+    expect(humanizeFlag("flipMargin%: -28.9")).toBe("Flip margin%: -28.9");
+    expect(humanizeFlag("flipMargin% negative")).toBe("Flip margin% negative");
+    expect(humanizeFlag("rentalCapRate n/a")).toBe("Rental cap rate n/a");
+    expect(humanizeFlag("eraHazards present")).toBe("Era hazards present");
+    expect(humanizeFlag("Verify rehabTier 'gut' vs description")).toBe("Verify rehab tier 'gut' vs description");
+    expect(humanizeFlag("eraHazards: lead_paint_pre1978, asbestos_era_pre1980"))
+      .toBe("Lead paint era (pre-1978), asbestos era (pre-1980)");
+    expect(humanizeFlag("tenant_occupied: access/transition risk")).toBe("Tenant occupied: access/transition risk");
+    expect(humanizeFlag("ownerTenureYears: 0 (recent_purchase_flag)")).toBe("Owner tenure years: 0 (recent purchase flag)");
+  });
+  it("maps every city-high-risk spelling to one label (so displayFlags dedupes them)", () => {
+    for (const f of ["zip_city_high_risk", "city-high-risk zip", "city-high-risk_zip"]) {
+      expect(humanizeFlag(f)).toBe("Wilmington city ZIP (higher risk)");
+    }
+    expect(displayFlags({ redFlags: ["zip_city_high_risk", "zipTier: city-high-risk"] })).toEqual(["Wilmington city ZIP (higher risk)"]);
+  });
   it("displayFlags: judge flags first, then pipeline flags, humanized and de-duplicated", () => {
     expect(displayFlags({ redFlags: ["sparse_photos", "Stop-work order"], riskFlags: ["heavy-rehab", "photoSignal: sparse_photos"] }))
       .toEqual(["Few listing photos", "Stop-work order", "Heavy rehab"]);

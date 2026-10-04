@@ -109,7 +109,10 @@ export function DealSheet({
     <Sheet open={!!id} onOpenChange={(o) => { if (!o) { setErrFor(null); onClose(); } }}>
       <SheetContent
         side="right"
-        className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        className="gap-0 p-0 outline-none data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        // Focus the panel, not its first button: Radix would focus Promote, and the
+        // Enter that opened the deal pressed again would promote it.
+        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}
         // Loading / not-found states have no SheetDescription (avoids the Radix warning).
         {...(data && data.listing ? {} : { "aria-describedby": undefined })}
       >
@@ -144,7 +147,8 @@ export function DealSheet({
 
             <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
               {photos.length > 0 && (
-                <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4">
+                // shrink-0: an overflow-x-auto flex child has min-height 0 and collapses in the column scroll body.
+                <div className="-mx-4 flex shrink-0 snap-x scroll-px-4 gap-2 overflow-x-auto px-4">
                   {photos.map((u, i) => (
                     <img key={u} src={u} alt={i === 0 ? l.address : ""} loading="lazy" className="h-40 w-60 shrink-0 snap-start rounded-lg bg-muted object-cover" />
                   ))}

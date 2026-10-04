@@ -106,7 +106,7 @@ export function buildDigest(rows: DigestRow[], o: DigestOpts): { subject: string
     `IRES MONITOR\n${title}\nNew Castle County · ${o.date}\n\n` +
     `${rows.map((r) => cardText(r, o)).join("\n\n")}\n\n` +
     `${footerLabel}: ${board}\nIRES CRM · automated nightly scan\n`;
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:${C.wash};">
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:0;background:${C.wash};">
 <div style="background:${C.wash};padding:20px 12px;font-family:${FONT};">
   <div style="max-width:600px;margin:0 auto;">
     <div style="padding:0 4px 14px;">

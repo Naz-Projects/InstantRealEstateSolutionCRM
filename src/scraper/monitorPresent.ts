@@ -80,6 +80,9 @@ const FLAG_LABELS: Record<string, string> = {
   sparse_photos: "Few listing photos",
   retail_staging: "Staged for retail buyers",
   "city-high-risk": "Wilmington city ZIP (higher risk)",
+  zip_city_high_risk: "Wilmington city ZIP (higher risk)",
+  "city-high-risk zip": "Wilmington city ZIP (higher risk)",
+  "city-high-risk_zip": "Wilmington city ZIP (higher risk)",
   "suburb-standard": "Standard suburban ZIP",
   "suburb-premium": "Premium suburban ZIP",
   lead_paint_pre1978: "Lead paint era (pre-1978)",
@@ -108,6 +111,9 @@ const REWRITES: Array<[RegExp, string]> = [
 ];
 const SLUG = /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/i;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// "ownerTenureYears" -> "owner tenure years" (the judge echoes dealSignals keys).
+const decamel = (s: string) =>
+  s.replace(/\b([a-z]+)((?:[A-Z][a-z]*)+)\b/g, (_, a: string, b: string) => `${a} ${b.replace(/([A-Z])/g, " $1").trim().toLowerCase()}`);
 
 export function humanizeFlag(raw: string): string {
   const s = raw.trim().replace(KEY_PREFIX, "");
@@ -115,7 +121,14 @@ export function humanizeFlag(raw: string): string {
   for (const [re, to] of REWRITES) if (re.test(s)) return s.replace(re, to);
   const noVerify = s.replace(/\s*\(VERIFY\)$/i, "");
   if (SLUG.test(noVerify) && !/\s/.test(noVerify)) return cap(noVerify.replace(/[_-]+/g, " ").toLowerCase());
-  return cap(noVerify);
+  // A list of slugs ("eraHazards: lead_paint_pre1978, asbestos_era_pre1980").
+  const parts = noVerify.split(/\s*,\s*/);
+  if (parts.length > 1 && parts.every((p) => SLUG.test(p))) {
+    return parts.map((p, i) => { const h = humanizeFlag(p); return i ? h.charAt(0).toLowerCase() + h.slice(1) : h; }).join(", ");
+  }
+  // Slug words inside free text ("tenant_occupied: ...", "(recent_purchase_flag)").
+  const words = noVerify.replace(/\b[a-z0-9]+(?:_[a-z0-9]+)+\b/gi, (k) => k.replace(/_+/g, " "));
+  return cap(decamel(words));
 }
 
 // Judge red flags first (most specific), then pipeline flags; humanized, de-duplicated.

@@ -53,6 +53,10 @@ describe("buildDigest", () => {
     expect(d.html).toContain("2 worth a look");
     expect(buildDigest([FLIP], OPTS).subject).toBe("IRES Monitor: 1 worth a look");
   });
+  it("declares UTF-8 and a mobile viewport (the em dash and ellipsis must not turn into mojibake)", () => {
+    expect(d.html).toMatch(/<head><meta charset="utf-8">/);
+    expect(d.html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
+  });
   it("one Review deal CTA per card, deep-linked", () => {
     expect(d.html.match(/>Review deal</g)).toHaveLength(2);
     expect(d.html).toContain('href="https://crm.example.com/monitor?id=abc123"');

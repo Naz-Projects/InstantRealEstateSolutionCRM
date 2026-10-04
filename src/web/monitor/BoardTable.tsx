@@ -178,10 +178,10 @@ export function BoardTable(p: BoardTableProps) {
                     {status === "new" && isNewSince(r, p.lastSeenAt) && <NewDot />}
                     <span className="truncate text-sm font-medium text-foreground">{r.address}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+                  <div className="flex min-w-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
                     <ExitBadge exit={r.bestExit} />
                     <span>{r.dealScore ?? "—"}</span>
-                    <span>List {money(r.listPrice)}</span>
+                    <span className="truncate">List {money(r.listPrice)}</span>
                   </div>
                   <div className="flex items-baseline gap-1.5 text-xs tabular-nums">
                     <span className={cn("font-semibold", TONE_TEXT[v.tone])}>{v.value}</span>
