@@ -139,7 +139,9 @@ export function digestRecipients(userEmails: Array<string | null | undefined>, f
 export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds: number | null; zestimate: number | null; homeType?: string; }):
   { arv: number | null; source: "comps" | "zestimate" | "none"; compsPpsf: number | null; compsCount: number } {
   const manufactured = (opts.homeType || "").toUpperCase() === "MANUFACTURED";
-  if (manufactured) return { arv: opts.zestimate ?? null, source: opts.zestimate ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
+  // sqft unknown (null/0) -> comps $/sqft can't price it and the median-soldPrice
+  // fallback crosses sizes/types (08-08 lesson): Zestimate or nothing (VERIFY flag).
+  if (manufactured || !(opts.sqft != null && opts.sqft > 0)) return { arv: opts.zestimate ?? null, source: opts.zestimate ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
   const sel = selectComps(opts.comps, { sqft: opts.sqft, beds: opts.beds });
   const sug = suggestArv(sel, opts.sqft);
   if (sug.arv == null) return { arv: opts.zestimate ?? null, source: opts.zestimate ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
@@ -148,7 +150,8 @@ export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds
   return { arv, source: "comps", compsPpsf: sug.pricePerSqft, compsCount: sug.count };
 }
 
-const GUT = /fire|flood|gut|shell|structural|severe|full rehab|full renovation|complete renovation|tear down|needs everything/i;
+// Word-bounded: bare "fire" matched fireplace/firepit and forced a $95/sqft gut tier.
+const GUT = /\b(fire|flood|water|smoke|storm)(\s+and\s+(fire|flood|water|smoke))?[\s-]+damaged?\b|\bgut(ted)?\b|\bshell\b|\bstructural\b|\bsevere\b|\bfull (rehab|renovation)\b|\bcomplete renovation\b|\btear[\s-]?down\b|\bneeds everything\b/i;
 const COSMETIC = /updated|renovated|remodel|move.?in|turn.?key|shows like new|refreshed|pride of ownership|new (kitchen|roof|hvac|appliances)/i;
 const MODERATE = /needs? (work|updating|tlc|repairs|renovation)|\bdated\b|handyman|investor|value.?add|personal touch|bring your (vision|contractor|imagination)|fixer|sold (strictly )?as.?is|cash only|may not qualify/i;
 export function inferRehabTier(description: string): "cosmetic" | "moderate" | "gut" {
@@ -261,7 +264,7 @@ export function evaluateDeal(i: DealInput): DealDecision {
     : "PASS";
   return { belowMarket, spread, spreadPct, flip, rental, ...s, bestExit, keeper: flipOk || rentalOk || belowMarket };
 }
-export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean }): string[] {
+export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean; sqftKnown?: boolean }): string[] {
   const f: string[] = [];
   if ((r.homeType || "").toUpperCase() === "MANUFACTURED") f.push("MANUFACTURED (comps/lot-rent suspect)");
   if (r.monthlyHoaFee && r.monthlyHoaFee > 250) f.push("HIGH-HOA $" + r.monthlyHoaFee + "/mo");
@@ -269,6 +272,7 @@ export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null;
   if (r.rehabTier === "gut") f.push("heavy-rehab");
   if (r.zestimate && r.compsArv && r.compsArv > r.zestimate * 1.5) f.push("comps>>Zestimate (ARV suspect)");
   if (r.detailOk === false) f.push("detail-missing (VERIFY)");
+  if (r.sqftKnown === false) f.push("sqft-missing (VERIFY)");
   return f;
 }
 

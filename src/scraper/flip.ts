@@ -50,14 +50,15 @@ export interface RehabEstimate {
   total: number | null;
 }
 
-/** Tiered rehab estimate: override wins; else perSqft * sqft; + contingency. */
+/** Tiered rehab estimate: override wins; else perSqft * sqft; + contingency.
+ *  sqft 0/negative is UNKNOWN (null), never a $0 rehab. */
 export function estimateRehab(
   perSqft: number,
   sqft: number | null,
   contingencyPct: number,
   override?: number | null,
 ): RehabEstimate {
-  const base = override != null ? override : sqft != null ? perSqft * sqft : null;
+  const base = override != null ? override : sqft != null && sqft > 0 ? perSqft * sqft : null;
   if (base === null) return { base: null, contingency: null, total: null };
   const contingency = base * contingencyPct;
   return { base, contingency, total: base + contingency };

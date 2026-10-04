@@ -452,6 +452,7 @@ export const analyzeOne = internalAction({
         zestimate,
         compsArv: arvRes.source === "comps" ? arv : null,
         detailOk,
+        sqftKnown: sqft != null && sqft > 0,
       });
 
       // 8) Off-market cross-reference (internal query — no user identity).

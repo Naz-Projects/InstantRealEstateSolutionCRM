@@ -561,3 +561,40 @@ describe("cronScanEnabled (MONITOR_SCAN_ENABLED off-switch)", () => {
     expect(cronScanEnabled(" 0 ")).toBe(false);
   });
 });
+
+describe("sqft unknown (null/0) is never priced (08-08 lesson)", () => {
+  const comps = [mkComp(230000, 1100), mkComp(220000, 1100), mkComp(226000, 1100)];
+  it("conservativeArv: sqft 0 -> Zestimate, not the median-soldPrice fallback", () => {
+    const r = conservativeArv({ comps, sqft: 0, beds: 3, zestimate: 180000, homeType: "SINGLE_FAMILY" });
+    expect(r).toMatchObject({ arv: 180000, source: "zestimate", compsPpsf: null, compsCount: 0 });
+  });
+  it("conservativeArv: sqft null and no Zestimate -> ARV null", () => {
+    const r = conservativeArv({ comps, sqft: null, beds: 3, zestimate: null, homeType: "SINGLE_FAMILY" });
+    expect(r).toMatchObject({ arv: null, source: "none", compsPpsf: null, compsCount: 0 });
+  });
+  it("riskFlags: sqftKnown false -> VERIFY flag; true/omitted -> none", () => {
+    expect(riskFlags({ sqftKnown: false })).toContain("sqft-missing (VERIFY)");
+    expect(riskFlags({ sqftKnown: true })).not.toContain("sqft-missing (VERIFY)");
+    expect(riskFlags({})).not.toContain("sqft-missing (VERIFY)");
+  });
+});
+
+describe("GUT regex is word-bounded (fireplace is not fire damage)", () => {
+  it("fireplace / firepit / flooring do not read as gut", () => {
+    expect(inferRehabTier("Cozy brick fireplace and a backyard firepit")).toBe("moderate");
+    expect(inferRehabTier("New flooring, updated kitchen, move-in ready")).toBe("cosmetic");
+    expect(inferRehabTier("Structurally sound, needs TLC")).toBe("moderate");
+  });
+  it("real damage / gut language still reads as gut", () => {
+    expect(inferRehabTier("Fire damage in rear bedroom")).toBe("gut");
+    expect(inferRehabTier("fire and water damage throughout")).toBe("gut");
+    expect(inferRehabTier("Water-damaged basement")).toBe("gut");
+    expect(inferRehabTier("Gutted to the studs")).toBe("gut");
+    expect(inferRehabTier("Needs a gut rehab")).toBe("gut");
+    expect(inferRehabTier("Structural issues, sold as-is")).toBe("gut");
+  });
+  it("side effect: a renovated listing with a fireplace is now detected as renovated", () => {
+    // detectRenovated requires !GUT; "fireplace" used to match GUT and hide the renovation.
+    expect(detectRenovated("Fully renovated colonial with a wood-burning fireplace")).toBe(true);
+  });
+});

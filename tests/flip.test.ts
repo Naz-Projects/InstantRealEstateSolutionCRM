@@ -80,3 +80,12 @@ describe("computeFlip", () => {
     expect(m.flags).toContain("missing-arv");
   });
 });
+
+describe("estimateRehab sqft guard", () => {
+  it("sqft 0 is unknown -> nulls (never a $0 rehab)", () => {
+    expect(estimateRehab(42, 0, 0.10)).toEqual({ base: null, contingency: null, total: null });
+  });
+  it("an explicit override still wins with sqft 0", () => {
+    expect(estimateRehab(42, 0, 0.10, 20000).total).toBe(22000);
+  });
+});
