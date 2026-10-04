@@ -102,24 +102,25 @@ describe("detailFromCache", () => {
   });
 });
 
+const NOW = Date.parse("2026-10-01T00:00:00Z");
 const mkComp = (soldPrice: number, sqft: number, beds = 4): Comp =>
   ({ address: "x", soldDate: "MAY 1, 2026", soldPrice, beds, baths: 2, sqft, pricePerSqft: soldPrice / sqft });
 
 describe("conservativeArv", () => {
   it("caps comps at 1.15x Zestimate when comps are inflated", () => {
     const comps = [mkComp(700000, 3101), mkComp(720000, 3101), mkComp(740000, 3101)];
-    const r = conservativeArv({ comps, sqft: 3101, beds: 3, zestimate: 311400, homeType: "SINGLE_FAMILY" });
+    const r = conservativeArv({ comps, sqft: 3101, beds: 3, zestimate: 311400, homeType: "SINGLE_FAMILY", now: NOW });
     expect(r.arv).toBe(Math.round(311400 * 1.15)); // capped
   });
   it("uses comps when consistent with Zestimate", () => {
     const comps = [mkComp(230000, 1100), mkComp(220000, 1100), mkComp(226000, 1100)];
-    const r = conservativeArv({ comps, sqft: 1100, beds: 3, zestimate: 176200, homeType: "SINGLE_FAMILY" });
+    const r = conservativeArv({ comps, sqft: 1100, beds: 3, zestimate: 176200, homeType: "SINGLE_FAMILY", now: NOW });
     expect(r.source).toBe("comps");
     expect(r.arv).toBeLessThanOrEqual(Math.round(176200 * 1.15));
   });
   it("manufactured -> Zestimate only (comps invalid)", () => {
     const comps = [mkComp(270000, 1019), mkComp(260000, 1019), mkComp(280000, 1019)];
-    const r = conservativeArv({ comps, sqft: 1019, beds: 2, zestimate: 90000, homeType: "MANUFACTURED" });
+    const r = conservativeArv({ comps, sqft: 1019, beds: 2, zestimate: 90000, homeType: "MANUFACTURED", now: NOW });
     expect(r.source).toBe("zestimate");
     expect(r.arv).toBe(90000);
   });
@@ -565,11 +566,11 @@ describe("cronScanEnabled (MONITOR_SCAN_ENABLED off-switch)", () => {
 describe("sqft unknown (null/0) is never priced (08-08 lesson)", () => {
   const comps = [mkComp(230000, 1100), mkComp(220000, 1100), mkComp(226000, 1100)];
   it("conservativeArv: sqft 0 -> Zestimate, not the median-soldPrice fallback", () => {
-    const r = conservativeArv({ comps, sqft: 0, beds: 3, zestimate: 180000, homeType: "SINGLE_FAMILY" });
+    const r = conservativeArv({ comps, sqft: 0, beds: 3, zestimate: 180000, homeType: "SINGLE_FAMILY", now: NOW });
     expect(r).toMatchObject({ arv: 180000, source: "zestimate", compsPpsf: null, compsCount: 0 });
   });
   it("conservativeArv: sqft null and no Zestimate -> ARV null", () => {
-    const r = conservativeArv({ comps, sqft: null, beds: 3, zestimate: null, homeType: "SINGLE_FAMILY" });
+    const r = conservativeArv({ comps, sqft: null, beds: 3, zestimate: null, homeType: "SINGLE_FAMILY", now: NOW });
     expect(r).toMatchObject({ arv: null, source: "none", compsPpsf: null, compsCount: 0 });
   });
   it("riskFlags: sqftKnown false -> VERIFY flag; true/omitted -> none", () => {

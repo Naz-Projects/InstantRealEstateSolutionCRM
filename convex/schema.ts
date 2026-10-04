@@ -635,7 +635,8 @@ export default defineSchema({
     // valuation + keeper math
     zestimate: v.optional(v.number()),
     rentZestimate: v.optional(v.number()),
-    conservativeArv: v.optional(v.number()),
+    conservativeArv: v.optional(v.number()), // after-repair value (75th-pct comps $/sqft since Phase 2)
+    asIsValue: v.optional(v.number()), // as-is value (median comps $/sqft) — no-Zestimate spread basis
     arvSource: v.optional(v.string()), // "comps"|"zestimate"|"none"
     compsPpsf: v.optional(v.number()),
     compsCount: v.optional(v.number()),

@@ -76,6 +76,7 @@ const analysisFields = v.object({
   zestimate: v.optional(v.number()),
   rentZestimate: v.optional(v.number()),
   conservativeArv: v.optional(v.number()),
+  asIsValue: v.optional(v.number()),
   arvSource: v.optional(v.string()),
   compsPpsf: v.optional(v.number()),
   compsCount: v.optional(v.number()),

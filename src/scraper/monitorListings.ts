@@ -4,6 +4,9 @@ export const MONITOR = {
   spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06,
   flipProfitFloor: 25000, // FLIP keeper floor: profit >= $25K AND margin >= flipMarginBar (research §1.3)
   cashFlowFloor: 0, // RENTAL keeper floor: cap >= capRateBar AND monthly cash flow >= this
+  // Comps (Phase 2): same type, sold <= compMaxAgeDays, nearest ring with >= compMinCount.
+  compRadiiMi: [0.5, 1], compMinCount: 3, compMaxCount: 10, compMaxAgeDays: 183,
+  arvPercentile: 0.75, // ARV = 75th-pct comps $/sqft (renovated proxy); as-is = median
   keeperRetireDays: 30, // keepers older than this age off the /monitor board (archivedAt)
   // Firecrawl v2 cache: first attempt accepts a page cached <= 1h; retries force a live
   // scrape (maxAge 0). Unset, v2 defaults to a 2-day cache (lessons 2026-10-03).
@@ -94,7 +97,7 @@ export function detailFromCache(nextData: any): ListingDetail | null {
   };
 }
 
-import { selectComps, suggestArv, type Comp } from "./comps";
+import type { Comp, CompType } from "./comps";
 import { estimateRehab, computeFlip, FLIP_DEFAULTS, REHAB_TIERS, type FlipAssumptions } from "./flip";
 export { estimateRehab };
 
@@ -136,18 +139,84 @@ export function digestRecipients(userEmails: Array<string | null | undefined>, f
   return out;
 }
 
-export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds: number | null; zestimate: number | null; homeType?: string; }):
-  { arv: number | null; source: "comps" | "zestimate" | "none"; compsPpsf: number | null; compsCount: number } {
+// Subject -> Redfin comp class. null = type unknown (never priced off typed comps).
+export function subjectCompType(homeType: string | null | undefined): CompType | null {
+  const t = (homeType || "").trim().toUpperCase();
+  return t === "TOWNHOUSE" ? "townhouse" : t === "SINGLE_FAMILY" ? "sfr" : null;
+}
+
+// Great-circle distance in miles (haversine).
+export function distanceMi(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 3958.8 * Math.asin(Math.sqrt(h));
+}
+
+export interface CompSubject { lat: number | null; lng: number | null; sqft: number; beds: number | null; compType: CompType | null; }
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Monitor comp selection (replaces the ZIP-wide "first 8"): same home type ->
+ * sold within compMaxAgeDays -> nearest ring with >= compMinCount (0.5 mi, then 1 mi,
+ * else the whole same-type ZIP pool) -> sqft +-30% / beds +-1 band when it still
+ * leaves enough -> nearest first, capped. Typed comps never widen across types
+ * (08-08 lesson); untyped legacy rows (markdown fallback / pre-deploy zipComps
+ * cache) carry no type or coords and pass those two steps unfiltered.
+ */
+export function selectMonitorComps(comps: Comp[], s: CompSubject, now: number): Comp[] {
+  let pool = comps.filter((c) => c.pricePerSqft != null);
+  if (pool.some((c) => c.propertyType)) {
+    if (!s.compType) return [];
+    pool = pool.filter((c) => c.propertyType === s.compType);
+  }
+  pool = pool.filter((c) => c.soldAt == null || now - c.soldAt <= MONITOR.compMaxAgeDays * DAY_MS);
+  const dist = (c: Comp): number | null =>
+    s.lat != null && s.lng != null && c.lat != null && c.lng != null ? distanceMi(s.lat, s.lng, c.lat, c.lng) : null;
+  for (const r of MONITOR.compRadiiMi) {
+    const ring = pool.filter((c) => { const d = dist(c); return d != null && d <= r; });
+    if (ring.length >= MONITOR.compMinCount) { pool = ring; break; }
+  }
+  const band = pool.filter((c) =>
+    c.sqft != null && c.sqft >= s.sqft * 0.7 && c.sqft <= s.sqft * 1.3 &&
+    (s.beds == null || c.beds == null || Math.abs(c.beds - s.beds) <= 1));
+  if (band.length >= MONITOR.compMinCount) pool = band;
+  const key = (c: Comp) => dist(c) ?? Number.MAX_VALUE;
+  return [...pool].sort((a, b) => key(a) - key(b)).slice(0, MONITOR.compMaxCount);
+}
+
+// Linear-interpolated percentile of an ASCENDING array (p in 0..1).
+function percentile(sorted: number[], p: number): number {
+  const idx = p * (sorted.length - 1);
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+export interface Valuation {
+  arv: number | null;       // after-repair: 75th-pct comps $/sqft x sqft (renovated proxy), capped 1.15 x Zestimate
+  asIsValue: number | null; // as-is: median comps $/sqft x sqft (the no-Zestimate spread basis)
+  source: "comps" | "zestimate" | "none";
+  compsPpsf: number | null; // median $/sqft (dealSignals' ppsf discount)
+  compsCount: number;
+}
+export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds: number | null; zestimate: number | null; homeType?: string; lat?: number | null; lng?: number | null; now: number }): Valuation {
+  const z = opts.zestimate ?? null;
+  const fallback: Valuation = { arv: z, asIsValue: z, source: z ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
   const manufactured = (opts.homeType || "").toUpperCase() === "MANUFACTURED";
   // sqft unknown (null/0) -> comps $/sqft can't price it and the median-soldPrice
   // fallback crosses sizes/types (08-08 lesson): Zestimate or nothing (VERIFY flag).
-  if (manufactured || !(opts.sqft != null && opts.sqft > 0)) return { arv: opts.zestimate ?? null, source: opts.zestimate ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
-  const sel = selectComps(opts.comps, { sqft: opts.sqft, beds: opts.beds });
-  const sug = suggestArv(sel, opts.sqft);
-  if (sug.arv == null) return { arv: opts.zestimate ?? null, source: opts.zestimate ? "zestimate" : "none", compsPpsf: null, compsCount: 0 };
-  let arv = sug.arv;
-  if (opts.zestimate && arv > opts.zestimate * 1.15) arv = Math.round(opts.zestimate * 1.15); // cap inflated comps
-  return { arv, source: "comps", compsPpsf: sug.pricePerSqft, compsCount: sug.count };
+  if (manufactured || opts.sqft == null || !(opts.sqft > 0)) return fallback;
+  const sel = selectMonitorComps(opts.comps, {
+    lat: opts.lat ?? null, lng: opts.lng ?? null, sqft: opts.sqft, beds: opts.beds, compType: subjectCompType(opts.homeType),
+  }, opts.now);
+  if (sel.length < MONITOR.compMinCount) return fallback;
+  const ppsf = sel.map((c) => c.pricePerSqft as number).sort((a, b) => a - b);
+  const med = percentile(ppsf, 0.5);
+  let arv = Math.round(percentile(ppsf, MONITOR.arvPercentile) * opts.sqft);
+  // Sanity cap kept: Zestimate ~ as-is value, so 1.15x bounds the renovation uplift
+  // (research §1.1: renovated premium ~$25-35/sqft) and still catches type/size-skewed pools.
+  if (z && arv > z * 1.15) arv = Math.round(z * 1.15);
+  return { arv, asIsValue: Math.round(med * opts.sqft), source: "comps", compsPpsf: Math.round(med), compsCount: sel.length };
 }
 
 // Word-bounded: bare "fire" matched fireplace/firepit and forced a $95/sqft gut tier.
@@ -281,6 +350,7 @@ export interface StoredListing {
   listPrice?: number;
   zestimate?: number;
   conservativeArv?: number;
+  asIsValue?: number;
   sqft?: number;
   rehabEstimate?: number;
   rentZestimate?: number;
@@ -293,7 +363,8 @@ export function dealInputFromStored(r: StoredListing): DealInput {
   return {
     listPrice: r.listPrice ?? null,
     zestimate: r.zestimate ?? null,
-    valueBasis: arv,
+    // Old rows have no asIsValue; their median-based conservativeArv is as-is-like.
+    valueBasis: sqftKnown ? (r.asIsValue ?? arv) : arv,
     arv,
     rehabTotal: !sqftKnown ? null : r.description ? keywordRehab(r.description, r.sqft!).total : (r.rehabEstimate ?? null),
     rent: r.rentZestimate ?? null,

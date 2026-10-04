@@ -411,7 +411,7 @@ export const analyzeOne = internalAction({
 
       // 3) Comps → conservative ARV (comps median $/sqft, capped vs Zestimate).
       const comps = zip ? await compsForZip(ctx, zip, apiKey) : [];
-      const arvRes = conservativeArv({ comps, sqft, beds: bedsNum, zestimate, homeType });
+      const arvRes = conservativeArv({ comps, sqft, beds: bedsNum, zestimate, homeType, lat: row.lat ?? null, lng: row.lng ?? null, now: Date.now() });
       const arv = arvRes.arv;
 
       // 4) Rehab tier + estimate.
@@ -422,7 +422,7 @@ export const analyzeOne = internalAction({
       const dealInput = {
         listPrice,
         zestimate,
-        valueBasis: arv,
+        valueBasis: arvRes.asIsValue,
         arv,
         rehabTotal,
         rent: rentZestimate,
@@ -528,6 +528,7 @@ export const analyzeOne = internalAction({
           ...(dealSignals.tenureYears != null ? { tenureYears: dealSignals.tenureYears } : {}),
           ...(dealSignals.zipTier ? { zipTier: dealSignals.zipTier } : {}),
           ...(arv != null ? { conservativeArv: arv } : {}),
+          ...(arvRes.asIsValue != null ? { asIsValue: arvRes.asIsValue } : {}),
           ...(arvRes.compsPpsf != null ? { compsPpsf: arvRes.compsPpsf } : {}),
           ...(spread != null ? { spread } : {}),
           ...(spreadPct != null ? { spreadPct } : {}),
