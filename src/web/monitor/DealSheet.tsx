@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { Link } from "@tanstack/react-router";
 import {
   AlarmClock, Calculator, CircleDashed, ClipboardCheck, ClipboardPlus, ExternalLink, Eye, History, Phone,
@@ -33,25 +34,29 @@ function Section({ title, icon, children }: { title: string; icon?: ReactNode; c
 // The deal side sheet. Its open state is the /monitor ?id= search param (deep link
 // from the digest email); garbage/foreign ids resolve to null in listingForMe.
 export function DealSheet({
-  id, passMenuOpen, onPassMenu, onClose, onError,
+  id, passMenuOpen, onPassMenu, onClose,
 }: {
   id: string | undefined;
   passMenuOpen: boolean;
   onPassMenu: (open: boolean) => void;
   onClose: () => void;
-  onError: (msg: string | null) => void;
 }) {
   const data = useQuery(api.monitorData.listingForMe, id ? { id } : "skip");
   const setTriage = useMutation(api.monitorData.setTriage);
   const promote = useMutation(api.potentialData.promoteToPotential);
   const markPromoted = useMutation(api.monitorData.markPromoted);
   const [busy, setBusy] = useState(false);
+  // Errors live in the sheet (the page's error line is hidden behind the modal
+  // overlay). Keyed by deal id so J/K to another deal never shows a stale error.
+  const [errFor, setErrFor] = useState<{ id: string; msg: string } | null>(null);
+  const err = errFor && errFor.id === id ? errFor.msg : null;
   const now = Date.now();
 
   const run = async (fn: () => Promise<unknown>) => {
-    onError(null);
+    const forId = id;
+    setErrFor(null);
     setBusy(true);
-    try { await fn(); } catch (e) { onError(describeError(e).message); } finally { setBusy(false); }
+    try { await fn(); } catch (e) { if (forId) setErrFor({ id: forId, msg: describeError(e).message }); } finally { setBusy(false); }
   };
 
   const l = data?.listing;
@@ -91,12 +96,23 @@ export function DealSheet({
       lat: l.lat ?? undefined,
       lng: l.lng ?? undefined,
     });
-    await markPromoted({ id: l._id, promotedDealId: res.id });
+    // promoteToPotential dedupes on the normalized address, so a retry after a
+    // failed link returns the same deal instead of creating a duplicate.
+    try {
+      await markPromoted({ id: l._id, promotedDealId: res.id });
+    } catch {
+      throw new ConvexError({ message: "Added to Potential, but this listing could not be marked as in pipeline. Press Promote again to link it (no duplicate is created)." });
+    }
   });
 
   return (
-    <Sheet open={!!id} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
+    <Sheet open={!!id} onOpenChange={(o) => { if (!o) { setErrFor(null); onClose(); } }}>
+      <SheetContent
+        side="right"
+        className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        // Loading / not-found states have no SheetDescription (avoids the Radix warning).
+        {...(data && data.listing ? {} : { "aria-describedby": undefined })}
+      >
         {data === undefined ? (
           <div className="flex flex-col gap-4 p-4">
             <SheetTitle className="sr-only">Loading deal</SheetTitle>
@@ -175,7 +191,7 @@ export function DealSheet({
                           </div>
                           <div className="flex shrink-0 flex-col items-end tabular-nums">
                             <span className="text-sm text-foreground">{h.price}</span>
-                            {h.change && <span className={cn("text-xs", TONE_TEXT[h.tone])}>{h.change}</span>}
+                            {h.change && <span className={cn("text-xs", h.tone === "cut" ? "text-amber-400" : "text-muted-foreground")}>{h.change}</span>}
                           </div>
                         </li>
                       ))}
@@ -223,7 +239,7 @@ export function DealSheet({
                       <Phone className="size-4" />
                       {l.agentName}
                       {l.agentPhone && (
-                        <a className="text-teal-glow hover:underline" href={`tel:${l.agentPhone.replace(/[^\d+]/g, "")}`}>{l.agentPhone}</a>
+                        <a className="text-teal-glow hover:underline" href={`tel:${(/^\s*\+/.test(l.agentPhone) ? "+" : "") + l.agentPhone.replace(/\D/g, "")}`}>{l.agentPhone}</a>
                       )}
                     </span>
                   )}
@@ -236,7 +252,10 @@ export function DealSheet({
               )}
             </div>
 
-            <SheetFooter className="flex-row flex-wrap border-t border-border">
+            {err && (
+              <p role="alert" className="border-t border-border px-4 pt-3 text-xs text-amber-400">{err}</p>
+            )}
+            <SheetFooter className={cn("flex-row flex-wrap", !err && "border-t border-border")}>
               {l.promotedDealId ? (
                 <Button variant="outline" asChild>
                   <Link to="/potential"><ClipboardCheck data-icon="inline-start" />In pipeline</Link>

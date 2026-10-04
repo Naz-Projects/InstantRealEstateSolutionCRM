@@ -187,8 +187,9 @@ describe("priceHistoryRows (deal sheet seller motivation)", () => {
   ];
   it("lists most recent first with cut amounts on price changes only", () => {
     expect(priceHistoryRows(hist)).toEqual([
-      { date: "Mar 1, 2025", event: "Price cut", price: "$189,900", change: `${MINUS}$10,000`, tone: "neg" },
-      { date: "Feb 1, 2025", event: "Price cut", price: "$199,900", change: `${MINUS}$10,100`, tone: "neg" },
+      // A cut is good news for a buyer: "cut" tone (amber), never the red negative tone.
+      { date: "Mar 1, 2025", event: "Price cut", price: "$189,900", change: `${MINUS}$10,000`, tone: "cut" },
+      { date: "Feb 1, 2025", event: "Price cut", price: "$199,900", change: `${MINUS}$10,100`, tone: "cut" },
       { date: "Jan 2, 2025", event: "Listed for sale", price: "$210,000", change: null, tone: "neutral" },
       { date: "Jun 15, 2019", event: "Sold", price: "$150,000", change: null, tone: "neutral" },
     ]);
@@ -201,7 +202,7 @@ describe("priceHistoryRows (deal sheet seller motivation)", () => {
       { date: "2025-02-01", event: "Price change", price: 205000 },
       { date: "2025-01-01", event: "Listed for sale", price: 200000 },
     ]);
-    expect(r[0]).toMatchObject({ event: "Price increase", change: "+$5,000", tone: "pos" });
+    expect(r[0]).toMatchObject({ event: "Price increase", change: "+$5,000", tone: "neutral" });
   });
   it("computes changes before capping rows (the comparison base survives the cut)", () => {
     const many = Array.from({ length: 8 }, (_, i) => ({

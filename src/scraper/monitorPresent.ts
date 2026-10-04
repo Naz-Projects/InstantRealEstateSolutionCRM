@@ -176,7 +176,8 @@ export function ownerSignal(r: Pick<PresentRow, "offMarketSignals" | "offMarketB
 }
 
 // ── Seller motivation (deal sheet) ──
-export interface HistoryRow { date: string; event: string; price: string; change: string | null; tone: Tone }
+// "cut" = a price cut (good news for a buyer, shown amber, never the red negative tone).
+export interface HistoryRow { date: string; event: string; price: string; change: string | null; tone: "cut" | "neutral" }
 
 const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 function fmtDate(d: unknown): string {
@@ -203,12 +204,12 @@ export function priceHistoryRows(history: unknown, max = 6): HistoryRow[] {
   let prev: number | null = null;
   const rows = evs.map((e): HistoryRow => {
     let change: string | null = null;
-    let tone: Tone = "neutral";
+    let tone: HistoryRow["tone"] = "neutral";
     let label = e.event ? cap(e.event) : "—";
     if (e.price != null && prev != null && classifyEvent(e.event) === "price_change" && e.price !== prev) {
       const d = e.price - prev;
       change = signedMoney(d);
-      tone = toneOf(d);
+      if (d < 0) tone = "cut";
       label = d < 0 ? "Price cut" : "Price increase";
     }
     if (e.price != null) prev = e.price;

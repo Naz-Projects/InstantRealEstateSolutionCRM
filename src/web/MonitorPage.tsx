@@ -281,7 +281,6 @@ export function MonitorPage() {
         passMenuOpen={!!openId && passMenuFor === openId}
         onPassMenu={(o) => setPassMenuFor(o && openId ? openId : null)}
         onClose={() => { setPassMenuFor(null); close(); }}
-        onError={setErr}
       />
     </div>
   );
