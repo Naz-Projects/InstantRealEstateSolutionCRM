@@ -2,6 +2,8 @@
 // email, so the page and the email always say the same thing. No React, no Convex.
 // Spec: docs/superpowers/plans/2026-10-04-monitor-phase3-triage-ui.md (Design Direction).
 
+import { classifyEvent } from "./dealSignals";
+
 export type Exit = "FLIP" | "RENTAL" | "WHOLESALE" | "PASS";
 export type Tone = "pos" | "neg" | "neutral";
 
@@ -171,6 +173,75 @@ export function ownerSignal(r: Pick<PresentRow, "offMarketSignals" | "offMarketB
   if (ok(r.offMarketBalances)) return `Delinquent balances ${money(r.offMarketBalances)}`;
   if (ok(r.offMarketConditionScore)) return `Condition score ${r.offMarketConditionScore}`;
   return null;
+}
+
+// ── Seller motivation (deal sheet) ──
+export interface HistoryRow { date: string; event: string; price: string; change: string | null; tone: Tone }
+
+const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+function fmtDate(d: unknown): string {
+  if (typeof d !== "string" && typeof d !== "number") return "—";
+  const ms = typeof d === "number" ? d : Date.parse(d);
+  return Number.isFinite(ms) ? dateFmt.format(ms) : String(d);
+}
+
+// priceHistory is stored as v.any() (scraped). Same cut rule as dealSignals: sort
+// oldest first, compare each price change to the previous priced event; then show
+// most recent first, capped at `max`.
+export function priceHistoryRows(history: unknown, max = 6): HistoryRow[] {
+  if (!Array.isArray(history)) return [];
+  const evs = history
+    .filter((h): h is Record<string, unknown> => !!h && typeof h === "object")
+    .map((h) => {
+      const event = typeof h.event === "string" ? h.event.trim() : "";
+      const price = typeof h.price === "number" && Number.isFinite(h.price) ? h.price : null;
+      const ms = typeof h.date === "number" ? h.date : typeof h.date === "string" ? Date.parse(h.date) : NaN;
+      return { event, price, date: h.date, ms: Number.isFinite(ms) ? ms : null };
+    })
+    .filter((e) => e.event || e.price != null)
+    .sort((a, b) => (a.ms ?? -Infinity) - (b.ms ?? -Infinity));
+  let prev: number | null = null;
+  const rows = evs.map((e): HistoryRow => {
+    let change: string | null = null;
+    let tone: Tone = "neutral";
+    let label = e.event ? cap(e.event) : "—";
+    if (e.price != null && prev != null && classifyEvent(e.event) === "price_change" && e.price !== prev) {
+      const d = e.price - prev;
+      change = signedMoney(d);
+      tone = toneOf(d);
+      label = d < 0 ? "Price cut" : "Price increase";
+    }
+    if (e.price != null) prev = e.price;
+    return { date: fmtDate(e.date), event: label, price: money(e.price), change, tone };
+  });
+  return rows.reverse().slice(0, max);
+}
+
+export interface MotivationFact { label: string; value: string }
+export interface SellerMotivation { facts: MotivationFact[]; signals: string[]; history: HistoryRow[] }
+export interface MotivationRow {
+  priceHistory?: unknown; motivationPoints?: N; motivationSignals?: string[] | null;
+  daysOnZillow?: N; tenureYears?: N; lastSoldPrice?: N; lastSoldDate?: S;
+}
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+// Plain-language motivation facts + the stored dealSignals phrases ("2 price cuts
+// (-8%)", "back on market"). Cut count/depth and back-on-market live only in those
+// phrases. Null when the row has nothing to show (old rows).
+export function sellerMotivation(r: MotivationRow): SellerMotivation | null {
+  const facts: MotivationFact[] = [];
+  if (ok(r.motivationPoints)) facts.push({ label: "Score", value: `${r.motivationPoints}/10` });
+  if (ok(r.daysOnZillow)) facts.push({ label: "On market", value: plural(Math.round(r.daysOnZillow), "day", "days") });
+  const tenure = ok(r.tenureYears) ? Math.round(r.tenureYears) : null;
+  if (tenure != null) facts.push({ label: "Owner tenure", value: plural(tenure, "yr", "yrs") });
+  if (ok(r.lastSoldPrice)) {
+    facts.push({ label: "Last sold", value: r.lastSoldDate ? `${money(r.lastSoldPrice)} · ${fmtDate(r.lastSoldDate)}` : money(r.lastSoldPrice) });
+  }
+  const signals = (r.motivationSignals ?? [])
+    .filter((s) => typeof s === "string" && s.trim() && !(tenure != null && /^\d+-yr owner$/i.test(s.trim())))
+    .map((s) => cap(s.trim().replace(/-(?=\d)/g, MINUS)));
+  const history = priceHistoryRows(r.priceHistory);
+  return facts.length || signals.length || history.length ? { facts, signals, history } : null;
 }
 
 export interface NumberCell { label: string; value: string; tone: Tone }

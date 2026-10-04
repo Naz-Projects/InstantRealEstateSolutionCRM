@@ -19,6 +19,7 @@ import {
 } from "./lib/monitorBoard";
 import { triageStatus, type PassReason, type TriageState } from "../scraper/monitorTriage";
 import { BoardSkeleton, BoardTable, type BoardListing } from "./monitor/BoardTable";
+import { DealSheet } from "./monitor/DealSheet";
 
 // "Monitor the Web" — the /monitor triage inbox (Phase 3). Per-user tabs (New /
 // Shortlist / Passed / All), filters, sort, a dense table (phone: compact list), a
@@ -119,6 +120,7 @@ export function MonitorPage() {
   const newCount = newSinceCount(all, lastSeenAt, now);
 
   const open = (id: string) => navigate({ search: (prev) => ({ ...prev, id }) });
+  const close = () => navigate({ search: (prev) => ({ ...prev, id: undefined }) });
 
   const run = async (fn: () => Promise<unknown>) => {
     setErr(null);
@@ -274,7 +276,13 @@ export function MonitorPage() {
           </>
         )}
       </div>
-      {/* DEAL SHEET MOUNT (Task 8) */}
+      <DealSheet
+        id={openId}
+        passMenuOpen={!!openId && passMenuFor === openId}
+        onPassMenu={(o) => setPassMenuFor(o && openId ? openId : null)}
+        onClose={() => { setPassMenuFor(null); close(); }}
+        onError={setErr}
+      />
     </div>
   );
 }

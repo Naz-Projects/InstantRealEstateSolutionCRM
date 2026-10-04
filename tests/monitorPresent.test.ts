@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   MINUS, money, signedMoney, pct1, toneOf, normalizeExit, exitLabel, spreadBasisLabel,
   verdictFor, humanizeFlag, displayFlags, safeHref, oneLineReason, analystNote, ownerSignal, numberGroups,
+  priceHistoryRows, sellerMotivation,
 } from "../src/scraper/monitorPresent";
 
 describe("money / signedMoney / pct1 / toneOf", () => {
@@ -173,5 +174,78 @@ describe("numberGroups", () => {
   it("omits empty groups (old rows)", () => {
     expect(numberGroups({ listPrice: 100000 }).map((x) => x.title)).toEqual(["Value"]);
     expect(numberGroups({})).toEqual([]);
+  });
+});
+
+describe("priceHistoryRows (deal sheet seller motivation)", () => {
+  const hist = [
+    // Zillow order: newest first
+    { date: "2025-03-01", event: "Price change", price: 189900 },
+    { date: "2025-02-01", event: "Price change", price: 199900 },
+    { date: "2025-01-02", event: "Listed for sale", price: 210000 },
+    { date: "2019-06-15", event: "Sold", price: 150000 },
+  ];
+  it("lists most recent first with cut amounts on price changes only", () => {
+    expect(priceHistoryRows(hist)).toEqual([
+      { date: "Mar 1, 2025", event: "Price cut", price: "$189,900", change: `${MINUS}$10,000`, tone: "neg" },
+      { date: "Feb 1, 2025", event: "Price cut", price: "$199,900", change: `${MINUS}$10,100`, tone: "neg" },
+      { date: "Jan 2, 2025", event: "Listed for sale", price: "$210,000", change: null, tone: "neutral" },
+      { date: "Jun 15, 2019", event: "Sold", price: "$150,000", change: null, tone: "neutral" },
+    ]);
+  });
+  it("formats YYYY-MM-DD in UTC (no off-by-one day)", () => {
+    expect(priceHistoryRows([{ date: "2025-03-01", event: "Sold", price: 1 }])[0].date).toBe("Mar 1, 2025");
+  });
+  it("labels a price increase", () => {
+    const r = priceHistoryRows([
+      { date: "2025-02-01", event: "Price change", price: 205000 },
+      { date: "2025-01-01", event: "Listed for sale", price: 200000 },
+    ]);
+    expect(r[0]).toMatchObject({ event: "Price increase", change: "+$5,000", tone: "pos" });
+  });
+  it("computes changes before capping rows (the comparison base survives the cut)", () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      date: `2025-0${i + 1}-01`, event: i === 0 ? "Listed for sale" : "Price change", price: 300000 - i * 1000,
+    }));
+    const r = priceHistoryRows(many);
+    expect(r).toHaveLength(6);
+    expect(r[0].date).toBe("Aug 1, 2025");
+    expect(r[5]).toMatchObject({ date: "Mar 1, 2025", change: `${MINUS}$1,000` });
+  });
+  it("tolerates junk entries: never NaN, undefined or a crash", () => {
+    const r = priceHistoryRows([null, 7, "x", {}, { date: "soon", event: "Price change", price: "12" }, { event: "Listing removed" }]);
+    expect(r).toEqual([
+      { date: "—", event: "Listing removed", price: "—", change: null, tone: "neutral" },
+      { date: "soon", event: "Price change", price: "—", change: null, tone: "neutral" },
+    ]);
+    expect(priceHistoryRows(undefined)).toEqual([]);
+    expect(priceHistoryRows("nope")).toEqual([]);
+    expect(JSON.stringify(r)).not.toMatch(/NaN|undefined/);
+  });
+});
+
+describe("sellerMotivation", () => {
+  it("returns null when the row has nothing to say", () => {
+    expect(sellerMotivation({})).toBeNull();
+    expect(sellerMotivation({ priceHistory: [], motivationSignals: [] })).toBeNull();
+  });
+  it("plain facts, capitalized signals with a true minus, tenure signal not repeated", () => {
+    const m = sellerMotivation({
+      motivationPoints: 7, daysOnZillow: 94, tenureYears: 22.4, lastSoldPrice: 150000, lastSoldDate: "2003-06-15",
+      motivationSignals: ["2 price cuts (-8%)", "stale on market", "22-yr owner", "back on market"],
+    })!;
+    expect(m.facts).toEqual([
+      { label: "Score", value: "7/10" },
+      { label: "On market", value: "94 days" },
+      { label: "Owner tenure", value: "22 yrs" },
+      { label: "Last sold", value: "$150,000 · Jun 15, 2003" },
+    ]);
+    expect(m.signals).toEqual([`2 price cuts (${MINUS}8%)`, "Stale on market", "Back on market"]);
+    expect(m.history).toEqual([]);
+  });
+  it("singular units and a tenure signal kept when there is no tenure fact", () => {
+    const m = sellerMotivation({ daysOnZillow: 1, tenureYears: 1, motivationSignals: ["1 price cut (-3%)"] })!;
+    expect(m.facts).toEqual([{ label: "On market", value: "1 day" }, { label: "Owner tenure", value: "1 yr" }]);
+    expect(sellerMotivation({ motivationSignals: ["18-yr owner"] })!.signals).toEqual(["18-yr owner"]);
   });
 });
