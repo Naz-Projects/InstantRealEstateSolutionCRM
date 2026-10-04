@@ -7,6 +7,9 @@ export const MONITOR = {
   // Comps (Phase 2): same type, sold <= compMaxAgeDays, nearest ring with >= compMinCount.
   compRadiiMi: [0.5, 1], compMinCount: 3, compMaxCount: 10, compMaxAgeDays: 183,
   arvPercentile: 0.75, // ARV = 75th-pct comps $/sqft (renovated proxy); as-is = median
+  // Rehab (Phase 2): systems tier + era add-ons (research §4) + longer gut hold.
+  systemsPerSqft: 55, leadPaintBeforeYear: 1978, leadPaintAddOn: 3000,
+  rewireBeforeYear: 1950, rewireAddOn: 15000, gutHoldingMonths: 9,
   keeperRetireDays: 30, // keepers older than this age off the /monitor board (archivedAt)
   // Firecrawl v2 cache: first attempt accepts a page cached <= 1h; retries force a live
   // scrape (maxAge 0). Unset, v2 defaults to a 2-day cache (lessons 2026-10-03).
@@ -233,13 +236,6 @@ export function inferRehabTier(description: string): "cosmetic" | "moderate" | "
   return "moderate";
 }
 
-// Keyword rehab tier + estimate (tier $/sqft + default contingency). The single
-// derivation shared by the scan's analyzeOne and the stored-row re-gate so both agree.
-export function keywordRehab(description: string, sqft: number | null) {
-  const tier = inferRehabTier(description);
-  return { tier, total: estimateRehab(REHAB_TIERS[tier].perSqft, sqft, FLIP_DEFAULTS.contingencyPct).total };
-}
-
 // Explicit ALREADY-DONE renovation language (someone else already flipped it) —
 // stricter than COSMETIC so a fixer isn't mislabeled. Needs-work language wins:
 // a description with both ("renovated kitchen but needs TLC") is NOT renovated,
@@ -248,6 +244,37 @@ const RENOVATED_STRONG = /(fully|newly|completely|totally|beautifully|recently|f
 export function detectRenovated(description: string | null | undefined): boolean {
   const d = description || "";
   return RENOVATED_STRONG.test(d) && !MODERATE.test(d) && !GUT.test(d);
+}
+
+// Monitor rehab scope: max(description keyword tier, LLM conditionTier) — the judge
+// can only RAISE the scope (costs up, margins down), so it can never create a keep.
+// "systems" (mechanicals/roof/electrical) sits between moderate and gut. Era add-ons
+// (research §4) are flat, outside the contingency; a gut already includes the rewire.
+// The single derivation shared by the scan's analyzeOne and the stored-row re-gate.
+export type MonitorRehabTier = "cosmetic" | "moderate" | "systems" | "gut";
+const TIER_RANK: Record<MonitorRehabTier, number> = { cosmetic: 0, moderate: 1, systems: 2, gut: 3 };
+function toMonitorTier(t: string | null | undefined): MonitorRehabTier | null {
+  if (t === "cosmetic" || t === "moderate" || t === "systems" || t === "gut") return t;
+  return t === "structural" ? "gut" : null; // judge conditionTier "structural" = gut scope
+}
+export interface MonitorRehab { tier: MonitorRehabTier; total: number | null; holdingMonths: number; addOns: string[]; }
+export function monitorRehab(o: { sqft: number | null | undefined; keywordTier: string | null | undefined; conditionTier: string | null | undefined; yearBuilt: number | null | undefined }): MonitorRehab {
+  const k = toMonitorTier(o.keywordTier) ?? "moderate";
+  const c = toMonitorTier(o.conditionTier);
+  const tier = c && TIER_RANK[c] > TIER_RANK[k] ? c : k;
+  const perSqft = tier === "systems" ? MONITOR.systemsPerSqft : REHAB_TIERS[tier].perSqft;
+  const base = estimateRehab(perSqft, o.sqft ?? null, FLIP_DEFAULTS.contingencyPct).total;
+  const addOns: string[] = [];
+  let extra = 0;
+  const yb = o.yearBuilt ?? 0;
+  if (yb > 0 && yb < MONITOR.leadPaintBeforeYear) { extra += MONITOR.leadPaintAddOn; addOns.push(`pre-${MONITOR.leadPaintBeforeYear} lead paint +$${MONITOR.leadPaintAddOn.toLocaleString("en-US")}`); }
+  if (yb > 0 && yb < MONITOR.rewireBeforeYear && tier !== "gut") { extra += MONITOR.rewireAddOn; addOns.push(`pre-${MONITOR.rewireBeforeYear} wiring +$${MONITOR.rewireAddOn.toLocaleString("en-US")}`); }
+  return {
+    tier,
+    total: base == null ? null : Math.round(base + extra),
+    holdingMonths: tier === "gut" ? MONITOR.gutHoldingMonths : MONITOR_FLIP_ASSUMPTIONS.holdingMonths,
+    addOns,
+  };
 }
 
 export interface RentalMetrics { rent: number; onePct: number; capRate: number; cashFlow: number; cashOnCash: number; allIn: number; }
@@ -266,9 +293,9 @@ export const MONITOR_FLIP_ASSUMPTIONS: FlipAssumptions = {
   ...FLIP_DEFAULTS.assumptions,
   closingPct: FLIP_DEFAULTS.assumptions.closingPct + 0.02,
 };
-export function analyzeFlip(arv: number | null, list: number | null, rehab: number) {
+export function analyzeFlip(arv: number | null, list: number | null, rehab: number, holdingMonths: number = MONITOR_FLIP_ASSUMPTIONS.holdingMonths) {
   if (arv == null || list == null) return null;
-  const m = computeFlip({ arv, purchasePrice: list, rehabTotal: rehab, assumptions: MONITOR_FLIP_ASSUMPTIONS });
+  const m = computeFlip({ arv, purchasePrice: list, rehabTotal: rehab, assumptions: { ...MONITOR_FLIP_ASSUMPTIONS, holdingMonths } });
   // NCC-corrected MAO (research §1.2/§1.15): the offer ceiling must absorb BOTH transfer-tax
   // legs — solve P + 0.02·P (buy leg) + rehab + 0.02·ARV (sell leg) = 0.70·ARV
   // => P = (0.68·ARV − rehab) / 1.02, an effective ~66.7% rule (inside the NCC 65–68% band).
@@ -308,6 +335,7 @@ export interface DealInput {
   rehabTotal: number | null; // null = unknown (no sqft) -> no flip/rental underwriting
   rent: number | null;
   renovated: boolean;        // already flipped by someone else -> no flip exit
+  holdingMonths?: number;    // flip hold (monitorRehab: 9 for a gut, else the 6-month default)
 }
 export interface DealDecision {
   belowMarket: boolean;
@@ -330,7 +358,7 @@ export function evaluateDeal(i: DealInput): DealDecision {
   const spread = basis != null && i.listPrice != null ? basis - i.listPrice : null;
   const spreadPct = spread != null && basis ? +((spread / basis) * 100).toFixed(1) : null;
   const belowMarket = basis != null && basis > 0 && i.listPrice != null && i.listPrice <= basis * (1 - MONITOR.spreadThreshold);
-  const flip = i.renovated || i.rehabTotal == null ? null : analyzeFlip(i.arv, i.listPrice, i.rehabTotal);
+  const flip = i.renovated || i.rehabTotal == null ? null : analyzeFlip(i.arv, i.listPrice, i.rehabTotal, i.holdingMonths);
   const rental = i.rehabTotal == null || i.listPrice == null ? null : analyzeRental({ rent: i.rent, list: i.listPrice, rehab: i.rehabTotal });
   const s = scoreDeal(flip, rental);
   const flipOk = meetsFlipFloor(flip);
@@ -345,9 +373,8 @@ export function evaluateDeal(i: DealInput): DealDecision {
 }
 // Re-gate adapter: rebuild a DealInput from a STORED monitorListings row (no scraping).
 // Old-row rules: sqft unknown -> rehab unknown and ARV = Zestimate-or-null (the old
-// median-soldPrice ARV and $0 rehab are discarded); sqft known -> rehab re-derived from
-// the stored description with the current keyword tier (old rows were mis-tiered gut by
-// the bare-"fire" regex), stored rehabEstimate only when there is no description;
+// median-soldPrice ARV and $0 rehab are discarded); rehab is RECOMPUTED with the
+// current tiers/add-ons from the stored description + conditionTier + yearBuilt;
 // renovated = stored RENOVATED flag OR the current detector on the stored description.
 export interface StoredListing {
   listPrice?: number;
@@ -355,7 +382,9 @@ export interface StoredListing {
   conservativeArv?: number;
   asIsValue?: number;
   sqft?: number;
-  rehabEstimate?: number;
+  rehabTier?: string;
+  conditionTier?: string;
+  yearBuilt?: number;
   rentZestimate?: number;
   description?: string;
   riskFlags?: string[];
@@ -363,15 +392,22 @@ export interface StoredListing {
 export function dealInputFromStored(r: StoredListing): DealInput {
   const sqftKnown = r.sqft != null && r.sqft > 0;
   const arv = sqftKnown ? (r.conservativeArv ?? null) : (r.zestimate ?? null);
+  const rehab = monitorRehab({
+    sqft: r.sqft,
+    keywordTier: r.description != null ? inferRehabTier(r.description) : r.rehabTier,
+    conditionTier: r.conditionTier,
+    yearBuilt: r.yearBuilt,
+  });
   return {
     listPrice: r.listPrice ?? null,
     zestimate: r.zestimate ?? null,
     // Old rows have no asIsValue; their median-based conservativeArv is as-is-like.
     valueBasis: sqftKnown ? (r.asIsValue ?? arv) : arv,
     arv,
-    rehabTotal: !sqftKnown ? null : r.description ? keywordRehab(r.description, r.sqft!).total : (r.rehabEstimate ?? null),
+    rehabTotal: rehab.total,
     rent: r.rentZestimate ?? null,
     renovated: (r.riskFlags ?? []).some((f) => f.startsWith("RENOVATED")) || detectRenovated(r.description),
+    holdingMonths: rehab.holdingMonths,
   };
 }
 // Row fields for a decision. `undefined` = REMOVE the field (ctx.db.patch semantics),

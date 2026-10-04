@@ -18,7 +18,8 @@ import {
   cronScanEnabled,
   digestRecipients,
   conservativeArv,
-  keywordRehab,
+  inferRehabTier,
+  monitorRehab,
   shouldReopenForDigest,
   detectRenovated,
   evaluateDeal,
@@ -414,8 +415,11 @@ export const analyzeOne = internalAction({
       const arvRes = conservativeArv({ comps, sqft, beds: bedsNum, zestimate, homeType, lat: row.lat ?? null, lng: row.lng ?? null, now: Date.now() });
       const arv = arvRes.arv;
 
-      // 4) Rehab tier + estimate.
-      const { tier: rehabTier, total: rehabTotal } = keywordRehab(description, sqft);
+      // 4) Rehab: description keyword tier now; re-scoped after the judge (step 9b)
+      // with max(keyword, LLM conditionTier) — the LLM can only raise costs.
+      const rehabTier = inferRehabTier(description);
+      const yearBuilt = detail?.yearBuilt ?? row.yearBuilt ?? null;
+      const preRehab = monitorRehab({ sqft, keywordTier: rehabTier, conditionTier: null, yearBuilt });
 
       // 5-6) Preliminary deal math (spread + flip + rental) — the judge's GIVEN numbers.
       // The final decision is re-run at 9b with the judge's renovated veto applied.
@@ -424,10 +428,14 @@ export const analyzeOne = internalAction({
         zestimate,
         valueBasis: arvRes.asIsValue,
         arv,
-        rehabTotal,
         rent: rentZestimate,
       };
-      const pre = evaluateDeal({ ...dealInput, renovated: detectRenovated(description) });
+      const pre = evaluateDeal({
+        ...dealInput,
+        rehabTotal: preRehab.total,
+        holdingMonths: preRehab.holdingMonths,
+        renovated: detectRenovated(description),
+      });
 
       // 6.5) Deterministic deal signals (math, not LLM). Stored even if the judge fails.
       const dealSignals = deriveDealSignals({
@@ -488,9 +496,12 @@ export const analyzeOne = internalAction({
       // a renovated rental with a clearing cap rate is a legitimate keeper.
       const renovated = detectRenovated(description) || verdict?.renovated === true;
       if (renovated) flags.push("RENOVATED (no flip)");
+      const rehab = monitorRehab({ sqft, keywordTier: rehabTier, conditionTier: verdict?.conditionTier ?? null, yearBuilt });
+      if (rehab.tier === "gut" && !flags.includes("heavy-rehab")) flags.push("heavy-rehab");
+      flags.push(...rehab.addOns);
 
       // 10) Keeper decision — deterministic floors only (distress is a label, never a keep).
-      const deal = evaluateDeal({ ...dealInput, renovated });
+      const deal = evaluateDeal({ ...dealInput, rehabTotal: rehab.total, holdingMonths: rehab.holdingMonths, renovated });
       const { keeper, belowMarket, spread, spreadPct, rental } = deal;
       const flipFinal = deal.flip;
 
@@ -509,7 +520,7 @@ export const analyzeOne = internalAction({
           status: "analyzed" as const,
           arvSource: arvRes.source,
           compsCount: arvRes.compsCount,
-          rehabTier,
+          rehabTier: rehab.tier,
           belowMarket,
           keeper,
           aiKeep: verdict?.keep ?? false,
@@ -532,7 +543,7 @@ export const analyzeOne = internalAction({
           ...(arvRes.compsPpsf != null ? { compsPpsf: arvRes.compsPpsf } : {}),
           ...(spread != null ? { spread } : {}),
           ...(spreadPct != null ? { spreadPct } : {}),
-          ...(rehabTotal != null ? { rehabEstimate: Math.round(rehabTotal) } : {}),
+          ...(rehab.total != null ? { rehabEstimate: rehab.total } : {}),
           ...(flipFinal
             ? {
                 ...(flipFinal.mao != null ? { flipMao: Math.round(flipFinal.mao) } : {}),

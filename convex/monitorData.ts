@@ -489,13 +489,15 @@ export const regateKeepers = internalMutation({
     for (const row of rows) {
       // User already promoted it to a potential deal: leave untouched (counts as kept).
       if (row.promotedDealId) { skippedPromoted++; continue; }
-      const d = evaluateDeal(dealInputFromStored(row));
+      const input = dealInputFromStored(row);
+      const d = evaluateDeal(input);
       if (d.keeper) exitMix[d.bestExit] = (exitMix[d.bestExit] ?? 0) + 1;
       else dekept.push(row.address);
       if (dryRun) continue;
       const tags = (row.matchedRequirements ?? []).filter((t) => t !== "below_market");
       await ctx.db.patch(row._id, {
         ...decisionFields(d),
+        rehabEstimate: input.rehabTotal ?? undefined, // re-scoped with the current tiers/add-ons
         matchedRequirements: d.belowMarket ? [...tags, "below_market"] : tags,
         updatedAt: now,
       });

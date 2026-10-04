@@ -3,7 +3,7 @@ import { buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
-import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields, keywordRehab } from "../src/scraper/monitorListings";
+import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields, monitorRehab } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
 import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows, shouldReopenForDigest } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
@@ -634,25 +634,36 @@ describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip
 });
 
 describe("dealInputFromStored (re-gate adapter)", () => {
-  it("maps a normal stored row (rehab re-derived from the description, as analyzeOne does)", () => {
-    const i = dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rehabEstimate: 30000, rentZestimate: 1900, description: "needs TLC", riskFlags: [] });
-    expect(i).toMatchObject({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rent: 1900, renovated: false });
-    expect(i.rehabTotal).toBeCloseTo(42 * 1500 * 1.1, 6); // moderate tier + 10% contingency
+  it("maps a normal stored row; rehab recomputed (moderate 42/sqft x 1500 x 1.10)", () => {
+    expect(dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rentZestimate: 1900, description: "needs TLC", riskFlags: [] }))
+      .toEqual({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rehabTotal: 69300, rent: 1900, renovated: false, holdingMonths: 6 });
   });
-  it("no stored description: falls back to the stored rehabEstimate", () => {
-    expect(dealInputFromStored({ listPrice: 180000, sqft: 1500, rehabEstimate: 30000 }).rehabTotal).toBe(30000);
+  it("re-derives the keyword tier from the stored description (old fireplace rows were 'gut')", () => {
+    const i = dealInputFromStored({ sqft: 1000, rehabTier: "gut", description: "Brick fireplace, needs TLC", yearBuilt: 1985 });
+    expect(i.rehabTotal).toBe(46200); // moderate, not gut
+    expect(i.holdingMonths).toBe(6);
+  });
+  it("LLM conditionTier raises the recomputed scope", () => {
+    const i = dealInputFromStored({ sqft: 1000, description: "needs TLC", conditionTier: "structural", yearBuilt: 1985 });
+    expect(i.rehabTotal).toBe(104500);
+    expect(i.holdingMonths).toBe(9);
+  });
+  it("no stored description: falls back to the stored rehabTier", () => {
+    const i = dealInputFromStored({ listPrice: 180000, sqft: 1500, rehabTier: "gut" });
+    expect(i.rehabTotal).toBe(156750);
+    expect(i.holdingMonths).toBe(9);
   });
   it("old fireplace row mis-tiered gut: inflated stored rehab replaced by the non-gut tier", () => {
-    const i = dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rehabEstimate: 156750, description: "Cozy colonial with a wood-burning fireplace and firepit", riskFlags: ["heavy-rehab"] });
+    const i = dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, description: "Cozy colonial with a wood-burning fireplace and firepit", riskFlags: ["heavy-rehab"] });
     expect(i.rehabTotal).toBeCloseTo(42 * 1500 * 1.1, 6);
     expect(i.rehabTotal).not.toBeCloseTo(156750, 0);
   });
   it("a real fire-damage description still yields the gut tier", () => {
-    const i = dealInputFromStored({ listPrice: 180000, sqft: 1500, rehabEstimate: 10000, description: "Fire damaged, sold as-is, cash only" });
+    const i = dealInputFromStored({ listPrice: 180000, sqft: 1500, description: "Fire damaged, sold as-is, cash only" });
     expect(i.rehabTotal).toBeCloseTo(95 * 1500 * 1.1, 6);
   });
   it("old sqft-0 row: discards the median-soldPrice ARV and the $0 rehab", () => {
-    const i = dealInputFromStored({ listPrice: 265000, conservativeArv: 697500, sqft: 0, rehabEstimate: 0, zestimate: 270000 });
+    const i = dealInputFromStored({ listPrice: 265000, conservativeArv: 697500, sqft: 0, zestimate: 270000 });
     expect(i.arv).toBe(270000);
     expect(i.valueBasis).toBe(270000);
     expect(i.rehabTotal).toBeNull();
@@ -663,16 +674,8 @@ describe("dealInputFromStored (re-gate adapter)", () => {
     expect(dealInputFromStored({}).renovated).toBe(false);
   });
   it("an old distress-only keeper (above market, thin flip) is de-kept", () => {
-    const d = evaluateDeal(dealInputFromStored({ listPrice: 240000, zestimate: 230000, conservativeArv: 260000, sqft: 1400, rehabEstimate: 64680, rentZestimate: 1700, description: "Estate sale, sold as-is" }));
+    const d = evaluateDeal(dealInputFromStored({ listPrice: 240000, zestimate: 230000, conservativeArv: 260000, sqft: 1400, rentZestimate: 1700, description: "Estate sale, sold as-is" }));
     expect(d.keeper).toBe(false);
-  });
-});
-
-describe("keywordRehab (shared by analyzeOne and the re-gate)", () => {
-  it("returns the keyword tier and its estimate", () => {
-    expect(keywordRehab("wood-burning fireplace", 1000)).toEqual({ tier: "moderate", total: expect.closeTo(46200, 6) });
-    expect(keywordRehab("fire damage throughout", 1000).tier).toBe("gut");
-    expect(keywordRehab("fire damage throughout", 0).total).toBeNull();
   });
 });
 
@@ -710,5 +713,36 @@ describe("evaluateDeal basis: non-positive Zestimate is absent", () => {
     expect(d.spread).toBe(30000);
     expect(d.spreadPct).toBe(15);
     expect(d.belowMarket).toBe(true);
+  });
+});
+
+describe("monitorRehab (max of keyword tier and LLM conditionTier + era add-ons)", () => {
+  it("LLM systems over keyword moderate: 55 x 1000 x 1.10 + lead paint 3,000", () => {
+    expect(monitorRehab({ sqft: 1000, keywordTier: "moderate", conditionTier: "systems", yearBuilt: 1960 }))
+      .toEqual({ tier: "systems", total: 63500, holdingMonths: 6, addOns: ["pre-1978 lead paint +$3,000"] });
+  });
+  it("structural = gut: 95 x 1000 x 1.10 + lead, no rewire add-on (gut includes it), 9-month hold", () => {
+    expect(monitorRehab({ sqft: 1000, keywordTier: "cosmetic", conditionTier: "structural", yearBuilt: 1940 }))
+      .toEqual({ tier: "gut", total: 107500, holdingMonths: 9, addOns: ["pre-1978 lead paint +$3,000"] });
+  });
+  it("the LLM can never LOWER the scope", () => {
+    expect(monitorRehab({ sqft: 1000, keywordTier: "gut", conditionTier: "cosmetic", yearBuilt: 2000 }).tier).toBe("gut");
+  });
+  it("pre-1950 non-gut: lead + rewire add-ons", () => {
+    expect(monitorRehab({ sqft: 1000, keywordTier: "moderate", conditionTier: null, yearBuilt: 1940 }).total).toBe(46200 + 3000 + 15000);
+  });
+  it("no yearBuilt -> no add-ons; unknown keyword tier -> moderate", () => {
+    expect(monitorRehab({ sqft: 1000, keywordTier: undefined, conditionTier: undefined, yearBuilt: null }))
+      .toEqual({ tier: "moderate", total: 46200, holdingMonths: 6, addOns: [] });
+  });
+  it("sqft unknown -> total null (add-ons never price an unknown house)", () => {
+    expect(monitorRehab({ sqft: 0, keywordTier: "moderate", conditionTier: null, yearBuilt: 1940 }).total).toBeNull();
+  });
+});
+
+describe("analyzeFlip holding months", () => {
+  it("a 9-month gut hold costs 3 more months of interest + holding (ARV 300k / list 180k / rehab 30k)", () => {
+    expect(analyzeFlip(300000, 180000, 30000)!.profit).toBe(42000);
+    expect(analyzeFlip(300000, 180000, 30000, 9)!.profit).toBe(35520);
   });
 });
