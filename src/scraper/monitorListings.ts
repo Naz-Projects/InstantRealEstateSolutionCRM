@@ -254,7 +254,7 @@ export function detectRenovated(description: string | null | undefined): boolean
 // Monitor rehab scope: max(description keyword tier, LLM conditionTier) — the judge
 // can only RAISE the scope (costs up, margins down), so it can never create a keep.
 // "systems" (mechanicals/roof/electrical) sits between moderate and gut. Era add-ons
-// (research §4) are flat, outside the contingency; a gut already includes the rewire.
+// (research §4) are flat, outside the contingency; gut and systems already include the rewire.
 // The single derivation shared by the scan's analyzeOne and the stored-row re-gate.
 export type MonitorRehabTier = "cosmetic" | "moderate" | "systems" | "gut";
 const TIER_RANK: Record<MonitorRehabTier, number> = { cosmetic: 0, moderate: 1, systems: 2, gut: 3 };
@@ -273,7 +273,7 @@ export function monitorRehab(o: { sqft: number | null | undefined; keywordTier: 
   let extra = 0;
   const yb = o.yearBuilt ?? 0;
   if (yb > 0 && yb < MONITOR.leadPaintBeforeYear) { extra += MONITOR.leadPaintAddOn; addOns.push(`pre-${MONITOR.leadPaintBeforeYear} lead paint +$${MONITOR.leadPaintAddOn.toLocaleString("en-US")}`); }
-  if (yb > 0 && yb < MONITOR.rewireBeforeYear && tier !== "gut") { extra += MONITOR.rewireAddOn; addOns.push(`pre-${MONITOR.rewireBeforeYear} wiring +$${MONITOR.rewireAddOn.toLocaleString("en-US")}`); }
+  if (yb > 0 && yb < MONITOR.rewireBeforeYear && tier !== "gut" && tier !== "systems") { extra += MONITOR.rewireAddOn; addOns.push(`pre-${MONITOR.rewireBeforeYear} wiring +$${MONITOR.rewireAddOn.toLocaleString("en-US")}`); }
   return {
     tier,
     total: base == null ? null : Math.round(base + extra),
@@ -493,7 +493,7 @@ export function partitionDigestRows<T extends { bestExit?: string | null; archiv
   for (const r of rows) (r.archivedAt == null && isDigestWorthy(r.bestExit) ? toEmail : toSkip).push(r);
   return { toEmail, toSkip };
 }
-export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean; sqftKnown?: boolean }): string[] {
+export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean; sqftKnown?: boolean; arvSource?: string }): string[] {
   const f: string[] = [];
   if ((r.homeType || "").toUpperCase() === "MANUFACTURED") f.push("MANUFACTURED (comps/lot-rent suspect)");
   if (r.monthlyHoaFee && r.monthlyHoaFee > 250) f.push("HIGH-HOA $" + r.monthlyHoaFee + "/mo");
@@ -502,6 +502,7 @@ export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null;
   if (r.zestimate && r.compsArv && r.compsArv > r.zestimate * 1.5) f.push("comps>>Zestimate (ARV suspect)");
   if (r.detailOk === false) f.push("detail-missing (VERIFY)");
   if (r.sqftKnown === false) f.push("sqft-missing (VERIFY)");
+  if (r.arvSource === "none" && r.sqftKnown === true) f.push("thin comps, no Zestimate (VERIFY ARV)");
   return f;
 }
 

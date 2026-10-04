@@ -30,7 +30,7 @@ import {
   type SearchListing,
   type JudgeVerdict,
 } from "../src/scraper/monitorListings";
-import { parseZip, parseRedfinComps, parseRedfinGisComps, type Comp } from "../src/scraper/comps";
+import { parseZip, parseRedfinComps, parseRedfinGisComps, isLegacyCompsCache, type Comp } from "../src/scraper/comps";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — the "use node" action layer:
@@ -137,7 +137,8 @@ async function compsForZip(ctx: ActionCtx, zip: string, apiKey: string): Promise
     zip,
     maxAgeMs: ZIP_COMPS_DB_TTL_MS,
   })) as Comp[] | null;
-  if (cached) {
+  // A legacy (pre-gis, untyped markdown) row is a miss: it would bypass the type/age filters.
+  if (cached && !isLegacyCompsCache(cached)) {
     compsCache.set(zip, { comps: cached, at: Date.now() });
     return cached;
   }
@@ -149,8 +150,9 @@ async function compsForZip(ctx: ActionCtx, zip: string, apiKey: string): Promise
   const comps = gis.length > 0 ? gis : page ? parseRedfinComps(page.markdown) : [];
   compsCache.set(zip, { comps, at: Date.now() });
   // Only a NON-EMPTY scrape is worth sharing — caching [] would pin every other
-  // listing in the zip to "no comps" for 12h on one transient block.
-  if (comps.length > 0) {
+  // listing in the zip to "no comps" for 12h on one transient block. Untyped markdown
+  // fallback rows are not shared either (they would read back as a legacy miss).
+  if (comps.length > 0 && !isLegacyCompsCache(comps)) {
     await ctx.runMutation(internal.monitorData.storeZipComps, { zip, comps });
   }
   return comps;
@@ -374,6 +376,7 @@ export const analyzeOne = internalAction({
         await ctx.runMutation(internal.monitorData.patchAnalysis, {
           id,
           clearFlip: true, // a re-analyzed pre-guard land row may carry stale flip fields
+          clearRental: true,
           fields: {
             status: "analyzed" as const,
             arvSource: "none",
@@ -398,6 +401,7 @@ export const analyzeOne = internalAction({
         await ctx.runMutation(internal.monitorData.patchAnalysis, {
           id,
           clearFlip: true,
+          clearRental: true,
           fields: {
             status: "analyzed" as const,
             arvSource: "none",
@@ -467,6 +471,7 @@ export const analyzeOne = internalAction({
         compsArv: arvRes.source === "comps" ? arv : null,
         detailOk,
         sqftKnown: sqft != null && sqft > 0,
+        arvSource: arvRes.source,
       });
 
       // 8) Off-market cross-reference (internal query — no user identity).

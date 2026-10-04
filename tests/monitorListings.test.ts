@@ -592,6 +592,13 @@ describe("sqft unknown (null/0) is never priced (08-08 lesson)", () => {
     expect(riskFlags({ sqftKnown: true })).not.toContain("sqft-missing (VERIFY)");
     expect(riskFlags({})).not.toContain("sqft-missing (VERIFY)");
   });
+  it("riskFlags: thin comps + no Zestimate (arvSource none, sqft known) -> VERIFY ARV flag", () => {
+    const FLAG = "thin comps, no Zestimate (VERIFY ARV)";
+    expect(riskFlags({ arvSource: "none", sqftKnown: true })).toContain(FLAG);
+    expect(riskFlags({ arvSource: "none", sqftKnown: false })).not.toContain(FLAG);
+    expect(riskFlags({ arvSource: "comps", sqftKnown: true })).not.toContain(FLAG);
+    expect(riskFlags({ arvSource: "zestimate", sqftKnown: true })).not.toContain(FLAG);
+  });
 });
 
 describe("GUT regex is word-bounded (fireplace is not fire damage)", () => {
@@ -746,6 +753,10 @@ describe("monitorRehab (max of keyword tier and LLM conditionTier + era add-ons)
   });
   it("pre-1950 non-gut: lead + rewire add-ons", () => {
     expect(monitorRehab({ sqft: 1000, keywordTier: "moderate", conditionTier: null, yearBuilt: 1940 }).total).toBe(46200 + 3000 + 15000);
+  });
+  it("pre-1950 systems: lead only, no rewire add-on (systems $55/sqft already covers electrical)", () => {
+    expect(monitorRehab({ sqft: 1000, keywordTier: "moderate", conditionTier: "systems", yearBuilt: 1940 }))
+      .toEqual({ tier: "systems", total: 63500, holdingMonths: 6, addOns: ["pre-1978 lead paint +$3,000"] });
   });
   it("no yearBuilt -> no add-ons; unknown keyword tier -> moderate", () => {
     expect(monitorRehab({ sqft: 1000, keywordTier: undefined, conditionTier: undefined, yearBuilt: null }))

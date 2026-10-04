@@ -90,7 +90,10 @@ export function parseRedfinGisComps(rawHtml: string): Comp[] {
     const propertyType = REDFIN_COMP_TYPES[h?.propertyType];
     const soldPrice = h?.price?.value;
     if (!propertyType || h?.state !== "DE" || typeof soldPrice !== "number" || soldPrice <= 0) continue;
-    const saleLabel: string = (h.sashes ?? []).find((s: any) => s?.lastSaleDate)?.lastSaleDate ?? "";
+    // include_nearby_homes mixes in non-sold homes (e.g. a relisted flip whose sash still
+    // carries its last sale date): their price is an ASKING price, never a sold comp.
+    if (h?.mlsStatus && !/^(closed|sold)$/i.test(String(h.mlsStatus))) continue;
+    const saleLabel: string = (Array.isArray(h.sashes) ? h.sashes : []).find((s: any) => s?.lastSaleDate)?.lastSaleDate ?? "";
     const soldAt = typeof h.soldDate === "number" ? h.soldDate : Date.parse(saleLabel) || undefined;
     const sqft = typeof h.sqFt?.value === "number" && h.sqFt.value > 0 ? h.sqFt.value : null;
     const ll = h.latLong?.value;
@@ -108,6 +111,14 @@ export function parseRedfinGisComps(rawHtml: string): Comp[] {
     });
   }
   return comps;
+}
+
+/**
+ * A shared zipComps row written before the gis parser (markdown rows only, no
+ * propertyType) bypasses the type/age filters, so callers treat it as a cache miss.
+ */
+export function isLegacyCompsCache(comps: Comp[]): boolean {
+  return comps.length > 0 && !comps.some((c) => c.propertyType);
 }
 
 /** Pick the most comparable comps to the subject (sqft ±30%, beds ±1), capped at 8. */

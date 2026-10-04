@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRedfinGisComps } from "../src/scraper/comps";
+import { parseRedfinGisComps, isLegacyCompsCache, type Comp } from "../src/scraper/comps";
 
 // Mirrors the real Redfin sold-search rawHtml (captured 2026-10-04, ZIP 19805):
 // InitialContext is a JSON object literal; the gis response body is a JSON STRING
@@ -84,5 +84,37 @@ describe("parseRedfinGisComps", () => {
     expect(parseRedfinGisComps("<html>no data</html>")).toEqual([]);
     expect(parseRedfinGisComps("root.__reactServerState.InitialContext = {not json};\n")).toEqual([]);
     expect(parseRedfinGisComps("")).toEqual([]);
+  });
+  it("skips non-sold homes (nearby active relist with a past lastSaleDate sash); Closed/Sold kept", () => {
+    const out = parseRedfinGisComps(redfinHtml([
+      home({ mlsStatus: "Active", soldDate: undefined, price: { value: 399000 }, sashes: [{ lastSaleDate: "AUG 1, 2026" }] }),
+      home({ mlsStatus: "Pending" }),
+      home({ mlsStatus: "Sold", price: { value: 200000 } }),
+      home({ mlsStatus: undefined, price: { value: 210000 } }),
+      home({}),
+    ]));
+    expect(out.map((c) => c.soldPrice)).toEqual([200000, 210000, 255000]);
+  });
+  it("malformed sashes (non-array) does not throw", () => {
+    const out = parseRedfinGisComps(redfinHtml([home({ soldDate: undefined, sashes: { lastSaleDate: "x" } as unknown })]));
+    expect(out).toHaveLength(1);
+    expect(out[0].soldDate).toBe("");
+  });
+  it("[] when the gis key is missing or its nested text is malformed", () => {
+    const wrap = (dataCache: unknown) =>
+      `root.__reactServerState.InitialContext = ${JSON.stringify({ "ReactServerAgent.cache": { dataCache } })};
+`;
+    expect(parseRedfinGisComps(wrap({ "/stingray/api/other": { res: { text: "{}&&{}" } } }))).toEqual([]);
+    expect(parseRedfinGisComps(wrap({ "/stingray/api/gis?x=1": { res: { text: "{}&&{not json" } } }))).toEqual([]);
+    expect(parseRedfinGisComps(wrap({ "/stingray/api/gis?x=1": { res: { text: "{}&&{\"payload\":{\"homes\":7}}" } } }))).toEqual([]);
+  });
+});
+
+describe("isLegacyCompsCache", () => {
+  const c = (o: Partial<Comp> = {}): Comp => ({ address: "a", soldDate: "", soldPrice: 1, beds: null, baths: null, sqft: null, pricePerSqft: null, ...o });
+  it("true only for a non-empty cache with no typed comp (pre-gis markdown rows)", () => {
+    expect(isLegacyCompsCache([c(), c()])).toBe(true);
+    expect(isLegacyCompsCache([c(), c({ propertyType: "sfr" })])).toBe(false);
+    expect(isLegacyCompsCache([])).toBe(false);
   });
 });
