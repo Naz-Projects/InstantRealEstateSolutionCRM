@@ -4,11 +4,12 @@ import { query, mutation, internalQuery, internalMutation } from "./_generated/s
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
-import { requireAdmin } from "./lib/getAuthUser";
+import { requireAdmin, getAuthUser } from "./lib/getAuthUser";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
 import { MONITOR, partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
 import { applyTriage, scanBlockedReason, type TriageState } from "../src/scraper/monitorTriage";
 import { sightingPatch, cardCutFields, recheckPatch } from "../src/scraper/monitorRecheck";
+import { normalizeBuyBox, isEmptyBuyBox, type BuyBox, type AudienceMember } from "../src/scraper/monitorBuyBox";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -997,5 +998,92 @@ export const offMarketForInternal = internalQuery({
   args: { address: v.string(), zip: v.optional(v.string()) },
   handler: async (ctx, { address, zip }) => {
     return crossRefOffMarket(ctx, address, zip);
+  },
+});
+
+// ---- Phase 4: per-user buy box ----
+
+// requireUser first (auth + active), then the users row for its _id. The box owner is
+// always derived from the caller's identity, never from args.
+async function callerUserId(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
+  await requireUser(ctx);
+  return (await getAuthUser(ctx))!._id;
+}
+
+function buyBoxFromDoc(d: Doc<"monitorBuyBoxes">): BuyBox {
+  return {
+    zips: d.zips,
+    exits: d.exits,
+    ...(d.priceMin != null ? { priceMin: d.priceMin } : {}),
+    ...(d.priceMax != null ? { priceMax: d.priceMax } : {}),
+    ...(d.minBeds != null ? { minBeds: d.minBeds } : {}),
+    ...(d.minFlipProfit != null ? { minFlipProfit: d.minFlipProfit } : {}),
+    ...(d.minCashFlow != null ? { minCashFlow: d.minCashFlow } : {}),
+  };
+}
+
+/** The caller's buy box, or null = everything digest-worthy. */
+export const myBuyBox = query({
+  args: {},
+  handler: async (ctx): Promise<BuyBox | null> => {
+    const userId = await callerUserId(ctx);
+    const d = await ctx.db.query("monitorBuyBoxes").withIndex("by_user", (q) => q.eq("userId", userId)).unique();
+    return d ? buyBoxFromDoc(d) : null;
+  },
+});
+
+/** Save (replace) the caller's buy box. An all-empty box deletes it (= everything). */
+export const saveMyBuyBox = mutation({
+  args: {
+    zips: v.array(v.string()),
+    priceMin: v.optional(v.number()),
+    priceMax: v.optional(v.number()),
+    minBeds: v.optional(v.number()),
+    exits: v.array(v.string()),
+    minFlipProfit: v.optional(v.number()),
+    minCashFlow: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await callerUserId(ctx);
+    const n = normalizeBuyBox(args);
+    if (!n.ok) throw new ConvexError({ code: "INVALID", message: n.error });
+    const existing = await ctx.db.query("monitorBuyBoxes").withIndex("by_user", (q) => q.eq("userId", userId)).unique();
+    if (isEmptyBuyBox(n.box)) {
+      if (existing) await ctx.db.delete(existing._id);
+      return null;
+    }
+    const doc = { userId, ...n.box, updatedAt: Date.now() };
+    if (existing) await ctx.db.replace(existing._id, doc); // replace drops cleared optional bounds
+    else await ctx.db.insert("monitorBuyBoxes", doc);
+    return null;
+  },
+});
+
+/** Reset the caller's buy box (back to everything). */
+export const clearMyBuyBox = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await callerUserId(ctx);
+    const existing = await ctx.db.query("monitorBuyBoxes").withIndex("by_user", (q) => q.eq("userId", userId)).unique();
+    if (existing) await ctx.db.delete(existing._id);
+    return null;
+  },
+});
+
+/**
+ * Digest audience for the scheduled sendDigest (no identity): every ACTIVE user's email +
+ * their buy box (null = everything). users is a small table (the same read
+ * users.activeEmailsInternal does); buy boxes are one row per user, capped.
+ */
+export const digestAudienceInternal = internalQuery({
+  args: {},
+  handler: async (ctx): Promise<AudienceMember[]> => {
+    const users = (await ctx.db.query("users").collect()).filter((u) => u.isActive);
+    const boxes = await ctx.db.query("monitorBuyBoxes").take(MONITOR.buyBoxReadCap);
+    const byUser = new Map(boxes.map((b) => [b.userId, b] as const));
+    return users.map((u) => {
+      const b = byUser.get(u._id);
+      return { email: u.email, box: b ? buyBoxFromDoc(b) : null };
+    });
   },
 });

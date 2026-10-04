@@ -756,6 +756,21 @@ export default defineSchema({
     fetchedAt: v.number(),
   }).index("by_zip", ["zip"]),
 
+  // Per-user Monitor buy box (Phase 4). One row per CRM user; no row = "everything
+  // digest-worthy". Kept separate from any per-user triage state (Phase 3) on purpose.
+  // userId = users._id (not the Clerk subject): the digest maps box -> email via users.
+  monitorBuyBoxes: defineTable({
+    userId: v.id("users"),
+    zips: v.array(v.string()),
+    priceMin: v.optional(v.number()),
+    priceMax: v.optional(v.number()),
+    minBeds: v.optional(v.number()),
+    exits: v.array(v.union(v.literal("FLIP"), v.literal("RENTAL"))),
+    minFlipProfit: v.optional(v.number()),
+    minCashFlow: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
   // Per-user /monitor triage (Phase 3). One row per (user, listing) the user acted on;
   // states are mutually exclusive (src/scraper/monitorTriage.ts). Kept OFF
   // monitorListings: that row is shared team-wide and patched by the scan pipeline.
