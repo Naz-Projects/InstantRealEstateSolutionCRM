@@ -150,7 +150,7 @@ export function DealSheet({
                 // shrink-0: an overflow-x-auto flex child has min-height 0 and collapses in the column scroll body.
                 <div className="-mx-4 flex shrink-0 snap-x scroll-px-4 gap-2 overflow-x-auto px-4">
                   {photos.map((u, i) => (
-                    <img key={u} src={u} alt={i === 0 ? l.address : ""} loading="lazy" className="h-40 w-60 shrink-0 snap-start rounded-lg bg-muted object-cover" />
+                    <img key={`${i}-${u}`}src={u} alt={i === 0 ? l.address : ""} loading="lazy" className="h-40 w-60 shrink-0 snap-start rounded-lg bg-muted object-cover" />
                   ))}
                 </div>
               )}
@@ -182,7 +182,7 @@ export function DealSheet({
                   )}
                   {motivation.signals.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
-                      {motivation.signals.map((s) => <Badge key={s} variant="outline">{s}</Badge>)}
+                      {motivation.signals.map((s, i) => <Badge key={`${i}-${s}`} variant="outline">{s}</Badge>)}
                     </div>
                   )}
                   {motivation.history.length > 0 && (
@@ -207,8 +207,8 @@ export function DealSheet({
               {gates.length > 0 && (
                 <Section title="Verify before you bid" icon={<ShieldCheck className="size-3.5 text-amber-400" />}>
                   <ul className="flex flex-col gap-1.5">
-                    {gates.map((g) => (
-                      <li key={g} className="flex gap-2 text-sm text-foreground">
+                    {gates.map((g, i) => (
+                      <li key={`${i}-${g}`}className="flex gap-2 text-sm text-foreground">
                         <CircleDashed className="mt-0.5 size-4 shrink-0 text-amber-400" />{g}
                       </li>
                     ))}

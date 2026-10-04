@@ -76,7 +76,17 @@ export function nextIndex(i: number, dir: "down" | "up", len: number): number {
   return dir === "down" ? Math.min(i + 1, len - 1) : Math.max(i - 1, 0);
 }
 
-export type BoardKey = "down" | "up" | "pass" | "shortlist" | "open";
+// J/K with the deal sheet open. `openIndex` is the open deal's index in the visible
+// list (-1 once P/S/Snooze moved it out). Then `sel` (the old slot) is the anchor:
+// J opens the row that slid into the slot, K the one above it.
+export function sheetStepIndex(openIndex: number, sel: number, dir: "down" | "up", len: number): number {
+  if (openIndex >= 0) return nextIndex(openIndex, dir, len);
+  const base = clampIndex(sel, len);
+  if (base < 0) return nextIndex(-1, dir, len);
+  return dir === "down" ? base : Math.max(base - 1, 0);
+}
+
+export type BoardKey ="down" | "up" | "pass" | "shortlist" | "open";
 export interface KeyLike {
   key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean;
   target?: { tagName?: string; isContentEditable?: boolean; closest?: (sel: string) => unknown } | null;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   inTab, tabCounts, filterRows, sortRows, zipOptions, isNewSince, newSinceCount,
-  clampIndex, nextIndex, boardKeyAction, type BoardRow,
+  clampIndex, nextIndex, sheetStepIndex, boardKeyAction, type BoardRow,
 } from "../src/web/lib/monitorBoard";
 
 const NOW = 1_800_000_000_000;
@@ -85,6 +85,20 @@ describe("selection index", () => {
     expect(nextIndex(2, "down", 3)).toBe(2);
     expect(nextIndex(0, "up", 3)).toBe(0);
     expect(nextIndex(1, "up", 0)).toBe(-1);
+  });
+  it("sheetStepIndex walks from the open deal while it is still listed", () => {
+    expect(sheetStepIndex(1, 0, "down", 4)).toBe(2);
+    expect(sheetStepIndex(1, 3, "up", 4)).toBe(0);
+    expect(sheetStepIndex(3, 3, "down", 4)).toBe(3);
+  });
+  it("sheetStepIndex: open deal left the list (P/S/Snooze) - J opens the row that slid into its slot, K the one above", () => {
+    expect(sheetStepIndex(-1, 2, "down", 4)).toBe(2);
+    expect(sheetStepIndex(-1, 2, "up", 4)).toBe(1);
+    expect(sheetStepIndex(-1, 4, "down", 4)).toBe(3); // was the last row: clamp
+    expect(sheetStepIndex(-1, 4, "up", 4)).toBe(2);
+    expect(sheetStepIndex(-1, 0, "up", 4)).toBe(0);
+    expect(sheetStepIndex(-1, -1, "down", 4)).toBe(0); // deep link, no selection
+    expect(sheetStepIndex(-1, 2, "down", 0)).toBe(-1); // list now empty
   });
 });
 

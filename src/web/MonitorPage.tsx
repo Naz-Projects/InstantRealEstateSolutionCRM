@@ -14,7 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { describeError } from "./lib/errorReporting";
 import {
-  boardKeyAction, clampIndex, filterRows, inTab, newSinceCount, nextIndex, sortRows, tabCounts, zipOptions,
+  boardKeyAction, clampIndex, filterRows, inTab, newSinceCount, nextIndex, sheetStepIndex, sortRows, tabCounts, zipOptions,
   SORT_LABELS, type BoardTab, type ExitFilter, type SortKey,
 } from "./lib/monitorBoard";
 import { triageStatus, type PassReason, type TriageState } from "../scraper/monitorTriage";
@@ -145,12 +145,14 @@ export function MonitorPage() {
       if (document.querySelector('[role="dialog"][aria-modal="true"]:not([data-slot="sheet-content"])')) return;
       const a = boardKeyAction({ key: e.key, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, target: e.target as HTMLElement | null });
       if (!a) return;
-      // With the sheet open (incl. a deep link), J/K start from the open deal, not the old selection.
-      const base = openId ? visible.findIndex((r) => r._id === openId) : sel;
+      // With the sheet open (incl. a deep link), J/K start from the open deal; if P/S/
+      // Snooze moved it out of the list, from its old slot (sheetStepIndex).
       const current = openId ?? visible[sel]?._id;
       if (a === "down" || a === "up") {
         e.preventDefault();
-        const ni = nextIndex(base, a, visible.length);
+        const ni = openId
+          ? sheetStepIndex(visible.findIndex((r) => r._id === openId), sel, a, visible.length)
+          : nextIndex(sel, a, visible.length);
         setSelected(ni);
         if (openId && visible[ni]) navigate({ search: (prev) => ({ ...prev, id: visible[ni]._id }), replace: true });
         return;
@@ -160,9 +162,9 @@ export function MonitorPage() {
       const r = all.find((x) => x._id === current);
       const s = r ? triageStatus(r.triage, now) : null;
       if (a === "open") open(current);
-      // P only where a pass menu is actually rendered: not on passed rows / the Passed
-      // tab, and not on a snoozed deal in the sheet (both show Restore instead).
-      if (a === "pass" && r && s !== "passed" && (openId ? s !== "snoozed" : tab !== "passed")) setPassMenuFor(current);
+      // P only where a pass menu is actually rendered: passed and snoozed deals show
+      // Restore instead, on the board and in the sheet alike.
+      if (a === "pass" && r && s !== "passed" && s !== "snoozed") setPassMenuFor(current);
       if (a === "shortlist" && r) void toggleShortlist(r);
     };
     document.addEventListener("keydown", onKey);
@@ -258,7 +260,6 @@ export function MonitorPage() {
             <BoardTable
               rows={visible}
               selected={sel}
-              tab={tab}
               lastSeenAt={lastSeenAt}
               now={now}
               passMenuFor={passMenuFor}

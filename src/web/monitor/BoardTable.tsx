@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { money, safeHref, verdictFor, type Tone } from "../../scraper/monitorPresent";
 import { triageStatus, type PassReason, type TriageState } from "../../scraper/monitorTriage";
-import { isNewSince, type BoardTab } from "../lib/monitorBoard";
+import { isNewSince } from "../lib/monitorBoard";
 import { ExitBadge } from "./ExitBadge";
 import { PassMenu } from "./PassMenu";
 
@@ -55,7 +55,6 @@ function subline(r: BoardListing): string {
 export interface BoardTableProps {
   rows: BoardListing[];
   selected: number;
-  tab: BoardTab;
   lastSeenAt: number | null;
   now: number;
   passMenuFor: string | null;
@@ -136,7 +135,7 @@ export function BoardTable(p: BoardTableProps) {
                       >
                         <Star className={cn(status === "shortlist" && "fill-current text-primary")} />
                       </Button>
-                      {p.tab === "passed" ? (
+                      {status === "passed" || status === "snoozed" ? (
                         <Button variant="ghost" size="icon-sm" aria-label="Restore" onClick={() => p.onRestore(r._id)}>
                           <RotateCcw />
                         </Button>
