@@ -6,7 +6,7 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 ## ★ NEXT — Monitor critique 2026-10-03 (awaiting user's phase pick)
 Doc: "IRES Monitor Critique" https://claude.ai/code/artifact/2e98e25e-8c30-4f05-b30e-6b7981216cce
 Evidence: prod monitorRuns Aug 6-Oct 3 + backtest of 1,225 rows + 30 live Zillow rechecks + rendered digest/page.
-- [ ] **Phase 1 — stop the noise (~1 d):** Firecrawl v2 `maxAge` unset → 2-day default cache → Zillow page identical
+- [x] **Phase 1 — SHIPPED 2026-10-04 (`5f870e6` on origin/main, prod backend deployed; regateKeepers live on prod: 106 active keepers -> 49 kept [5 FLIP / 10 RENTAL / 34 WHOLESALE], 57 de-kept; dev MONITOR_SCAN_ENABLED=0; Firecrawl remote monitor already gone). Plan: docs/superpowers/plans/2026-10-04-monitor-phase1-2-deal-quality.md.** Original scope: Firecrawl v2 `maxAge` unset → 2-day default cache → Zillow page identical
   3 nights running (new listings only every 3rd night); fix: small maxAge, `maxAge:0` on retries (monitorScrape.ts:69,
   Redfin :139 too). Dev deployment runs the nightly scan too (gate with env flag). Firecrawl Monitor dead since early Aug
   (all runs trigger=cron) — delete it. Keeper gate (monitorListings.ts:~200-206): drop distress-OR path (154 keepers, all
