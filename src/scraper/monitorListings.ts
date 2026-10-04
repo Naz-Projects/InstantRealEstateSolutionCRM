@@ -95,7 +95,7 @@ export function detailFromCache(nextData: any): ListingDetail | null {
 }
 
 import { selectComps, suggestArv, type Comp } from "./comps";
-import { estimateRehab, computeFlip, FLIP_DEFAULTS, type FlipAssumptions } from "./flip";
+import { estimateRehab, computeFlip, FLIP_DEFAULTS, REHAB_TIERS, type FlipAssumptions } from "./flip";
 export { estimateRehab };
 
 // Vacant land: house comps/rehab/rental math are meaningless on it, so land is
@@ -159,6 +159,13 @@ export function inferRehabTier(description: string): "cosmetic" | "moderate" | "
   if (GUT.test(d)) return "gut";
   if (COSMETIC.test(d) && !MODERATE.test(d)) return "cosmetic";
   return "moderate";
+}
+
+// Keyword rehab tier + estimate (tier $/sqft + default contingency). The single
+// derivation shared by the scan's analyzeOne and the stored-row re-gate so both agree.
+export function keywordRehab(description: string, sqft: number | null) {
+  const tier = inferRehabTier(description);
+  return { tier, total: estimateRehab(REHAB_TIERS[tier].perSqft, sqft, FLIP_DEFAULTS.contingencyPct).total };
 }
 
 // Explicit ALREADY-DONE renovation language (someone else already flipped it) —
@@ -266,8 +273,10 @@ export function evaluateDeal(i: DealInput): DealDecision {
 }
 // Re-gate adapter: rebuild a DealInput from a STORED monitorListings row (no scraping).
 // Old-row rules: sqft unknown -> rehab unknown and ARV = Zestimate-or-null (the old
-// median-soldPrice ARV and $0 rehab are discarded); renovated = stored RENOVATED flag
-// OR the current detector on the stored description.
+// median-soldPrice ARV and $0 rehab are discarded); sqft known -> rehab re-derived from
+// the stored description with the current keyword tier (old rows were mis-tiered gut by
+// the bare-"fire" regex), stored rehabEstimate only when there is no description;
+// renovated = stored RENOVATED flag OR the current detector on the stored description.
 export interface StoredListing {
   listPrice?: number;
   zestimate?: number;
@@ -286,7 +295,7 @@ export function dealInputFromStored(r: StoredListing): DealInput {
     zestimate: r.zestimate ?? null,
     valueBasis: arv,
     arv,
-    rehabTotal: sqftKnown ? (r.rehabEstimate ?? null) : null,
+    rehabTotal: !sqftKnown ? null : r.description ? keywordRehab(r.description, r.sqft!).total : (r.rehabEstimate ?? null),
     rent: r.rentZestimate ?? null,
     renovated: (r.riskFlags ?? []).some((f) => f.startsWith("RENOVATED")) || detectRenovated(r.description),
   };

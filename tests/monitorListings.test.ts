@@ -3,7 +3,7 @@ import { buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
-import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
+import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields, keywordRehab } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
 import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
@@ -633,9 +633,22 @@ describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip
 });
 
 describe("dealInputFromStored (re-gate adapter)", () => {
-  it("maps a normal stored row", () => {
-    expect(dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rehabEstimate: 30000, rentZestimate: 1900, description: "needs TLC", riskFlags: [] }))
-      .toEqual({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rehabTotal: 30000, rent: 1900, renovated: false });
+  it("maps a normal stored row (rehab re-derived from the description, as analyzeOne does)", () => {
+    const i = dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rehabEstimate: 30000, rentZestimate: 1900, description: "needs TLC", riskFlags: [] });
+    expect(i).toMatchObject({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rent: 1900, renovated: false });
+    expect(i.rehabTotal).toBeCloseTo(42 * 1500 * 1.1, 6); // moderate tier + 10% contingency
+  });
+  it("no stored description: falls back to the stored rehabEstimate", () => {
+    expect(dealInputFromStored({ listPrice: 180000, sqft: 1500, rehabEstimate: 30000 }).rehabTotal).toBe(30000);
+  });
+  it("old fireplace row mis-tiered gut: inflated stored rehab replaced by the non-gut tier", () => {
+    const i = dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rehabEstimate: 156750, description: "Cozy colonial with a wood-burning fireplace and firepit", riskFlags: ["heavy-rehab"] });
+    expect(i.rehabTotal).toBeCloseTo(42 * 1500 * 1.1, 6);
+    expect(i.rehabTotal).not.toBeCloseTo(156750, 0);
+  });
+  it("a real fire-damage description still yields the gut tier", () => {
+    const i = dealInputFromStored({ listPrice: 180000, sqft: 1500, rehabEstimate: 10000, description: "Fire damaged, sold as-is, cash only" });
+    expect(i.rehabTotal).toBeCloseTo(95 * 1500 * 1.1, 6);
   });
   it("old sqft-0 row: discards the median-soldPrice ARV and the $0 rehab", () => {
     const i = dealInputFromStored({ listPrice: 265000, conservativeArv: 697500, sqft: 0, rehabEstimate: 0, zestimate: 270000 });
@@ -651,6 +664,14 @@ describe("dealInputFromStored (re-gate adapter)", () => {
   it("an old distress-only keeper (above market, thin flip) is de-kept", () => {
     const d = evaluateDeal(dealInputFromStored({ listPrice: 240000, zestimate: 230000, conservativeArv: 260000, sqft: 1400, rehabEstimate: 64680, rentZestimate: 1700, description: "Estate sale, sold as-is" }));
     expect(d.keeper).toBe(false);
+  });
+});
+
+describe("keywordRehab (shared by analyzeOne and the re-gate)", () => {
+  it("returns the keyword tier and its estimate", () => {
+    expect(keywordRehab("wood-burning fireplace", 1000)).toEqual({ tier: "moderate", total: expect.closeTo(46200, 6) });
+    expect(keywordRehab("fire damage throughout", 1000).tier).toBe("gut");
+    expect(keywordRehab("fire damage throughout", 0).total).toBeNull();
   });
 });
 

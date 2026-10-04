@@ -18,9 +18,8 @@ import {
   cronScanEnabled,
   digestRecipients,
   conservativeArv,
-  inferRehabTier,
+  keywordRehab,
   detectRenovated,
-  estimateRehab,
   evaluateDeal,
   riskFlags,
   buildJudgePrompt,
@@ -28,7 +27,6 @@ import {
   type SearchListing,
   type JudgeVerdict,
 } from "../src/scraper/monitorListings";
-import { REHAB_TIERS, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { parseZip, parseRedfinComps, type Comp } from "../src/scraper/comps";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
 
@@ -413,8 +411,7 @@ export const analyzeOne = internalAction({
       const arv = arvRes.arv;
 
       // 4) Rehab tier + estimate.
-      const rehabTier = inferRehabTier(description);
-      const rehab = estimateRehab(REHAB_TIERS[rehabTier].perSqft, sqft, FLIP_DEFAULTS.contingencyPct);
+      const { tier: rehabTier, total: rehabTotal } = keywordRehab(description, sqft);
 
       // 5-6) Preliminary deal math (spread + flip + rental) — the judge's GIVEN numbers.
       // The final decision is re-run at 9b with the judge's renovated veto applied.
@@ -423,7 +420,7 @@ export const analyzeOne = internalAction({
         zestimate,
         valueBasis: arv,
         arv,
-        rehabTotal: rehab.total,
+        rehabTotal,
         rent: rentZestimate,
       };
       const pre = evaluateDeal({ ...dealInput, renovated: detectRenovated(description) });
@@ -529,7 +526,7 @@ export const analyzeOne = internalAction({
           ...(arvRes.compsPpsf != null ? { compsPpsf: arvRes.compsPpsf } : {}),
           ...(spread != null ? { spread } : {}),
           ...(spreadPct != null ? { spreadPct } : {}),
-          ...(rehab.total != null ? { rehabEstimate: Math.round(rehab.total) } : {}),
+          ...(rehabTotal != null ? { rehabEstimate: Math.round(rehabTotal) } : {}),
           ...(flipFinal
             ? {
                 ...(flipFinal.mao != null ? { flipMao: Math.round(flipFinal.mao) } : {}),
