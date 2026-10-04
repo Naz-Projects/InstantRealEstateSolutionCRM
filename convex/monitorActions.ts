@@ -336,7 +336,10 @@ export const runMonitorRecheck = internalAction({
       const apiKey = fcKey();
 
       // Lane A: price-cut sweep (sorted newest-listed, stable pages; a blocked page ends it).
-      const toAnalyze: Array<Doc<"monitorListings">["_id"]> = [];
+      // Each page's analyses are scheduled right after its upserts: an upsert consumes the
+      // cut (listPrice moves down), so an action killed mid-sweep must not leave earlier
+      // pages' cuts recorded but never analyzed.
+      let scheduled = 0;
       let total: number | null = null;
       for (let page = 1; page <= MONITOR.cutSearchMaxPages; page++) {
         const nextData = await scrapeZillowJson(buildSearchUrl({ page, priceCutOnly: true }), apiKey, SEARCH_SCRAPE_BUDGET);
@@ -352,7 +355,9 @@ export const runMonitorRecheck = internalAction({
           if (up.isNew) res.newCount++;
           if (up.priceDropped) res.cutEvents++;
           if (up.backOnMarket) res.backOnMarket++;
-          if (up.isNew || up.priceDropped || up.backOnMarket) toAnalyze.push(up.id);
+          if (up.isNew || up.priceDropped || up.backOnMarket) {
+            await ctx.scheduler.runAfter(scheduled++ * STAGGER_MS, internal.monitorActions.analyzeOne, { id: up.id });
+          }
         }
         if (total != null && res.cutCards >= total) break;
       }
@@ -363,13 +368,10 @@ export const runMonitorRecheck = internalAction({
           context: "monitorActions.runMonitorRecheck",
         });
       }
-      for (let i = 0; i < toAnalyze.length; i++) {
-        await ctx.scheduler.runAfter(i * STAGGER_MS, internal.monitorActions.analyzeOne, { id: toAnalyze[i] });
-      }
 
       // Lane B: detail re-checks for rows due in the rotation (after Lane A's analyses).
       const due = await ctx.runQuery(internal.monitorData.dueForRecheck, { now: Date.now(), limit: MONITOR.recheckDetailCap });
-      const offset = toAnalyze.length * STAGGER_MS;
+      const offset = scheduled * STAGGER_MS;
       for (let i = 0; i < due.length; i++) {
         await ctx.scheduler.runAfter(offset + i * STAGGER_MS, internal.monitorActions.recheckOne, { id: due[i]._id });
       }

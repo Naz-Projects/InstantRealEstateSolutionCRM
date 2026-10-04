@@ -600,8 +600,10 @@ export const applyRecheck = internalMutation({
 /**
  * One-time (operator) seeding: put the CURRENT active keepers into the re-check rotation,
  * spread over the cadence window so day one doesn't re-scrape all of them. New keepers
- * join automatically via analyzeOne. Run on prod after deploy:
- *   npx convex run monitorData:seedRecheck '{"dryRun":true}'
+ * join automatically via analyzeOne. Run on prod after deploy (prod deploy key; a bare
+ * `npx convex run` targets the dev deployment), dry run first, then without dryRun:
+ *   CONVEX_DEPLOY_KEY=<prod> npx convex run monitorData:seedRecheck '{"dryRun":true}'
+ * Rerun-safe: rows already in the rotation (recheckAt set) are skipped.
  */
 export const seedRecheck = internalMutation({
   args: { dryRun: v.optional(v.boolean()) },
