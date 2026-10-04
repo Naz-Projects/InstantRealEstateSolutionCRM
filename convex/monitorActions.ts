@@ -15,6 +15,7 @@ import {
   isLandType,
   isMultiUnitType,
   isCondoType,
+  passesScanGate,
   cronScanEnabled,
   digestRecipients,
   conservativeArv,
@@ -245,20 +246,7 @@ export const runMonitorScan = internalAction({
         if (total == null) total = totalResultCount(nextData);
 
         for (const l of listings) {
-          if (
-            l.isNewConstruction ||
-            l.isZillowOwned ||
-            // Apartment buildings / multi-family / condo units are not the wholesaling target — drop at the gate.
-            isMultiUnitType(l.homeType) ||
-            isCondoType(l.homeType) ||
-            // $0/placeholder-price foreclosure/auction listings have no underwritable purchase price -> mirage 100% spread; exclude.
-            l.price == null ||
-            l.price < MONITOR.minListPrice ||
-            l.price > MONITOR.priceCeiling
-          ) {
-            continue;
-          }
-          survivors.push(l);
+          if (passesScanGate(l)) survivors.push(l);
         }
         if (total != null && scanned >= total) break;
       }

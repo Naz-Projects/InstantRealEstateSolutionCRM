@@ -13,10 +13,19 @@ export const MONITOR = {
   // Rental (Phase 2): opex reserve, tax fallback when the listing has no rate, DSCR bar,
   // BRRRR refi LTV (research §5: post-refi DSCR >= ~1.15 at <= 75% LTV).
   rentalOpexPct: 0.35, rentalTaxFallbackPct: 1.6, dscrBar: 1.2, brrrrRefiLtv: 0.75,
-  keeperRetireDays: 30, // keepers older than this age off the /monitor board (archivedAt)
+  keeperRetireDays: 30, // keepers not seen in any Zillow search for this long age off the board (archivedAt)
   // Firecrawl v2 cache: first attempt accepts a page cached <= 1h; retries force a live
   // scrape (maxAge 0). Unset, v2 defaults to a 2-day cache (lessons 2026-10-03).
   scrapeMaxAgeMs: 60 * 60 * 1000,
+  // Phase 4 (wider net): re-check lane. Lane A = daily price-cut search sweep (verified
+  // live 2026-10-04: 208 NCC results <= $500K = 6 pages); Lane B = detail re-scrape rotation.
+  recheckEveryDays: 3,   // active keepers: detail re-check cadence (status / cut / back-on-market)
+  pendingRecheckDays: 7, // PENDING-archived rows: slower cadence, watching for back-on-market
+  trackDays: 45,         // a row not seen in any Zillow search for this long leaves the rotation
+  recheckDetailCap: 25,  // max detail re-checks scheduled per re-check run (~1 credit each)
+  cutSearchMaxPages: 8,  // price-cut sweep page cap (6 needed today; a short sweep logs coverage)
+  alertTagFreshDays: 7,  // a PRICE CUT / BACK ON MARKET tag shows in the digest this long after the event
+  recheckGraceMs: 12 * 60 * 60 * 1000, // due times are set minutes AFTER the 14:00 cron; without this grace a 3-day check drifts to 4
   ncc_bounds: { west: -75.97218944726562, east: -75.22237255273437, south: 39.36230086205304, north: 39.76777058263119 },
 } as const;
 
@@ -27,13 +36,21 @@ export function cronScanEnabled(flag: string | undefined): boolean {
   return (flag ?? "").trim() !== "0";
 }
 
-export function buildSearchUrl({ page }: { page?: number } = {}): string {
+export function buildSearchUrl({ page, priceCutOnly }: { page?: number; priceCutOnly?: boolean } = {}): string {
+  // priceCutOnly = the Phase 4 sweep: ANY days on Zillow + Zillow's "Must have price
+  // reduction" filter (id onlyPriceReduction, no shortId). Verified live 2026-10-04: echoed in
+  // queryState, every card priceChange < 0, sort "days" honored with it ("mostrecentchange"
+  // is silently replaced by relevance = unstable pages). The nightly branch must stay
+  // byte-identical (key order included): the remote Firecrawl monitor watches that URL.
+  const filterState = priceCutOnly
+    ? { sort: { value: MONITOR.sort }, price: { max: MONITOR.priceCeiling }, onlyPriceReduction: { value: true } }
+    : { sort: { value: MONITOR.sort }, doz: { value: MONITOR.dozDays }, price: { max: MONITOR.priceCeiling } };
   const sqs = {
     pagination: page && page > 1 ? { currentPage: page } : {},
     isMapVisible: false,
     mapBounds: MONITOR.ncc_bounds,
     regionSelection: [{ regionId: MONITOR.regionId, regionType: MONITOR.regionType }],
-    filterState: { sort: { value: MONITOR.sort }, doz: { value: MONITOR.dozDays }, price: { max: MONITOR.priceCeiling } },
+    filterState,
     isListVisible: true,
   };
   return "https://www.zillow.com/new-castle-county-de/?searchQueryState=" + encodeURIComponent(JSON.stringify(sqs));
@@ -49,6 +66,9 @@ export interface SearchListing {
   ppsf: number | null; status: string; homeType?: string; daysOnZillow?: number;
   zestimate: number | null; zestSpreadPct: number | null; address: string; zip?: string;
   lat?: number; lng?: number; isNewConstruction: boolean; isZillowOwned: boolean; url: string;
+  homeStatus?: string;       // Zillow homeInfo.homeStatus, e.g. "FOR_SALE"
+  priceChange?: number;      // Zillow's last price change in $ (negative = cut)
+  datePriceChanged?: number; // epoch ms of that change
 }
 export function totalResultCount(nextData: any): number | null {
   return nextData?.props?.pageProps?.searchPageState?.cat1?.searchList?.totalResultCount ?? null;
@@ -70,6 +90,9 @@ export function listingsFromSearch(nextData: any): SearchListing[] {
       address: c.address ?? "", zip: c.addressZipcode, lat: c.latLong?.latitude, lng: c.latLong?.longitude,
       isNewConstruction: !!(c.builderName || c.isPaidBuilderNewConstruction) || /\/community\//.test(url),
       isZillowOwned: !!c.isZillowOwned, url,
+      homeStatus: typeof hi.homeStatus === "string" ? hi.homeStatus : undefined,
+      priceChange: typeof hi.priceChange === "number" ? hi.priceChange : undefined,
+      datePriceChanged: typeof hi.datePriceChanged === "number" ? hi.datePriceChanged : undefined,
     };
   });
 }
@@ -81,6 +104,8 @@ export interface ListingDetail {
   agentName?: string; agentPhone?: string; brokerName?: string; lotSize: number | null;
   priceHistory: { date?: string; event?: string; price?: number; ppsf?: number }[]; photoUrls: string[];
   propertyTaxRate: number | null; // percent (e.g. 0.68); Zillow's rate for this property
+  price: number | null; // current list price on the detail page (re-check lane compares it)
+  isPending: boolean;   // listingSubType.isPending (verified live 2026-10-04)
 }
 export function detailFromCache(nextData: any): ListingDetail | null {
   const cc = nextData?.props?.pageProps?.componentProps?.gdpClientCache;
@@ -102,6 +127,8 @@ export function detailFromCache(nextData: any): ListingDetail | null {
     priceHistory: (p.priceHistory ?? []).slice(0, 6).map((h: any) => ({ date: h.date, event: h.event, price: h.price, ppsf: h.pricePerSquareFoot })),
     photoUrls: photos,
     propertyTaxRate: typeof p.propertyTaxRate === "number" && p.propertyTaxRate > 0 ? p.propertyTaxRate : null,
+    price: typeof p.price === "number" && p.price > 0 ? p.price : null,
+    isPending: p.listingSubType?.isPending === true,
   };
 }
 
@@ -129,6 +156,21 @@ export function isMultiUnitType(homeType: string | null | undefined): boolean {
 export function isCondoType(homeType: string | null | undefined): boolean {
   const t = (homeType || "").trim().toUpperCase().replace(/_/g, "");
   return t === "CONDO" || t === "CONDOMINIUM" || t.startsWith("COOP");
+}
+
+// The discovery gate shared by the nightly new-listings scan and the price-cut sweep:
+// no new construction / Zillow-owned / multi-family / condo, and a real purchase price
+// inside the band ($0/placeholder foreclosure prices make mirage 100% spreads).
+export function passesScanGate(l: SearchListing): boolean {
+  return !(
+    l.isNewConstruction ||
+    l.isZillowOwned ||
+    isMultiUnitType(l.homeType) ||
+    isCondoType(l.homeType) ||
+    l.price == null ||
+    l.price < MONITOR.minListPrice ||
+    l.price > MONITOR.priceCeiling
+  );
 }
 
 // Digest recipients: every active CRM user + the RESEND_TO fallback, deduped
