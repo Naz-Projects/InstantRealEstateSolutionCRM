@@ -254,7 +254,7 @@ export interface DealDecision {
 // belowMarket basis = Zestimate when present (list <= 0.85 x Zestimate), else the
 // comps value. Distress is score/label only — it never keeps a listing.
 export function evaluateDeal(i: DealInput): DealDecision {
-  const basis = i.zestimate ?? i.valueBasis;
+  const basis = i.zestimate != null && i.zestimate > 0 ? i.zestimate : i.valueBasis;
   const spread = basis != null && i.listPrice != null ? basis - i.listPrice : null;
   const spreadPct = spread != null && basis ? +((spread / basis) * 100).toFixed(1) : null;
   const belowMarket = basis != null && basis > 0 && i.listPrice != null && i.listPrice <= basis * (1 - MONITOR.spreadThreshold);
@@ -327,6 +327,12 @@ export function decisionFields(d: DealDecision) {
 // stays on the /monitor board but never reaches the email.
 export function isDigestWorthy(bestExit: string | null | undefined): boolean {
   return bestExit === "FLIP" || bestExit === "RENTAL";
+}
+// A board-only keeper (WHOLESALE/PASS/unset) may already carry emailedAt from
+// markDigestSkipped; when a re-analysis upgrades it to FLIP/RENTAL, emailedAt must be
+// cleared or the digest (keeper && emailedAt unset) never sees it.
+export function shouldReopenForDigest(prevExit: string | null | undefined, nextExit: string | null | undefined): boolean {
+  return isDigestWorthy(nextExit) && !isDigestWorthy(prevExit);
 }
 // Split never-emailed keepers: active digest-worthy rows get emailed; the rest
 // (board-only exits, archived) get emailedAt stamped as "processed" so they leave

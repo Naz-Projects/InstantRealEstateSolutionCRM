@@ -5,7 +5,7 @@ import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields, keywordRehab } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
-import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows } from "../src/scraper/monitorListings";
+import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows, shouldReopenForDigest } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
@@ -687,5 +687,27 @@ describe("decisionFields", () => {
     const f = decisionFields(evaluateDeal({ ...DEAL, listPrice: 120000, arv: 250000, rehabTotal: 20000, rent: 1900 }));
     expect(f.flipProfit).toBe(73200);
     expect(f.cashFlow).toBe(436);
+  });
+});
+
+describe("shouldReopenForDigest (board-only keeper upgraded to an actionable exit)", () => {
+  it("reopens when the exit becomes digest-worthy", () => {
+    expect(shouldReopenForDigest("WHOLESALE", "FLIP")).toBe(true);
+    expect(shouldReopenForDigest("PASS", "RENTAL")).toBe(true);
+    expect(shouldReopenForDigest(undefined, "FLIP")).toBe(true);
+  });
+  it("does not reopen an already-worthy exit or a downgrade", () => {
+    expect(shouldReopenForDigest("FLIP", "FLIP")).toBe(false);
+    expect(shouldReopenForDigest("FLIP", "WHOLESALE")).toBe(false);
+    expect(shouldReopenForDigest("RENTAL", "FLIP")).toBe(false);
+  });
+});
+
+describe("evaluateDeal basis: non-positive Zestimate is absent", () => {
+  it("zestimate 0 falls back to valueBasis", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 170000, zestimate: 0, valueBasis: 200000 });
+    expect(d.spread).toBe(30000);
+    expect(d.spreadPct).toBe(15);
+    expect(d.belowMarket).toBe(true);
   });
 });

@@ -19,6 +19,7 @@ import {
   digestRecipients,
   conservativeArv,
   keywordRehab,
+  shouldReopenForDigest,
   detectRenovated,
   evaluateDeal,
   riskFlags,
@@ -500,6 +501,7 @@ export const analyzeOne = internalAction({
         id,
         ...(flipFinal ? {} : { clearFlip: true }),
         ...(rental ? {} : { clearRental: true }),
+        ...(shouldReopenForDigest(row.bestExit, deal.bestExit) ? { clearEmailed: true } : {}),
         fields: {
           status: "analyzed" as const,
           arvSource: arvRes.source,

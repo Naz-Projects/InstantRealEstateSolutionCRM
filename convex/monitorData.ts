@@ -219,10 +219,12 @@ export const patchAnalysis = internalMutation({
     fields: analysisFields,
     clearFlip: v.optional(v.boolean()),
     clearRental: v.optional(v.boolean()),
+    clearEmailed: v.optional(v.boolean()), // board-only keeper upgraded to FLIP/RENTAL -> back into the digest
   },
-  handler: async (ctx, { id, fields, clearFlip, clearRental }) => {
+  handler: async (ctx, { id, fields, clearFlip, clearRental, clearEmailed }) => {
     await ctx.db.patch(id, {
       ...fields,
+      ...(clearEmailed ? { emailedAt: undefined } : {}),
       ...(clearFlip
         ? { flipMao: undefined, flipProfit: undefined, flipMargin: undefined, flipRoi: undefined, roomVsList: undefined }
         : {}),
@@ -467,7 +469,8 @@ export const archiveStaleKeepers = internalMutation({
  * Re-gate the active (non-archived) keepers under the CURRENT keeper rules using
  * only stored fields (no scraping, zero Firecrawl credits). De-keeps rows that now
  * fail; never promotes a non-keeper (the scan's analyzeOne is the only promoter).
- * Rows that stay keepers get their decision fields refreshed. `dryRun` returns the
+ * Rows that stay keepers get their decision fields refreshed; rows the user already
+ * promoted (promotedDealId) are skipped untouched. `dryRun` returns the
  * same counts without writing. Operator-run on prod after deploy:
  *   npx convex run monitorData:regateKeepers '{"dryRun":true}'
  */
@@ -480,8 +483,11 @@ export const regateKeepers = internalMutation({
       .collect();
     const exitMix: Record<string, number> = {};
     const dekept: string[] = [];
+    let skippedPromoted = 0;
     const now = Date.now();
     for (const row of rows) {
+      // User already promoted it to a potential deal: leave untouched (counts as kept).
+      if (row.promotedDealId) { skippedPromoted++; continue; }
       const d = evaluateDeal(dealInputFromStored(row));
       if (d.keeper) exitMix[d.bestExit] = (exitMix[d.bestExit] ?? 0) + 1;
       else dekept.push(row.address);
@@ -498,6 +504,7 @@ export const regateKeepers = internalMutation({
       total: rows.length,
       kept: rows.length - dekept.length,
       dekept: dekept.length,
+      skippedPromoted,
       exitMix,
       dekeptSample: dekept.slice(0, 25),
     };
