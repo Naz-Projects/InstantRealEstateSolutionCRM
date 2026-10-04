@@ -3,6 +3,27 @@
 What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocked on the user.
 (History lives in git; this is the current picture, not a session log.)
 
+## ★ NEXT — Monitor critique 2026-10-03 (awaiting user's phase pick)
+Doc: "IRES Monitor Critique" https://claude.ai/code/artifact/2e98e25e-8c30-4f05-b30e-6b7981216cce
+Evidence: prod monitorRuns Aug 6-Oct 3 + backtest of 1,225 rows + 30 live Zillow rechecks + rendered digest/page.
+- [ ] **Phase 1 — stop the noise (~1 d):** Firecrawl v2 `maxAge` unset → 2-day default cache → Zillow page identical
+  3 nights running (new listings only every 3rd night); fix: small maxAge, `maxAge:0` on retries (monitorScrape.ts:69,
+  Redfin :139 too). Dev deployment runs the nightly scan too (gate with env flag). Firecrawl Monitor dead since early Aug
+  (all runs trigger=cron) — delete it. Keeper gate (monitorListings.ts:~200-206): drop distress-OR path (154 keepers, all
+  -ve flip, 7/8 sampled overpriced); belowMarket vs Zestimate (≤0.85×) WHEN a Zestimate exists, else keep current comps test (requiring one drops 3 real winners); RENTAL needs cap≥6% AND cash flow≥0;
+  sqft=0 → median-soldPrice ARV + $0 rehab bug (comps.ts:91, flip.ts:60); GUT regex matches "fireplace" (:139).
+  Digest: FLIP/RENTAL only. Sim: keepers 33%→16% (~4.7/night).
+  Then re-gate the ~95 existing keepers under the new rules (patchAnalysis pattern from the 08-08 condo cleanup).
+  NOTE: the 30-listing outcome sample is small + non-random (FLIP picks skewed to worst ratios) — lean on population stats.
+- [ ] **Phase 2 — trustworthy numbers (2-3 d):** comps by distance+type (comps.ts:75 takes first 8 ZIP-wide; city ARV off
+  >25% on 37%); renovated ARV = top-quartile $/sqft vs as-is median; rehab uses LLM conditionTier; lease rent from
+  description; real NCC tax (1.6% unverified); DSCR + refi view.
+- [ ] **Phase 3 — triage UI (2-3 d):** /monitor inbox (New/Shortlist/Passed, pass-with-reason, snooze, filters, sort, side
+  sheet, J/K/P/S); email 5-second brief with deep links, decision number (offer gap / cash flow) up front, AA contrast.
+- [ ] **Phase 4 — wider net (2 d):** re-check lane for tracked listings (price cuts, back-on-market, pending/sold → retire),
+  re-alert on new cuts (clear emailedAt), per-user buy box.
+- Open user Qs: phase order; profit floors; send "0 worth a look" emails?; allow 2-4 unit for rentals?; digest to all 5 users?
+
 ## ★ NEXT — Deep-dive follow-ups (2026-08-08, full detail in `memory/deep-dive-2026-08-08.md`)
 - [x] **Digest → all active users** + **apartment/MF/condo exclusion** + prod keeper cleanup (SHIPPED 2026-08-08).
 - [x] **P0-arch A25-1 — SHIPPED 2026-08-08 (`664ea0e` → prod):** keeper set bounded — `archivedAt` +
