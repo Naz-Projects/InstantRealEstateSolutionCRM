@@ -21,7 +21,7 @@
 - The distress-OR keep path is deleted; "distressed"/foreclosure are labels only. The LLM never decides keeping. LLM inputs may only make the economics WORSE (renovated veto removes a flip; conditionTier can only raise rehab scope).
 - Do NOT change the shared helpers `selectComps`, `suggestArv`, `parseRedfinComps` or `REHAB_TIERS` (used by the Flip Analyzer, compsActions, equityActions). The `estimateRehab` sqft > 0 guard (Task 4) is the one intended global fix.
 - Do not remove `convex/http.ts`'s webhook route or `createFirecrawlMonitor` (the remote monitor deletion is an orchestrator ops step).
-- Convex codegen/validation ONLY via the isolated local backend, PowerShell: `$env:CONVEX_AGENT_MODE='anonymous'; npx convex dev --once`. Never plain `npx convex dev` / `npx convex codegen` (they push to the shared deployment). Commit any resulting `convex/_generated/*` changes in the same task.
+- Convex codegen/validation ONLY via the isolated local backend, PowerShell: `$env:CONVEX_AGENT_MODE='anonymous'; npx convex dev --once`. Never plain `npx convex dev` / `npx convex codegen` (they push to the shared deployment). Commit any resulting `convex/_generated/*` changes in the same task. On a FRESH anonymous backend the push fails with "CLERK_JWT_ISSUER_DOMAIN ... not set"; set a dummy once: `$env:CONVEX_AGENT_MODE='anonymous'; npx convex env set CLERK_JWT_ISSUER_DOMAIN https://example.clerk.accounts.dev` (verified 2026-10-04: the final-state schema + functions then push clean).
 - Every task ends green on all three: `npx vitest run`, `npx tsc --noEmit` (src/scripts/tests), `npx tsc --noEmit -p convex` (Convex functions). Baseline before Task 1: 396 tests pass, both typechecks clean.
 - No emojis anywhere (code, comments, commit messages, flags).
 - Every commit message ends with exactly these two lines:
@@ -197,12 +197,12 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
 **Files:**
 - Modify: `src/scraper/monitorListings.ts` (new export before `buildSearchUrl`)
 - Modify: `convex/monitorActions.ts` (import list; top of `runMonitorScan` handler)
-- Test: `tests/monitorListings.test.ts` (append; extend line-7 import)
+- Test: `tests/monitorListings.test.ts` (append; extend the `import { isLandType, ...` line)
 
 **Interfaces:**
 - Produces: `cronScanEnabled(flag: string | undefined): boolean`.
 
-- [ ] **Step 1: Write the failing test** — change the import on line 7 of `tests/monitorListings.test.ts` to:
+- [ ] **Step 1: Write the failing test** — replace the `import { isLandType, isMultiUnitType, isCondoType, digestRecipients } ...` line of `tests/monitorListings.test.ts` with:
 ```ts
 import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled } from "../src/scraper/monitorListings";
 ```
@@ -270,7 +270,7 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
 - Modify: `convex/monitorActions.ts` (imports; steps 5-6, judge args, 9b/10, patch)
 - Modify: `convex/monitorData.ts` (`analysisFields`; `patchAnalysis` `clearRental`)
 - Modify: `convex/schema.ts` (`monitorListings`: `flipScore`, `rentScore`)
-- Test: `tests/monitorListings.test.ts` (replace the `describe("scoreDeal + decideKeeper"...)` block, lines ~193-219; extend line-6 import)
+- Test: `tests/monitorListings.test.ts` (replace the `describe("scoreDeal + decideKeeper"...)` block; replace the `import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } ...` line)
 
 **Interfaces:**
 - Consumes: `analyzeFlip(arv, list, rehab)`, `analyzeRental({rent, list, rehab})`, `RentalMetrics`.
@@ -285,7 +285,7 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
   - `MONITOR.flipProfitFloor = 25000`, `MONITOR.cashFlowFloor = 0`; `MONITOR.distressScoreFloor` is DELETED.
   - `patchAnalysis` accepts `clearRental?: boolean`.
 
-- [ ] **Step 1: Write the failing tests** — in `tests/monitorListings.test.ts` replace the line-6 import with:
+- [ ] **Step 1: Write the failing tests** — in `tests/monitorListings.test.ts` replace the `import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } ...` line with:
 ```ts
 import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
@@ -692,12 +692,12 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
 **Files:**
 - Modify: `src/scraper/monitorListings.ts` (new export above `riskFlags`)
 - Modify: `convex/monitorData.ts` (import; `keepersToEmail` filter)
-- Test: `tests/monitorListings.test.ts` (append; extend line-7 import)
+- Test: `tests/monitorListings.test.ts` (append; extend the `import { isLandType, ...` line)
 
 **Interfaces:**
 - Produces: `isDigestWorthy(bestExit: string | null | undefined): boolean`.
 
-- [ ] **Step 1: Write the failing test** — line-7 import becomes:
+- [ ] **Step 1: Write the failing test** — the `import { isLandType, ...` line becomes:
 ```ts
 import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy } from "../src/scraper/monitorListings";
 ```
@@ -757,7 +757,7 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
 **Files:**
 - Modify: `src/scraper/monitorListings.ts` (new exports above `isDigestWorthy`)
 - Modify: `convex/monitorData.ts` (import; new `regateKeepers` internalMutation above `sweepStalePending`)
-- Test: `tests/monitorListings.test.ts` (append; extend line-6 import)
+- Test: `tests/monitorListings.test.ts` (append; extend the `import { analyzeFlip, ...` line)
 
 **Interfaces:**
 - Consumes: `evaluateDeal`, `DealInput`, `DealDecision`, `detectRenovated`.
@@ -767,7 +767,7 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
   - `decisionFields(d: DealDecision)` -> `{ keeper, belowMarket, bestExit, dealScore, flipScore, rentScore, spread?, spreadPct?, flipMao?, flipProfit?, flipMargin?, flipRoi?, roomVsList?, capRate?, cashFlow?, onePctRule?, cashOnCash? }` where absent exits are explicit `undefined` (= remove on `ctx.db.patch`).
   - Convex: `internal.monitorData.regateKeepers({ dryRun?: boolean }) -> { dryRun, total, kept, dekept, exitMix, dekeptSample }`.
 
-- [ ] **Step 1: Write the failing tests** — line-6 import becomes:
+- [ ] **Step 1: Write the failing tests** — the `import { analyzeFlip, ...` line becomes:
 ```ts
 import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
 ```
@@ -917,7 +917,7 @@ export const regateKeepers = internalMutation({
 });
 ```
 
-- [ ] **Step 6: Validate locally** — `npx vitest run` -> 429 passed; `npx tsc --noEmit`; `npx tsc --noEmit -p convex` -> clean. PowerShell: `$env:CONVEX_AGENT_MODE='anonymous'; npx convex dev --once` (regenerates `convex/_generated/api.d.ts` with `regateKeepers`), then `$env:CONVEX_AGENT_MODE='anonymous'; npx convex run monitorData:regateKeepers '{\"dryRun\":true}'` -> Expected on the empty local backend: `{ dryRun: true, total: 0, kept: 0, dekept: 0, exitMix: {}, dekeptSample: [] }`.
+- [ ] **Step 6: Validate locally** — `npx vitest run` -> 429 passed; `npx tsc --noEmit`; `npx tsc --noEmit -p convex` -> clean. PowerShell: `$env:CONVEX_AGENT_MODE='anonymous'; npx convex dev --once` (regenerates `convex/_generated/api.d.ts` with `regateKeepers`), then from the **Bash** tool (avoids PowerShell 5.1 JSON-argument mangling): `CONVEX_AGENT_MODE=anonymous npx convex run monitorData:regateKeepers '{"dryRun":true}'` -> Expected on the empty local backend: `{ "dekept": 0, "dekeptSample": [], "dryRun": true, "exitMix": {}, "kept": 0, "total": 0 }` (a trailing Windows `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` line is harmless node exit noise). This dry-run is a smoke check; codegen + both `tsc` passes are the gate.
 
 - [ ] **Step 7: Commit**
 
@@ -928,7 +928,7 @@ git commit -m "feat(monitor): regateKeepers mutation (stored-fields re-gate, dry
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
 ```
-Phase 1 is now shippable. Orchestrator ops after deploy (not implementer steps): set `MONITOR_SCAN_ENABLED=0` on dev; delete the remote Firecrawl monitor; run `regateKeepers` dry-run, review, then for real on prod.
+Phase 1 is now shippable. Orchestrator ops after deploy (not implementer steps): set `MONITOR_SCAN_ENABLED=0` on dev; delete the remote Firecrawl monitor; run `regateKeepers` dry-run, review, then for real on prod IMMEDIATELY after deploy and before that night's scan (02:00 UTC) — until it runs, `keepersToEmail` still sees un-emailed old keepers carrying old `bestExit` labels, so the next digest would go out under the old rules. Repeat the re-gate after the Phase 2 deploy (Tasks 9-10 change the stored-row math).
 
 ---
 
@@ -1426,7 +1426,7 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
 - Modify: `src/scraper/monitorListings.ts` (MONITOR; flip import; new `monitorRehab` above `RentalMetrics`; `analyzeFlip` hold param; `DealInput.holdingMonths`; `evaluateDeal`; `StoredListing` + `dealInputFromStored`)
 - Modify: `convex/monitorActions.ts` (imports; step 4; pre/final `evaluateDeal`; flags; patch)
 - Modify: `convex/monitorData.ts` (`regateKeepers` patches the recomputed `rehabEstimate`)
-- Test: `tests/monitorListings.test.ts` (append; update three Task-6 adapter tests; extend line-6 import)
+- Test: `tests/monitorListings.test.ts` (append; update three Task-6 adapter tests; extend the `import { analyzeFlip, ...` line)
 
 **Interfaces:**
 - Consumes: `REHAB_TIERS`, `FLIP_DEFAULTS`, `estimateRehab` (flip.ts); `JudgeVerdict.conditionTier` (`"cosmetic" | "moderate" | "systems" | "structural" | null`).
@@ -1439,7 +1439,7 @@ Claude-Session: https://claude.ai/code/session_01BLSGv8DSEn1gkdquU5iXLV"
   - `DealInput.holdingMonths?: number`
   - `StoredListing`: REMOVES `rehabEstimate`; ADDS `rehabTier?: string; conditionTier?: string; yearBuilt?: number`. `dealInputFromStored` now returns `holdingMonths` too.
 
-- [ ] **Step 1: Write the failing tests** — line-6 import: add `monitorRehab` to the list. Append:
+- [ ] **Step 1: Write the failing tests** — add `monitorRehab` to the `import { analyzeFlip, ...` line. Append:
 ```ts
 describe("monitorRehab (max of keyword tier and LLM conditionTier + era add-ons)", () => {
   it("LLM systems over keyword moderate: 55 x 1000 x 1.10 + lead paint 3,000", () => {
