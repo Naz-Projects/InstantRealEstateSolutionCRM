@@ -264,6 +264,11 @@ export function evaluateDeal(i: DealInput): DealDecision {
     : "PASS";
   return { belowMarket, spread, spreadPct, flip, rental, ...s, bestExit, keeper: flipOk || rentalOk || belowMarket };
 }
+// Digest = actionable exits only: a keeper whose bestExit is WHOLESALE/PASS (or unset)
+// stays on the /monitor board but never reaches the email.
+export function isDigestWorthy(bestExit: string | null | undefined): boolean {
+  return bestExit === "FLIP" || bestExit === "RENTAL";
+}
 export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean; sqftKnown?: boolean }): string[] {
   const f: string[] = [];
   if ((r.homeType || "").toUpperCase() === "MANUFACTURED") f.push("MANUFACTURED (comps/lot-rent suspect)");

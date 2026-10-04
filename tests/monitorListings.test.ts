@@ -5,7 +5,7 @@ import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
-import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled } from "../src/scraper/monitorListings";
+import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
@@ -596,5 +596,18 @@ describe("GUT regex is word-bounded (fireplace is not fire damage)", () => {
   it("side effect: a renovated listing with a fireplace is now detected as renovated", () => {
     // detectRenovated requires !GUT; "fireplace" used to match GUT and hide the renovation.
     expect(detectRenovated("Fully renovated colonial with a wood-burning fireplace")).toBe(true);
+  });
+});
+
+describe("isDigestWorthy (digest = FLIP/RENTAL keepers only)", () => {
+  it("FLIP and RENTAL are emailed", () => {
+    expect(isDigestWorthy("FLIP")).toBe(true);
+    expect(isDigestWorthy("RENTAL")).toBe(true);
+  });
+  it("WHOLESALE / PASS / unset are board-only", () => {
+    expect(isDigestWorthy("WHOLESALE")).toBe(false);
+    expect(isDigestWorthy("PASS")).toBe(false);
+    expect(isDigestWorthy(undefined)).toBe(false);
+    expect(isDigestWorthy(null)).toBe(false);
   });
 });

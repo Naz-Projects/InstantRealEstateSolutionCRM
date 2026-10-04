@@ -5,6 +5,7 @@ import type { QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
+import { isDigestWorthy } from "../src/scraper/monitorListings";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -409,7 +410,8 @@ export const keepersToEmail = internalQuery({
       .query("monitorListings")
       .withIndex("by_keeper_emailed", (q) => q.eq("keeper", true).eq("emailedAt", undefined))
       .collect();
-    const active = rows.filter((r) => r.archivedAt === undefined);
+    // Filter BEFORE the cap so board-only keepers (WHOLESALE/PASS) can't crowd it.
+    const active = rows.filter((r) => r.archivedAt === undefined && isDigestWorthy(r.bestExit));
     active.sort((a, b) => (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity));
     return active.slice(0, limit ?? 50);
   },
