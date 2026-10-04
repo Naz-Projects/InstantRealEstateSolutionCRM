@@ -9,6 +9,13 @@ export const MONITOR = {
   ncc_bounds: { west: -75.97218944726562, east: -75.22237255273437, south: 39.36230086205304, north: 39.76777058263119 },
 } as const;
 
+// Dev-duplicate off-switch: the nightly CRON scan runs unless the deployment sets
+// MONITOR_SCAN_ENABLED to exactly "0" (unset = enabled, so prod is unchanged).
+// Webhook/manual runs ignore it.
+export function cronScanEnabled(flag: string | undefined): boolean {
+  return (flag ?? "").trim() !== "0";
+}
+
 export function buildSearchUrl({ page }: { page?: number } = {}): string {
   const sqs = {
     pagination: page && page > 1 ? { currentPage: page } : {},

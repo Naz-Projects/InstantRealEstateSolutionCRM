@@ -15,6 +15,7 @@ import {
   isLandType,
   isMultiUnitType,
   isCondoType,
+  cronScanEnabled,
   digestRecipients,
   conservativeArv,
   inferRehabTier,
@@ -167,6 +168,11 @@ export const runMonitorScan = internalAction({
     maxPages: v.optional(v.number()),
   },
   handler: async (ctx, { trigger, content, maxPages }): Promise<ScanResult> => {
+    // Off-switch for the cron path only (e.g. the dev deployment duplicating prod's
+    // nightly scan): MONITOR_SCAN_ENABLED="0" skips with no run row and no scrape.
+    if (trigger === "cron" && !cronScanEnabled(process.env.MONITOR_SCAN_ENABLED)) {
+      return { scanned: 0, newCount: 0, keeperCount: 0 };
+    }
     // Cron 20h no-op guard: the daily safety net only fills in when the webhook
     // didn't fire. If a COMPLETE run already finished/started within the last 20h,
     // skip entirely (no run row, no scrape). Only the cron is guarded — webhook /

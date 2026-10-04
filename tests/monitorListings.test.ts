@@ -4,7 +4,7 @@ import { extractNextData, listingsFromSearch, totalResultCount } from "../src/sc
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
-import { isLandType, isMultiUnitType, isCondoType, digestRecipients } from "../src/scraper/monitorListings";
+import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
@@ -480,5 +480,18 @@ describe("parseJudgeResponse v2 (condition/exit breakdown)", () => {
     expect(v.conditionTier).toBe("cosmetic");
     expect(v.exitTriage).toBe("WHOLETAIL");
     expect(v.valueAddScope).toBe("paint + carpet");
+  });
+});
+
+describe("cronScanEnabled (MONITOR_SCAN_ENABLED off-switch)", () => {
+  it("enabled when unset/empty/anything but 0", () => {
+    expect(cronScanEnabled(undefined)).toBe(true);
+    expect(cronScanEnabled("")).toBe(true);
+    expect(cronScanEnabled("1")).toBe(true);
+    expect(cronScanEnabled("false")).toBe(true); // literal spec: only "0" disables
+  });
+  it("disabled only by 0 (whitespace-tolerant)", () => {
+    expect(cronScanEnabled("0")).toBe(false);
+    expect(cronScanEnabled(" 0 ")).toBe(false);
   });
 });
