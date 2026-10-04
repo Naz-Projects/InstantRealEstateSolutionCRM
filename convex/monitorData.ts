@@ -138,6 +138,11 @@ const analysisFields = v.object({
   offMarketSignals: v.optional(v.array(v.string())),
   offMarketBalances: v.optional(v.number()),
   offMarketConditionScore: v.optional(v.number()),
+  // Phase 4 tracking (set by analyzeOne)
+  homeStatus: v.optional(v.string()),
+  recheckAt: v.optional(v.number()),
+  alertTag: v.optional(v.string()),
+  alertedEventAt: v.optional(v.number()),
   // workflow
   status: v.optional(
     v.union(
@@ -224,12 +229,14 @@ export const patchAnalysis = internalMutation({
     fields: analysisFields,
     clearFlip: v.optional(v.boolean()),
     clearRental: v.optional(v.boolean()),
-    clearEmailed: v.optional(v.boolean()), // board-only keeper upgraded to FLIP/RENTAL -> back into the digest
+    clearEmailed: v.optional(v.boolean()), // upgraded to FLIP/RENTAL, or a new cut/back-on-market re-alert -> back into the digest
+    clearRecheck: v.optional(v.boolean()), // no longer a keeper -> leave the detail re-check rotation
   },
-  handler: async (ctx, { id, fields, clearFlip, clearRental, clearEmailed }) => {
+  handler: async (ctx, { id, fields, clearFlip, clearRental, clearEmailed, clearRecheck }) => {
     await ctx.db.patch(id, {
       ...fields,
       ...(clearEmailed ? { emailedAt: undefined } : {}),
+      ...(clearRecheck ? { recheckAt: undefined } : {}),
       ...(clearFlip
         ? { flipMao: undefined, flipProfit: undefined, flipMargin: undefined, flipRoi: undefined, roomVsList: undefined }
         : {}),

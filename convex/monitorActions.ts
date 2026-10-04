@@ -22,6 +22,7 @@ import {
   inferRehabTier,
   monitorRehab,
   shouldReopenForDigest,
+  isDigestWorthy,
   detectRenovated,
   evaluateDeal,
   rentForListing,
@@ -34,6 +35,7 @@ import {
 import { parseZip, parseRedfinComps, parseRedfinGisComps, isLegacyCompsCache, type Comp } from "../src/scraper/comps";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
 import { buildDigest } from "../src/scraper/monitorDigest";
+import { reAlertDecision, nextRecheckAt } from "../src/scraper/monitorRecheck";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — the "use node" action layer:
 // scan → per-listing enrich → keeper decision. ONE shared scan path (webhook /
@@ -512,6 +514,12 @@ export const analyzeOne = internalAction({
       const matched = new Set<string>(verdict?.matchedRequirements ?? []);
       if (belowMarket) matched.add("below_market");
 
+      // 10b) Phase 4: re-alert on a NEW cut / back-on-market (decided here, after the new
+      // numbers, so a failed re-analysis never emails stale ones) + detail re-check rotation.
+      const now = Date.now();
+      const reAlert = reAlertDecision(row, isDigestWorthy(deal.bestExit));
+      const recheckAt = nextRecheckAt({ keeper, archivedAt: row.archivedAt, archivedReason: row.archivedReason, lastSeen: row.lastSeen }, now);
+
       // 11) Patch everything + status:"analyzed" (omit null-valued optionals).
       // clearFlip/clearRental: patchAnalysis merges, so a re-analyzed row whose exit
       // is now null (renovated veto / unknown rehab) must have it REMOVED, not omitted.
@@ -519,7 +527,9 @@ export const analyzeOne = internalAction({
         id,
         ...(flipFinal ? {} : { clearFlip: true }),
         ...(rental ? {} : { clearRental: true }),
-        ...(shouldReopenForDigest(row.bestExit, deal.bestExit) ? { clearEmailed: true } : {}),
+        // ONE clearEmailed per analysis: exit upgrade (Phase 1) OR a new event (alertedEventAt guard).
+        ...(shouldReopenForDigest(row.bestExit, deal.bestExit) || reAlert.reopen ? { clearEmailed: true } : {}),
+        ...(recheckAt == null ? { clearRecheck: true } : {}),
         fields: {
           status: "analyzed" as const,
           arvSource: arvRes.source,
@@ -535,6 +545,9 @@ export const analyzeOne = internalAction({
           rentScore: deal.rentScore,
           bestExit: deal.bestExit,
           aiModel: LLM_MODEL,
+          ...(recheckAt != null ? { recheckAt } : {}),
+          ...(reAlert.reopen ? { alertedEventAt: reAlert.alertedEventAt, alertTag: reAlert.alertTag } : {}),
+          ...(detail?.homeStatus ? { homeStatus: detail.homeStatus } : {}),
           // deterministic deal signals (ALWAYS store — stands even when the judge fails)
           motivationPoints: dealSignals.motivationPoints,
           motivationSignals: dealSignals.motivationSignals,
