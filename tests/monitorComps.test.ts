@@ -67,6 +67,17 @@ describe("selectMonitorComps", () => {
     const out = selectMonitorComps([comp({}), comp({}), comp({}), comp({ sqft: 3000 })], SUBJ, NOW);
     expect(out.map((c) => c.sqft)).toEqual([1200, 1200, 1200]);
   });
+  it("typed comp with no sold date (nearby active/pending listing) is excluded", () => {
+    const undated: Comp = { ...comp({}), soldAt: undefined };
+    const out = selectMonitorComps([comp({}), comp({}), comp({}), undated], SUBJ, NOW);
+    expect(out).toHaveLength(3);
+    expect(out).not.toContain(undated);
+  });
+  it("undated untyped legacy comp is still included", () => {
+    const out = selectMonitorComps([comp({ legacy: true }), comp({ legacy: true }), comp({ legacy: true })], SUBJ, NOW);
+    expect(out.every((c) => c.soldAt == null)).toBe(true);
+    expect(out).toHaveLength(3);
+  });
   it("caps at compMaxCount", () => {
     const many = Array.from({ length: 15 }, () => comp({}));
     expect(selectMonitorComps(many, SUBJ, NOW)).toHaveLength(MONITOR.compMaxCount);
@@ -83,6 +94,11 @@ describe("conservativeArv v2 (as-is = median, ARV = 75th pct)", () => {
     const r = conservativeArv({ ...base, zestimate: 200000 });
     expect(r.arv).toBe(230000);
     expect(r.asIsValue).toBe(210000);
+  });
+  it("as-is clamped to ARV when the Zestimate cap pushes ARV below the median", () => {
+    const r = conservativeArv({ ...base, zestimate: 150000 });
+    expect(r.arv).toBe(172500);
+    expect(r.asIsValue).toBe(172500);
   });
   it("fewer than compMinCount comps -> Zestimate for both values", () => {
     expect(conservativeArv({ ...base, comps: four.slice(0, 2), zestimate: 190000 })).toEqual({ arv: 190000, asIsValue: 190000, source: "zestimate", compsPpsf: null, compsCount: 0 });

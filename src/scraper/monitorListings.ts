@@ -170,7 +170,9 @@ export function selectMonitorComps(comps: Comp[], s: CompSubject, now: number): 
     if (!s.compType) return [];
     pool = pool.filter((c) => c.propertyType === s.compType);
   }
-  pool = pool.filter((c) => c.soldAt == null || now - c.soldAt <= MONITOR.compMaxAgeDays * DAY_MS);
+  // Typed (gis) comps must carry a sold date: the request includes nearby homes and
+  // an undated row is an active/pending listing whose price is a LIST price.
+  pool = pool.filter((c) => c.soldAt != null ? now - c.soldAt <= MONITOR.compMaxAgeDays * DAY_MS : !c.propertyType);
   const dist = (c: Comp): number | null =>
     s.lat != null && s.lng != null && c.lat != null && c.lng != null ? distanceMi(s.lat, s.lng, c.lat, c.lng) : null;
   for (const r of MONITOR.compRadiiMi) {
@@ -216,7 +218,8 @@ export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds
   // Sanity cap kept: Zestimate ~ as-is value, so 1.15x bounds the renovation uplift
   // (research §1.1: renovated premium ~$25-35/sqft) and still catches type/size-skewed pools.
   if (z && arv > z * 1.15) arv = Math.round(z * 1.15);
-  return { arv, asIsValue: Math.round(med * opts.sqft), source: "comps", compsPpsf: Math.round(med), compsCount: sel.length };
+  // As-is never exceeds after-repair (the Zestimate cap can pull ARV below the median).
+  return { arv, asIsValue: Math.min(Math.round(med * opts.sqft), arv), source: "comps", compsPpsf: Math.round(med), compsCount: sel.length };
 }
 
 // Word-bounded: bare "fire" matched fireplace/firepit and forced a $95/sqft gut tier.

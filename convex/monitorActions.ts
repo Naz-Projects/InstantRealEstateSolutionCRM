@@ -409,7 +409,7 @@ export const analyzeOne = internalAction({
         return;
       }
 
-      // 3) Comps → conservative ARV (comps median $/sqft, capped vs Zestimate).
+      // 3) Comps → ARV (75th-percentile comps $/sqft, capped 1.15x Zestimate) + as-is value (median $/sqft).
       const comps = zip ? await compsForZip(ctx, zip, apiKey) : [];
       const arvRes = conservativeArv({ comps, sqft, beds: bedsNum, zestimate, homeType, lat: row.lat ?? null, lng: row.lng ?? null, now: Date.now() });
       const arv = arvRes.arv;
