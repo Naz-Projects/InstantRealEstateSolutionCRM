@@ -5,7 +5,7 @@ import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
-import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy } from "../src/scraper/monitorListings";
+import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
@@ -609,5 +609,25 @@ describe("isDigestWorthy (digest = FLIP/RENTAL keepers only)", () => {
     expect(isDigestWorthy("PASS")).toBe(false);
     expect(isDigestWorthy(undefined)).toBe(false);
     expect(isDigestWorthy(null)).toBe(false);
+  });
+});
+
+describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip)", () => {
+  it("active FLIP/RENTAL go to toEmail; WHOLESALE/PASS/unset/archived go to toSkip", () => {
+    const rows = [
+      { id: "flip", bestExit: "FLIP" },
+      { id: "rent", bestExit: "RENTAL" },
+      { id: "whole", bestExit: "WHOLESALE" },
+      { id: "pass", bestExit: "PASS" },
+      { id: "unset" },
+      { id: "archFlip", bestExit: "FLIP", archivedAt: 123 },
+      { id: "archPass", bestExit: "PASS", archivedAt: 123 },
+    ];
+    const { toEmail, toSkip } = partitionDigestRows(rows);
+    expect(toEmail.map((r) => r.id)).toEqual(["flip", "rent"]);
+    expect(toSkip.map((r) => r.id)).toEqual(["whole", "pass", "unset", "archFlip", "archPass"]);
+  });
+  it("empty in -> empty out", () => {
+    expect(partitionDigestRows([])).toEqual({ toEmail: [], toSkip: [] });
   });
 });

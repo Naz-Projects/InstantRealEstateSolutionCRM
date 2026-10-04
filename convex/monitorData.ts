@@ -5,7 +5,7 @@ import type { QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
-import { isDigestWorthy } from "../src/scraper/monitorListings";
+import { partitionDigestRows } from "../src/scraper/monitorListings";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -376,6 +376,26 @@ export const markEmailed = internalMutation({
   },
 });
 
+/**
+ * Stamp emailedAt ("digest processed") on never-emailed keepers that will never
+ * be emailed (WHOLESALE/PASS/unset bestExit, or archived) so they leave the
+ * by_keeper_emailed range and the nightly digest scan stays bounded. Run by
+ * sendDigest before any send/key check. Returns the stamped count.
+ */
+export const markDigestSkipped = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_keeper_emailed", (q) => q.eq("keeper", true).eq("emailedAt", undefined))
+      .collect();
+    const { toSkip } = partitionDigestRows(rows);
+    const now = Date.now();
+    for (const r of toSkip) await ctx.db.patch(r._id, { emailedAt: now, updatedAt: now });
+    return toSkip.length;
+  },
+});
+
 /** Link a listing to the Potential deal it was promoted into. */
 export const setPromotedDeal = internalMutation({
   args: {
@@ -404,14 +424,15 @@ export const getListingInternal = internalQuery({
 export const keepersToEmail = internalQuery({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
-    // Index-bounded: only keeper rows never emailed (the digest stamps emailedAt,
-    // so this set stays small regardless of how many keepers accumulate).
+    // Index-bounded: only keeper rows the digest hasn't processed. emailedAt means
+    // "digest processed": sent rows are stamped by markEmailed and board-only /
+    // archived rows by markDigestSkipped, so this set stays small over time.
     const rows = await ctx.db
       .query("monitorListings")
       .withIndex("by_keeper_emailed", (q) => q.eq("keeper", true).eq("emailedAt", undefined))
       .collect();
     // Filter BEFORE the cap so board-only keepers (WHOLESALE/PASS) can't crowd it.
-    const active = rows.filter((r) => r.archivedAt === undefined && isDigestWorthy(r.bestExit));
+    const active = partitionDigestRows(rows).toEmail;
     active.sort((a, b) => (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity));
     return active.slice(0, limit ?? 50);
   },

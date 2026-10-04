@@ -269,6 +269,15 @@ export function evaluateDeal(i: DealInput): DealDecision {
 export function isDigestWorthy(bestExit: string | null | undefined): boolean {
   return bestExit === "FLIP" || bestExit === "RENTAL";
 }
+// Split never-emailed keepers: active digest-worthy rows get emailed; the rest
+// (board-only exits, archived) get emailedAt stamped as "processed" so they leave
+// the by_keeper_emailed range instead of being re-scanned every night.
+export function partitionDigestRows<T extends { bestExit?: string | null; archivedAt?: number | null }>(rows: T[]): { toEmail: T[]; toSkip: T[] } {
+  const toEmail: T[] = [];
+  const toSkip: T[] = [];
+  for (const r of rows) (r.archivedAt == null && isDigestWorthy(r.bestExit) ? toEmail : toSkip).push(r);
+  return { toEmail, toSkip };
+}
 export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean; sqftKnown?: boolean }): string[] {
   const f: string[] = [];
   if ((r.homeType || "").toUpperCase() === "MANUFACTURED") f.push("MANUFACTURED (comps/lot-rent suspect)");

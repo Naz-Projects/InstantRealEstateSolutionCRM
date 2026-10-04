@@ -840,6 +840,9 @@ function buildDigest(keepers: Keeper[], monitorLink: string): { subject: string;
 export const sendDigest = internalAction({
   args: { runId: v.id("monitorRuns") },
   handler: async (ctx, { runId }): Promise<{ sent: boolean }> => {
+    // First, independent of the key/send: retire board-only + archived keepers
+    // from the never-emailed index so the digest scan stays bounded.
+    await ctx.runMutation(internal.monitorData.markDigestSkipped, {});
     const key = (process.env.RESEND_API_KEY ?? "").trim();
     if (!key) {
       await ctx.runMutation(internal.errors.logServerError, {
