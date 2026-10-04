@@ -1,7 +1,9 @@
 export const MONITOR = {
   regionId: 2986, regionType: 4, // New Castle County, DE
   priceCeiling: 500000, minListPrice: 1000, dozDays: "7", sort: "days",
-  spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06, distressScoreFloor: 30,
+  spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06,
+  flipProfitFloor: 25000, // FLIP keeper floor: profit >= $25K AND margin >= flipMarginBar (research §1.3)
+  cashFlowFloor: 0, // RENTAL keeper floor: cap >= capRateBar AND monthly cash flow >= this
   keeperRetireDays: 30, // keepers older than this age off the /monitor board (archivedAt)
   // Firecrawl v2 cache: first attempt accepts a page cached <= 1h; retries force a live
   // scrape (maxAge 0). Unset, v2 defaults to a 2-day cache (lessons 2026-10-03).
@@ -201,20 +203,63 @@ export function analyzeRental({ rent, list, rehab, taxRatePct }: { rent: number 
   const invested = 0.25 * allIn + 0.03 * list;
   return { rent, onePct: rent / list, capRate, cashFlow: Math.round(cashFlow), cashOnCash: (cashFlow * 12) / invested, allIn };
 }
-export function scoreDeal(flip: any, rental: RentalMetrics | null) {
+export type FlipResult = NonNullable<ReturnType<typeof analyzeFlip>>;
+export function scoreDeal(flip: FlipResult | null, rental: RentalMetrics | null) {
   const flipScore = !flip || flip.margin == null ? 0 : flip.margin >= 0.2 ? 90 : flip.margin >= 0.15 ? 75 : flip.margin >= 0.1 ? 60 : flip.margin >= 0.05 ? 40 : flip.margin > 0 ? 20 : 0;
   const rentScore = !rental ? 0 : rental.capRate >= 0.08 ? 90 : rental.capRate >= 0.06 ? 72 : rental.capRate >= 0.05 ? 55 : rental.capRate >= 0.04 ? 40 : 20;
-  const dealScore = Math.max(flipScore, rentScore);
-  const bestExit = dealScore < 35 ? "PASS" : flipScore >= rentScore ? "FLIP" : "RENTAL";
-  return { flipScore, rentScore, dealScore, bestExit } as const;
+  return { flipScore, rentScore, dealScore: Math.max(flipScore, rentScore) } as const;
 }
-export function decideKeeper({ belowMarket, flip, rental, distress, spread, dealScore }: { belowMarket: boolean; flip?: any; rental?: any; distress: boolean; spread: number | null; dealScore: number }): boolean {
-  if (belowMarket) return true;
-  if (flip && flip.margin != null && flip.margin >= MONITOR.flipMarginBar) return true;
-  if (rental && rental.capRate != null && rental.capRate >= MONITOR.capRateBar) return true;
-  // distress (an LLM/foreclosure tag) never keeps a listing whose economics are negative
-  if (distress) return (spread != null && spread >= 0) || dealScore >= MONITOR.distressScoreFloor;
-  return false;
+// Keeper floors (user-approved 2026-10-03). Profit is computed AT LIST PRICE.
+export function meetsFlipFloor(flip: FlipResult | null): boolean {
+  return !!flip && flip.profit != null && flip.profit >= MONITOR.flipProfitFloor && flip.margin >= MONITOR.flipMarginBar;
+}
+export function meetsRentalFloor(rental: RentalMetrics | null): boolean {
+  return !!rental && rental.capRate >= MONITOR.capRateBar && rental.cashFlow >= MONITOR.cashFlowFloor;
+}
+
+export type BestExit = "FLIP" | "RENTAL" | "WHOLESALE" | "PASS";
+export interface DealInput {
+  listPrice: number | null;
+  zestimate: number | null;
+  valueBasis: number | null; // as-is value for the spread test when there is no Zestimate
+  arv: number | null;        // after-repair value for the flip math
+  rehabTotal: number | null; // null = unknown (no sqft) -> no flip/rental underwriting
+  rent: number | null;
+  renovated: boolean;        // already flipped by someone else -> no flip exit
+}
+export interface DealDecision {
+  belowMarket: boolean;
+  spread: number | null;
+  spreadPct: number | null;
+  flip: FlipResult | null;
+  rental: RentalMetrics | null;
+  flipScore: number;
+  rentScore: number;
+  dealScore: number;
+  bestExit: BestExit;
+  keeper: boolean;
+}
+// THE keeper decision — the only place keep/exit is decided (analyzeOne, the re-gate
+// mutation and the backtest script all call it). Deterministic: the LLM never keeps.
+// belowMarket basis = Zestimate when present (list <= 0.85 x Zestimate), else the
+// comps value. Distress is score/label only — it never keeps a listing.
+export function evaluateDeal(i: DealInput): DealDecision {
+  const basis = i.zestimate ?? i.valueBasis;
+  const spread = basis != null && i.listPrice != null ? basis - i.listPrice : null;
+  const spreadPct = spread != null && basis ? +((spread / basis) * 100).toFixed(1) : null;
+  const belowMarket = basis != null && basis > 0 && i.listPrice != null && i.listPrice <= basis * (1 - MONITOR.spreadThreshold);
+  const flip = i.renovated || i.rehabTotal == null ? null : analyzeFlip(i.arv, i.listPrice, i.rehabTotal);
+  const rental = i.rehabTotal == null || i.listPrice == null ? null : analyzeRental({ rent: i.rent, list: i.listPrice, rehab: i.rehabTotal });
+  const s = scoreDeal(flip, rental);
+  const flipOk = meetsFlipFloor(flip);
+  const rentalOk = meetsRentalFloor(rental);
+  const bestExit: BestExit =
+    flipOk && rentalOk ? (s.flipScore >= s.rentScore ? "FLIP" : "RENTAL")
+    : flipOk ? "FLIP"
+    : rentalOk ? "RENTAL"
+    : belowMarket ? "WHOLESALE"
+    : "PASS";
+  return { belowMarket, spread, spreadPct, flip, rental, ...s, bestExit, keeper: flipOk || rentalOk || belowMarket };
 }
 export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean }): string[] {
   const f: string[] = [];

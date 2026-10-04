@@ -21,10 +21,7 @@ import {
   inferRehabTier,
   detectRenovated,
   estimateRehab,
-  analyzeFlip,
-  analyzeRental,
-  scoreDeal,
-  decideKeeper,
+  evaluateDeal,
   riskFlags,
   buildJudgePrompt,
   parseJudgeResponse,
@@ -418,16 +415,18 @@ export const analyzeOne = internalAction({
       // 4) Rehab tier + estimate.
       const rehabTier = inferRehabTier(description);
       const rehab = estimateRehab(REHAB_TIERS[rehabTier].perSqft, sqft, FLIP_DEFAULTS.contingencyPct);
-      const rehabTotal = rehab.total ?? 0;
 
-      // 5) Below-market spread (conservative ARV vs list).
-      const spread = arv != null && listPrice != null ? arv - listPrice : null;
-      const spreadPct = spread != null && arv ? +(((spread) / arv) * 100).toFixed(1) : null;
-      const belowMarket = spreadPct != null && spreadPct >= MONITOR.spreadThreshold * 100;
-
-      // 6) Multi-exit underwriting (scored at 9b, after the renovated veto).
-      const flip = analyzeFlip(arv, listPrice, rehabTotal);
-      const rental = analyzeRental({ rent: rentZestimate, list: listPrice ?? 0, rehab: rehabTotal });
+      // 5-6) Preliminary deal math (spread + flip + rental) — the judge's GIVEN numbers.
+      // The final decision is re-run at 9b with the judge's renovated veto applied.
+      const dealInput = {
+        listPrice,
+        zestimate,
+        valueBasis: arv,
+        arv,
+        rehabTotal: rehab.total,
+        rent: rentZestimate,
+      };
+      const pre = evaluateDeal({ ...dealInput, renovated: detectRenovated(description) });
 
       // 6.5) Deterministic deal signals (math, not LLM). Stored even if the judge fails.
       const dealSignals = deriveDealSignals({
@@ -466,10 +465,10 @@ export const analyzeOne = internalAction({
         address: row.address,
         listPrice,
         conservativeArv: arv,
-        spreadPct,
+        spreadPct: pre.spreadPct,
         rehabTier,
-        flipMarginPct: flip && flip.margin != null ? +(flip.margin * 100).toFixed(1) : null,
-        capRatePct: rental ? +(rental.capRate * 100).toFixed(1) : null,
+        flipMarginPct: pre.flip ? +(pre.flip.margin * 100).toFixed(1) : null,
+        capRatePct: pre.rental ? +(pre.rental.capRate * 100).toFixed(1) : null,
         homeType,
         description,
         dealSignals,
@@ -486,25 +485,23 @@ export const analyzeOne = internalAction({
       // a flip (never create/restore a keep). Rental/below-market exits untouched —
       // a renovated rental with a clearing cap rate is a legitimate keeper.
       const renovated = detectRenovated(description) || verdict?.renovated === true;
-      const flipFinal = renovated ? null : flip;
-      const score = scoreDeal(flipFinal, rental);
       if (renovated) flags.push("RENOVATED (no flip)");
 
-      // 10) Keeper decision (deterministic OR + AI distress).
-      const distress =
-        !!verdict?.matchedRequirements.includes("distressed") ||
-        !!detail?.foreclosure;
-      const keeper = decideKeeper({ belowMarket, flip: flipFinal, rental, distress, spread, dealScore: score.dealScore });
+      // 10) Keeper decision — deterministic floors only (distress is a label, never a keep).
+      const deal = evaluateDeal({ ...dealInput, renovated });
+      const { keeper, belowMarket, spread, spreadPct, rental } = deal;
+      const flipFinal = deal.flip;
 
       const matched = new Set<string>(verdict?.matchedRequirements ?? []);
       if (belowMarket) matched.add("below_market");
 
       // 11) Patch everything + status:"analyzed" (omit null-valued optionals).
-      // clearFlip: patchAnalysis merges, so a re-analyzed row that had flip fields
-      // before the veto must have them REMOVED, not just omitted.
+      // clearFlip/clearRental: patchAnalysis merges, so a re-analyzed row whose exit
+      // is now null (renovated veto / unknown rehab) must have it REMOVED, not omitted.
       await ctx.runMutation(internal.monitorData.patchAnalysis, {
         id,
-        ...(renovated ? { clearFlip: true } : {}),
+        ...(flipFinal ? {} : { clearFlip: true }),
+        ...(rental ? {} : { clearRental: true }),
         fields: {
           status: "analyzed" as const,
           arvSource: arvRes.source,
@@ -515,8 +512,10 @@ export const analyzeOne = internalAction({
           aiKeep: verdict?.keep ?? false,
           matchedRequirements: [...matched],
           riskFlags: flags,
-          dealScore: score.dealScore,
-          bestExit: score.bestExit,
+          dealScore: deal.dealScore,
+          flipScore: deal.flipScore,
+          rentScore: deal.rentScore,
+          bestExit: deal.bestExit,
           aiModel: LLM_MODEL,
           // deterministic deal signals (ALWAYS store — stands even when the judge fails)
           motivationPoints: dealSignals.motivationPoints,

@@ -3,7 +3,8 @@ import { buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
-import { analyzeFlip, analyzeRental, scoreDeal, decideKeeper, riskFlags } from "../src/scraper/monitorListings";
+import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR } from "../src/scraper/monitorListings";
+import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
 import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
@@ -190,31 +191,96 @@ describe("analyzeRental", () => {
   });
   it("returns null without rent", () => { expect(analyzeRental({ rent: null, list: 100000, rehab: 0 })).toBeNull(); });
 });
-describe("scoreDeal + decideKeeper", () => {
-  it("labels best exit FLIP when flip margin high", () => {
+// Base input for evaluateDeal tests: nothing known, rehab $0 known. Each case overrides.
+const DEAL: DealInput = { listPrice: null, zestimate: null, valueBasis: null, arv: null, rehabTotal: 0, rent: null, renovated: false };
+const flipOf = (profit: number, margin: number): FlipResult => ({ mao: 0, profit, margin, roi: null, roomVsList: 0 });
+const rentalOf = (capRate: number, cashFlow: number): RentalMetrics => ({ rent: 0, onePct: 0, capRate, cashFlow, cashOnCash: 0, allIn: 0 });
+
+describe("scoreDeal (scores only — exit/keep live in evaluateDeal)", () => {
+  it("max of the band scores", () => {
     const f = analyzeFlip(247200, 125000, 23265); const r = analyzeRental({ rent: 1788, list: 125000, rehab: 23265 });
-    const s = scoreDeal(f, r); expect(s.bestExit).toBe("FLIP"); expect(s.dealScore).toBeGreaterThanOrEqual(75);
+    const s = scoreDeal(f, r);
+    expect(s.flipScore).toBe(90); // margin ~0.249
+    expect(s.dealScore).toBe(Math.max(s.flipScore, s.rentScore));
   });
-  it("keeps when a deterministic exit clears (below-market OR flip OR rental)", () => {
-    expect(decideKeeper({ belowMarket: true, distress: false, spread: null, dealScore: 0 })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.2 }, distress: false, spread: null, dealScore: 0 })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, rental: { capRate: 0.09 }, distress: false, spread: null, dealScore: 0 })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, flip: { margin: 0.02 }, rental: { capRate: 0.03 }, distress: false, spread: null, dealScore: 0 })).toBe(false);
+});
+
+describe("keeper floors (user-approved 2026-10-03)", () => {
+  it("FLIP floor = profit >= $25,000 AND margin >= 12% (both boundaries inclusive)", () => {
+    expect(MONITOR.flipProfitFloor).toBe(25000);
+    expect(meetsFlipFloor(flipOf(25000, 0.12))).toBe(true);
+    expect(meetsFlipFloor(flipOf(24999, 0.3))).toBe(false);
+    expect(meetsFlipFloor(flipOf(80000, 0.1199))).toBe(false);
+    expect(meetsFlipFloor(null)).toBe(false);
   });
-  it("distress keeps ONLY when not above market (spread>=0) OR dealScore>=floor", () => {
-    // above-market AS-IS boilerplate (508 Lake Dr / 513 W 37th noise) — dropped
-    expect(decideKeeper({ belowMarket: false, distress: true, spread: -20000, dealScore: 0 })).toBe(false);
-    // distressed and not above market — kept
-    expect(decideKeeper({ belowMarket: false, distress: true, spread: 0, dealScore: 0 })).toBe(true);
-    expect(decideKeeper({ belowMarket: false, distress: true, spread: 25000, dealScore: 0 })).toBe(true);
-    // unknown spread is not a free pass
-    expect(decideKeeper({ belowMarket: false, distress: true, spread: null, dealScore: 0 })).toBe(false);
-    // score floor keeps it
-    expect(decideKeeper({ belowMarket: false, distress: true, spread: null, dealScore: 40 })).toBe(true);
-    // below the 30 floor
-    expect(decideKeeper({ belowMarket: false, distress: true, spread: -20000, dealScore: 20 })).toBe(false);
-    // deterministic rental keep unchanged (218 W 23rd)
-    expect(decideKeeper({ belowMarket: false, distress: false, rental: { capRate: 0.065 }, spread: null, dealScore: 0 })).toBe(true);
+  it("RENTAL floor = cap >= 6% AND monthly cash flow >= 0 (both boundaries inclusive)", () => {
+    expect(meetsRentalFloor(rentalOf(0.06, 0))).toBe(true);
+    expect(meetsRentalFloor(rentalOf(0.0599, 500))).toBe(false);
+    expect(meetsRentalFloor(rentalOf(0.09, -1))).toBe(false);
+    expect(meetsRentalFloor(null)).toBe(false);
+  });
+});
+
+describe("evaluateDeal (the single keep/exit decision)", () => {
+  it("FLIP keeper: ARV 300k, list 180k, rehab 30k -> profit 42,000 / margin 14%", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 180000, arv: 300000, rehabTotal: 30000 });
+    expect(d.flip!.profit).toBe(42000);
+    expect(d.flip!.margin).toBeCloseTo(0.14, 10);
+    expect(d).toMatchObject({ flipScore: 60, rentScore: 0, dealScore: 60, bestExit: "FLIP", keeper: true, belowMarket: false });
+  });
+  it("margin under 12% is not a keeper even with $30K profit (list 190k -> margin 10.3%)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 190000, arv: 300000, rehabTotal: 30000 });
+    expect(d.flip!.profit).toBe(30925);
+    expect(d).toMatchObject({ bestExit: "PASS", keeper: false, dealScore: 60 });
+  });
+  it("profit under $25K is not a keeper even at 13.5% margin (ARV 180k, list 108k, rehab 18k)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 108000, arv: 180000, rehabTotal: 18000 });
+    expect(d.flip!.profit).toBe(24240);
+    expect(d).toMatchObject({ bestExit: "PASS", keeper: false });
+  });
+  it("RENTAL keeper: rent 2000, list 150k, rehab 20k -> cap 8.5%, +$314/mo", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 2000 });
+    expect(d.rental!.cashFlow).toBe(314);
+    expect(d).toMatchObject({ rentScore: 90, bestExit: "RENTAL", keeper: true });
+  });
+  it("cap >= 6% but negative cash flow is not a RENTAL (rent 1500, list 150k -> cap 6.2%, -$9/mo)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 10000, rent: 1500 });
+    expect(d.rental!.cashFlow).toBe(-9);
+    expect(d).toMatchObject({ rentScore: 72, bestExit: "PASS", keeper: false });
+  });
+  it("a 4% cap never labels RENTAL (old scoreDeal did)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 200000, rehabTotal: 20000, rent: 1500 });
+    expect(d.rental!.capRate).toBeCloseTo(0.0416, 3);
+    expect(d).toMatchObject({ rentScore: 40, bestExit: "PASS", keeper: false });
+  });
+  it("both floors met -> higher score wins, tie goes to FLIP", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 120000, arv: 250000, rehabTotal: 20000, rent: 1900 });
+    expect(d).toMatchObject({ flipScore: 90, rentScore: 90, bestExit: "FLIP", keeper: true });
+  });
+  it("below market vs Zestimate: list <= 0.85 x Zestimate keeps (WHOLESALE label), 1 dollar over does not", () => {
+    expect(evaluateDeal({ ...DEAL, listPrice: 170000, zestimate: 200000 })).toMatchObject({ belowMarket: true, spreadPct: 15, bestExit: "WHOLESALE", keeper: true });
+    expect(evaluateDeal({ ...DEAL, listPrice: 170001, zestimate: 200000 })).toMatchObject({ belowMarket: false, bestExit: "PASS", keeper: false });
+  });
+  it("no Zestimate -> the comps value basis runs the same 15% test", () => {
+    expect(evaluateDeal({ ...DEAL, listPrice: 170000, valueBasis: 200000 })).toMatchObject({ belowMarket: true, spread: 30000, keeper: true });
+  });
+  it("a Zestimate overrides an inflated comps basis (the 08-08 fake-spread lesson)", () => {
+    expect(evaluateDeal({ ...DEAL, listPrice: 170000, zestimate: 190000, valueBasis: 300000 })).toMatchObject({ belowMarket: false, spreadPct: 10.5, keeper: false });
+  });
+  it("renovated -> no flip exit at all", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 180000, arv: 300000, rehabTotal: 30000, renovated: true });
+    expect(d.flip).toBeNull();
+    expect(d).toMatchObject({ bestExit: "PASS", keeper: false });
+  });
+  it("unknown rehab (no sqft) -> no flip and no rental underwriting (never a $0 rehab)", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 150000, arv: 300000, rehabTotal: null, rent: 2000 });
+    expect(d.flip).toBeNull();
+    expect(d.rental).toBeNull();
+    expect(d.keeper).toBe(false);
+  });
+  it("distress is not an input — an above-market distressed listing cannot be kept", () => {
+    const d = evaluateDeal({ ...DEAL, listPrice: 250000, zestimate: 220000, arv: 230000, rehabTotal: 30000 });
+    expect(d.keeper).toBe(false);
   });
 });
 describe("riskFlags", () => {
