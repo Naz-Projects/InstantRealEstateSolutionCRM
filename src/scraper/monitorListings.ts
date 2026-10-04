@@ -264,6 +264,56 @@ export function evaluateDeal(i: DealInput): DealDecision {
     : "PASS";
   return { belowMarket, spread, spreadPct, flip, rental, ...s, bestExit, keeper: flipOk || rentalOk || belowMarket };
 }
+// Re-gate adapter: rebuild a DealInput from a STORED monitorListings row (no scraping).
+// Old-row rules: sqft unknown -> rehab unknown and ARV = Zestimate-or-null (the old
+// median-soldPrice ARV and $0 rehab are discarded); renovated = stored RENOVATED flag
+// OR the current detector on the stored description.
+export interface StoredListing {
+  listPrice?: number;
+  zestimate?: number;
+  conservativeArv?: number;
+  sqft?: number;
+  rehabEstimate?: number;
+  rentZestimate?: number;
+  description?: string;
+  riskFlags?: string[];
+}
+export function dealInputFromStored(r: StoredListing): DealInput {
+  const sqftKnown = r.sqft != null && r.sqft > 0;
+  const arv = sqftKnown ? (r.conservativeArv ?? null) : (r.zestimate ?? null);
+  return {
+    listPrice: r.listPrice ?? null,
+    zestimate: r.zestimate ?? null,
+    valueBasis: arv,
+    arv,
+    rehabTotal: sqftKnown ? (r.rehabEstimate ?? null) : null,
+    rent: r.rentZestimate ?? null,
+    renovated: (r.riskFlags ?? []).some((f) => f.startsWith("RENOVATED")) || detectRenovated(r.description),
+  };
+}
+// Row fields for a decision. `undefined` = REMOVE the field (ctx.db.patch semantics),
+// so a now-null exit can't leave stale numbers on the card (07-04 patch-merge lesson).
+export function decisionFields(d: DealDecision) {
+  return {
+    keeper: d.keeper,
+    belowMarket: d.belowMarket,
+    bestExit: d.bestExit,
+    dealScore: d.dealScore,
+    flipScore: d.flipScore,
+    rentScore: d.rentScore,
+    spread: d.spread ?? undefined,
+    spreadPct: d.spreadPct ?? undefined,
+    flipMao: d.flip ? d.flip.mao : undefined,
+    flipProfit: d.flip?.profit != null ? Math.round(d.flip.profit) : undefined,
+    flipMargin: d.flip ? d.flip.margin : undefined,
+    flipRoi: d.flip?.roi ?? undefined,
+    roomVsList: d.flip ? d.flip.roomVsList : undefined,
+    capRate: d.rental ? d.rental.capRate : undefined,
+    cashFlow: d.rental ? d.rental.cashFlow : undefined,
+    onePctRule: d.rental ? d.rental.onePct : undefined,
+    cashOnCash: d.rental ? d.rental.cashOnCash : undefined,
+  };
+}
 // Digest = actionable exits only: a keeper whose bestExit is WHOLESALE/PASS (or unset)
 // stays on the /monitor board but never reaches the email.
 export function isDigestWorthy(bestExit: string | null | undefined): boolean {

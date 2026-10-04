@@ -5,7 +5,7 @@ import type { QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
-import { partitionDigestRows } from "../src/scraper/monitorListings";
+import { partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — V8 data layer: queries + mutations
 // ONLY (no "use node", no actions — those live in convex/monitorActions.ts).
@@ -460,6 +460,47 @@ export const archiveStaleKeepers = internalMutation({
       }
     }
     return archived;
+  },
+});
+
+/**
+ * Re-gate the active (non-archived) keepers under the CURRENT keeper rules using
+ * only stored fields (no scraping, zero Firecrawl credits). De-keeps rows that now
+ * fail; never promotes a non-keeper (the scan's analyzeOne is the only promoter).
+ * Rows that stay keepers get their decision fields refreshed. `dryRun` returns the
+ * same counts without writing. Operator-run on prod after deploy:
+ *   npx convex run monitorData:regateKeepers '{"dryRun":true}'
+ */
+export const regateKeepers = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { dryRun }) => {
+    const rows = await ctx.db
+      .query("monitorListings")
+      .withIndex("by_keeper_archived", (q) => q.eq("keeper", true).eq("archivedAt", undefined))
+      .collect();
+    const exitMix: Record<string, number> = {};
+    const dekept: string[] = [];
+    const now = Date.now();
+    for (const row of rows) {
+      const d = evaluateDeal(dealInputFromStored(row));
+      if (d.keeper) exitMix[d.bestExit] = (exitMix[d.bestExit] ?? 0) + 1;
+      else dekept.push(row.address);
+      if (dryRun) continue;
+      const tags = (row.matchedRequirements ?? []).filter((t) => t !== "below_market");
+      await ctx.db.patch(row._id, {
+        ...decisionFields(d),
+        matchedRequirements: d.belowMarket ? [...tags, "below_market"] : tags,
+        updatedAt: now,
+      });
+    }
+    return {
+      dryRun: !!dryRun,
+      total: rows.length,
+      kept: rows.length - dekept.length,
+      dekept: dekept.length,
+      exitMix,
+      dekeptSample: dekept.slice(0, 25),
+    };
   },
 });
 

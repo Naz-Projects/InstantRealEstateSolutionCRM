@@ -3,7 +3,7 @@ import { buildSearchUrl } from "../src/scraper/monitorListings";
 import { extractNextData, listingsFromSearch, totalResultCount } from "../src/scraper/monitorListings";
 import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
-import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR } from "../src/scraper/monitorListings";
+import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
 import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
@@ -629,5 +629,42 @@ describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip
   });
   it("empty in -> empty out", () => {
     expect(partitionDigestRows([])).toEqual({ toEmail: [], toSkip: [] });
+  });
+});
+
+describe("dealInputFromStored (re-gate adapter)", () => {
+  it("maps a normal stored row", () => {
+    expect(dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rehabEstimate: 30000, rentZestimate: 1900, description: "needs TLC", riskFlags: [] }))
+      .toEqual({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rehabTotal: 30000, rent: 1900, renovated: false });
+  });
+  it("old sqft-0 row: discards the median-soldPrice ARV and the $0 rehab", () => {
+    const i = dealInputFromStored({ listPrice: 265000, conservativeArv: 697500, sqft: 0, rehabEstimate: 0, zestimate: 270000 });
+    expect(i.arv).toBe(270000);
+    expect(i.valueBasis).toBe(270000);
+    expect(i.rehabTotal).toBeNull();
+  });
+  it("renovated from the stored flag OR the description", () => {
+    expect(dealInputFromStored({ riskFlags: ["RENOVATED (no flip)"] }).renovated).toBe(true);
+    expect(dealInputFromStored({ description: "Fully remodeled, turnkey" }).renovated).toBe(true);
+    expect(dealInputFromStored({}).renovated).toBe(false);
+  });
+  it("an old distress-only keeper (above market, thin flip) is de-kept", () => {
+    const d = evaluateDeal(dealInputFromStored({ listPrice: 240000, zestimate: 230000, conservativeArv: 260000, sqft: 1400, rehabEstimate: 64680, rentZestimate: 1700, description: "Estate sale, sold as-is" }));
+    expect(d.keeper).toBe(false);
+  });
+});
+
+describe("decisionFields", () => {
+  it("null exits become undefined (patch removes them)", () => {
+    const f = decisionFields(evaluateDeal({ ...DEAL, listPrice: 170000, zestimate: 200000, rehabTotal: null }));
+    expect(f).toMatchObject({ keeper: true, bestExit: "WHOLESALE", belowMarket: true, spreadPct: 15 });
+    expect(f.flipMao).toBeUndefined();
+    expect(f.capRate).toBeUndefined();
+    expect("flipMao" in f).toBe(true); // key present -> ctx.db.patch clears it
+  });
+  it("carries rounded flip profit and rental numbers", () => {
+    const f = decisionFields(evaluateDeal({ ...DEAL, listPrice: 120000, arv: 250000, rehabTotal: 20000, rent: 1900 }));
+    expect(f.flipProfit).toBe(73200);
+    expect(f.cashFlow).toBe(436);
   });
 });
