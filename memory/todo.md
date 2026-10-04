@@ -15,7 +15,7 @@ Evidence: prod monitorRuns Aug 6-Oct 3 + backtest of 1,225 rows + 30 live Zillow
   Digest: FLIP/RENTAL only. Sim: keepers 33%→16% (~4.7/night).
   Then re-gate the ~95 existing keepers under the new rules (patchAnalysis pattern from the 08-08 condo cleanup).
   NOTE: the 30-listing outcome sample is small + non-random (FLIP picks skewed to worst ratios) — lean on population stats.
-- [ ] **Phase 2 — trustworthy numbers (2-3 d):** comps by distance+type (comps.ts:75 takes first 8 ZIP-wide; city ARV off
+- [x] **Phase 2 — SHIPPED 2026-10-04 (`253f691` on origin/main, prod deployed; regate live 49->42 [FLIP 3 / RENTAL 1 / WHOLESALE 38]). Redfin gis comps (live 19805: 235 typed comps, mlsStatus Closed), distance/type/6-mo selection, asIs median vs ARV p75, monitorRehab (max keyword/LLM, systems tier, lead/rewire add-ons, 9-mo gut hold), rental: lease rent, Zillow tax rate (1.6% fallback flagged), 35% opex, DSCR>=1.2, BRRRR cash-left-in. Backtest: scripts/monitor-backtest.ts (old 30.7% keep -> new 14.5%, 26 digest-worthy over ~3 months).** Original scope: comps by distance+type (comps.ts:75 takes first 8 ZIP-wide; city ARV off
   >25% on 37%); renovated ARV = top-quartile $/sqft vs as-is median; rehab uses LLM conditionTier; lease rent from
   description; real NCC tax (1.6% unverified); DSCR + refi view.
 - [ ] **Phase 3 — triage UI (2-3 d):** /monitor inbox (New/Shortlist/Passed, pass-with-reason, snooze, filters, sort, side
