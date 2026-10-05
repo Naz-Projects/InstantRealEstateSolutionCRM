@@ -6,11 +6,10 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 ## ★ Monitor the Web — open items (state: memory.md "Monitor the Web"; all 4 critique phases SHIPPED 2026-10-04, `origin/main a051e9c`)
 - [x] Critique 2026-10-03 -> Phase 1 deal floors, Phase 2 comps/ARV/rehab/rental, Phase 3 triage inbox + 5-second digest,
   Phase 4 price-cut sweep + re-check rotation + status retire + re-alerts + per-user buy box. Plans: `docs/superpowers/plans/2026-10-04-monitor-*.md`.
-- [ ] **Verify the first nightly on the new code** (2026-10-05 02:00 UTC): fresh scan (scanned count changes night to night), per-recipient
-  digest sent with new layout + PRICE CUT tags (3 queued: 9 E 44th, 307 W 5th, 23 Maple), then the 14:00 UTC re-check run (Lane A + Lane B).
+- [x] **First nightly on the new code verified (2026-10-05):** scanned 111 (was 109), 31 new analyzed, 0 failed, 3 keepers + all 3 PRICE CUT alerts emailed, no new errorLogs, no backOnMarketAt rows. 14:00 UTC re-check run not yet inspected.
 - [ ] **Watch:** any row whose `backOnMarketAt` re-stamps within days (repeat-email loop signature); errorLogs for "covered X of Y" short sweeps;
   Lane B starvation if unknown-status retries pile up (cap 25/day).
-- [ ] **Manufactured homes:** rental math ignores lot rent (23 Maple Dr $32K shows as a strong RENTAL) — exclude from the rental exit or require lot rent.
+- [x] **Manufactured homes excluded like land (2026-10-05, `ab25d1e`)** + 10 prod MH keepers de-kept. User also chose: stay SILENT on empty nights (no "0 worth a look" email).
 - [ ] Each user sets their buy box (none set yet -> everyone gets every FLIP/RENTAL).
 - [ ] Pre-Phase-2 rentals lack `dscr` (show "DSCR —") until re-analyzed by a cut/recheck.
 - [ ] Deferred minors: `requestScan` double-click race; "Offer gap" sort ranks flips only; a recipient whose send fails misses that night's rows;
@@ -18,8 +17,7 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
   resubscribes every render; manual-run 1h Firecrawl cache on first attempt.
 - [ ] Backlog: auto-enrich new keepers (Street View condition + equity), dashboard "New on Monitor" panel, photo fallback to Street View,
   promote source tag "Monitor", 4h cadence (only if needed).
-- [ ] Product Qs (user, still unanswered): no-list-price foreclosures as a "price TBD" section?; land listings section?; send "0 worth a look"
-  emails on empty nights (currently silent)?; allow 2-4 unit buildings in the rental lane (currently excluded)?
+- [ ] Product Qs (user, still unanswered): no-list-price foreclosures as a "price TBD" section?; land listings section?; allow 2-4 unit buildings in the rental lane (currently excluded)?
 - [ ] Key hygiene: rotate the chat-shared Firecrawl/Resend keys (standing punch list).
 
 ## ★ NEXT — Deep-dive follow-ups (2026-08-08, full detail in `memory/deep-dive-2026-08-08.md`)

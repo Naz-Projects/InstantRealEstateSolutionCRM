@@ -33,7 +33,7 @@ by their buy box (`monitorBuyBoxes`; none set yet = everything), UTF-8, deep lin
 45 new older listings); 165 rows carry a stored price cut; first Lane B pass retired 4 (2 pending, 1 sold, 1 off-market).
 **Keys/infra:** prod Firecrawl key is on the 100k ANNUAL plan (92k left 2026-10-04); DeepSeek `deepseek/deepseek-v3.2` judge via
 OpenRouter; Resend from `monitor@instantrealestatesolution.com`; prod CLI reads need `CONVEX_DEPLOY_KEY_PROD` (`.env.local` default = DEV).
-**Known blind spot:** manufactured homes underwrite as rentals without lot rent (e.g. 23 Maple Dr $32K) — consider excluding or requiring lot rent.
+**Manufactured homes (2026-10-05, `ab25d1e`):** treated like land per user decision — `isManufacturedType` joins the 2b LAND guard (never underwritten/kept, flag "MANUFACTURED (not underwritten)", leaves the re-check rotation). The 10 prod MH rental keepers were de-kept via `patchAnalysis` (active keepers now 55: FLIP 5 / RENTAL 1 / WHOLESALE 49).
 Earlier architecture deep dive (bounded reads, truthful fan-out, credit leaks, security, signals roadmap): `memory/deep-dive-2026-08-08.md`.
 
 ## ★ Active initiative (2026-06-06..08) — Wholesaling Lead Engine
