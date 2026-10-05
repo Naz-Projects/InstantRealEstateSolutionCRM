@@ -94,6 +94,9 @@ describe("humanizeFlag / displayFlags", () => {
     expect(humanizeFlag("tax rate estimated 1.6% (VERIFY)")).toBe("Tax rate estimated 1.6%");
     expect(humanizeFlag("LEASED at $1,450/mo")).toBe("Leased at $1,450/mo");
     expect(humanizeFlag("HIGH-HOA $300/mo")).toBe("High HOA $300/mo");
+    expect(humanizeFlag("LAND (not underwritten)")).toBe("LAND (not underwritten)");
+    expect(humanizeFlag("MANUFACTURED (not underwritten)")).toBe("Manufactured home (not underwritten)");
+    expect(humanizeFlag("MANUFACTURED (comps/lot-rent suspect)")).toBe("Manufactured home (comps suspect)");
   });
   it("turns unknown slugs into words and leaves free text alone (first letter capped)", () => {
     expect(humanizeFlag("foundation_crack_risk")).toBe("Foundation crack risk");

@@ -5,7 +5,7 @@ import { detailFromCache } from "../src/scraper/monitorListings";
 import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper/monitorListings";
 import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields, monitorRehab } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
-import { isLandType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows, shouldReopenForDigest } from "../src/scraper/monitorListings";
+import { isLandType, isManufacturedType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows, shouldReopenForDigest } from "../src/scraper/monitorListings";
 import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
@@ -326,6 +326,21 @@ describe("isLandType", () => {
     expect(isLandType(undefined)).toBe(false);
     expect(isLandType(null)).toBe(false);
     expect(isLandType("")).toBe(false);
+  });
+});
+
+describe("isManufacturedType", () => {
+  it("true for MANUFACTURED (case-insensitive, trimmed)", () => {
+    expect(isManufacturedType("MANUFACTURED")).toBe(true);
+    expect(isManufacturedType("manufactured")).toBe(true);
+    expect(isManufacturedType(" MANUFACTURED ")).toBe(true);
+  });
+  it("false for houses, land, and missing values", () => {
+    expect(isManufacturedType("SINGLE_FAMILY")).toBe(false);
+    expect(isManufacturedType("LOT")).toBe(false);
+    expect(isManufacturedType(undefined)).toBe(false);
+    expect(isManufacturedType(null)).toBe(false);
+    expect(isManufacturedType("")).toBe(false);
   });
 });
 

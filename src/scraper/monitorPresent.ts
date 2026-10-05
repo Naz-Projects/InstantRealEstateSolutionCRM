@@ -102,6 +102,7 @@ const FLAG_LABELS: Record<string, string> = {
   "sqft-missing (VERIFY)": "Square footage unknown",
   "comps>>Zestimate (ARV suspect)": "Comps far above Zestimate (ARV suspect)",
   "RENOVATED (no flip)": "Already renovated",
+  "MANUFACTURED (not underwritten)": "Manufactured home (not underwritten)",
 };
 const KEY_PREFIX = /^(?:zipTier|photoSignal|eraHazards?|tenureSignal|vsAppreciation|domBucket)\s*[:=]\s*/i;
 const REWRITES: Array<[RegExp, string]> = [

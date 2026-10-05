@@ -149,6 +149,13 @@ export function isLandType(homeType: string | null | undefined): boolean {
   return t === "LOT" || t === "LAND";
 }
 
+// Manufactured (mobile) homes: lot rent + chattel financing break the rental and
+// flip math, so they are treated like land — never underwritten or kept (user
+// decision 2026-10-05). Zillow's homeType enum emits only "MANUFACTURED".
+export function isManufacturedType(homeType: string | null | undefined): boolean {
+  return (homeType || "").trim().toUpperCase() === "MANUFACTURED";
+}
+
 // Apartment buildings / multi-family: not the wholesaling target (SFR/townhouse/
 // condo deals), so they are filtered out at scan AND vetoed at analysis.
 export function isMultiUnitType(homeType: string | null | undefined): boolean {

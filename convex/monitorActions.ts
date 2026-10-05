@@ -13,6 +13,7 @@ import {
   totalResultCount,
   detailFromCache,
   isLandType,
+  isManufacturedType,
   isMultiUnitType,
   isCondoType,
   passesScanGate,
@@ -494,10 +495,12 @@ export const analyzeOne = internalAction({
       const taxRatePct = detail?.propertyTaxRate ?? row.propertyTaxRatePct ?? null;
       const zip = row.propZip ?? parseZip(row.address) ?? undefined;
 
-      // 2b) LAND guard: house comps / rehab / rental math are meaningless on vacant
-      // land, so it is never underwritten or kept — surfaced in "All new" only. Bail
-      // before comps/ARV/rehab/exits/off-market and the DeepSeek call (saves credits).
-      if (isLandType(homeType)) {
+      // 2b) LAND / MANUFACTURED guard: house comps / rehab / rental math are
+      // meaningless on vacant land, and lot rent + chattel financing break them on
+      // manufactured homes, so neither is ever underwritten or kept — surfaced in
+      // "All new" only. Bail before comps/ARV/rehab/exits/off-market and the
+      // DeepSeek call (saves credits).
+      if (isLandType(homeType) || isManufacturedType(homeType)) {
         await ctx.runMutation(internal.monitorData.patchAnalysis, {
           id,
           clearFlip: true, // a re-analyzed pre-guard land row may carry stale flip fields
@@ -510,8 +513,9 @@ export const analyzeOne = internalAction({
             aiKeep: false,
             dealScore: 0,
             bestExit: "PASS",
-            riskFlags: ["LAND (not underwritten)"],
+            riskFlags: [isManufacturedType(homeType) ? "MANUFACTURED (not underwritten)" : "LAND (not underwritten)"],
             matchedRequirements: [],
+            ...(detail?.homeType ? { homeType: detail.homeType } : {}),
           },
         });
         await done("analyzed", false);
