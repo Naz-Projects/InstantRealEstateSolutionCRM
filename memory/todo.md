@@ -3,29 +3,24 @@
 What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocked on the user.
 (History lives in git; this is the current picture, not a session log.)
 
-## ★ NEXT — Monitor critique 2026-10-03 (awaiting user's phase pick)
-Doc: "IRES Monitor Critique" https://claude.ai/code/artifact/2e98e25e-8c30-4f05-b30e-6b7981216cce
-Evidence: prod monitorRuns Aug 6-Oct 3 + backtest of 1,225 rows + 30 live Zillow rechecks + rendered digest/page.
-- [x] **Phase 1 — SHIPPED 2026-10-04 (`5f870e6` on origin/main, prod backend deployed; regateKeepers live on prod: 106 active keepers -> 49 kept [5 FLIP / 10 RENTAL / 34 WHOLESALE], 57 de-kept; dev MONITOR_SCAN_ENABLED=0; Firecrawl remote monitor already gone). Plan: docs/superpowers/plans/2026-10-04-monitor-phase1-2-deal-quality.md.** Original scope: Firecrawl v2 `maxAge` unset → 2-day default cache → Zillow page identical
-  3 nights running (new listings only every 3rd night); fix: small maxAge, `maxAge:0` on retries (monitorScrape.ts:69,
-  Redfin :139 too). Dev deployment runs the nightly scan too (gate with env flag). Firecrawl Monitor dead since early Aug
-  (all runs trigger=cron) — delete it. Keeper gate (monitorListings.ts:~200-206): drop distress-OR path (154 keepers, all
-  -ve flip, 7/8 sampled overpriced); belowMarket vs Zestimate (≤0.85×) WHEN a Zestimate exists, else keep current comps test (requiring one drops 3 real winners); RENTAL needs cap≥6% AND cash flow≥0;
-  sqft=0 → median-soldPrice ARV + $0 rehab bug (comps.ts:91, flip.ts:60); GUT regex matches "fireplace" (:139).
-  Digest: FLIP/RENTAL only. Sim: keepers 33%→16% (~4.7/night).
-  Then re-gate the ~95 existing keepers under the new rules (patchAnalysis pattern from the 08-08 condo cleanup).
-  NOTE: the 30-listing outcome sample is small + non-random (FLIP picks skewed to worst ratios) — lean on population stats.
-- [x] **Phase 2 — SHIPPED 2026-10-04 (`253f691` on origin/main, prod deployed; regate live 49->42 [FLIP 3 / RENTAL 1 / WHOLESALE 38]). Redfin gis comps (live 19805: 235 typed comps, mlsStatus Closed), distance/type/6-mo selection, asIs median vs ARV p75, monitorRehab (max keyword/LLM, systems tier, lead/rewire add-ons, 9-mo gut hold), rental: lease rent, Zillow tax rate (1.6% fallback flagged), 35% opex, DSCR>=1.2, BRRRR cash-left-in. Backtest: scripts/monitor-backtest.ts (old 30.7% keep -> new 14.5%, 26 digest-worthy over ~3 months).** Original scope: comps by distance+type (comps.ts:75 takes first 8 ZIP-wide; city ARV off
-  >25% on 37%); renovated ARV = top-quartile $/sqft vs as-is median; rehab uses LLM conditionTier; lease rent from
-  description; real NCC tax (1.6% unverified); DSCR + refi view.
-- [x] **Phase 3 — SHIPPED 2026-10-04 (`2b1cbdf` on origin/main; prod backend + Cloudflare frontend live; final-review fix wave: sheet J/K anchor, Restore in All, stable keys).** Per-user triage inbox + deal sheet (?id= deep link) + 5-second digest; Task 9 harness pass fixed sheet photo strip collapse, Promote autofocus, flag slug leaks, digest charset.
-  - [ ] Open: merge + prod deploy decision; Run now (`requestScan`, admin, spends Firecrawl/LLM) needs a prod go/no-go.
-  - [ ] Open: 0/10 RENTAL keepers in the 2026-10-04 prod export carry `dscr` (pre-Phase-2 rows) -> board/email show "DSCR —" until re-analyzed/regated; 19/49 keepers (WHOLESALE) have dealScore 0.
-  - Original scope: /monitor inbox (New/Shortlist/Passed, pass-with-reason, snooze, filters, sort, side
-  sheet, J/K/P/S); email 5-second brief with deep links, decision number (offer gap / cash flow) up front, AA contrast.
-- [x] **Phase 4 — SHIPPED 2026-10-04 (`19c936c` on origin/main; prod deployed; seedRecheck live 42 keepers; first manual sweep 18:33 UTC: 6 pages / 209 price-reduced cards / 121 missed cuts / 45 new rows). Lane A price-cut sweep (Zillow onlyPriceReduction) + Lane B detail re-check rotation (keepers every 3d, cap 25/day; own cron 0 14 * * * UTC, dispatch +15 min, 4-min sweep deadline), status retire (PENDING/SOLD/OFF_MARKET), card-side back-on-market only queues a detail confirm (repeat-email loop fixed pre-ship), re-alerts PRICE CUT / BACK ON MARKET, per-user buy box (monitorBuyBoxes + dialog) + per-recipient digest. Prod Firecrawl key = 100k ANNUAL plan (92k left 2026-10-04), not the 17.8k monthly. Plan: docs/superpowers/plans/2026-10-04-monitor-phase4-wider-net.md.** Original scope: re-check lane for tracked listings (price cuts, back-on-market, pending/sold → retire),
-  re-alert on new cuts (clear emailedAt), per-user buy box.
-- Open user Qs: phase order; profit floors; send "0 worth a look" emails?; allow 2-4 unit for rentals?; digest to all 5 users?
+## ★ Monitor the Web — open items (state: memory.md "Monitor the Web"; all 4 critique phases SHIPPED 2026-10-04, `origin/main a051e9c`)
+- [x] Critique 2026-10-03 -> Phase 1 deal floors, Phase 2 comps/ARV/rehab/rental, Phase 3 triage inbox + 5-second digest,
+  Phase 4 price-cut sweep + re-check rotation + status retire + re-alerts + per-user buy box. Plans: `docs/superpowers/plans/2026-10-04-monitor-*.md`.
+- [ ] **Verify the first nightly on the new code** (2026-10-05 02:00 UTC): fresh scan (scanned count changes night to night), per-recipient
+  digest sent with new layout + PRICE CUT tags (3 queued: 9 E 44th, 307 W 5th, 23 Maple), then the 14:00 UTC re-check run (Lane A + Lane B).
+- [ ] **Watch:** any row whose `backOnMarketAt` re-stamps within days (repeat-email loop signature); errorLogs for "covered X of Y" short sweeps;
+  Lane B starvation if unknown-status retries pile up (cap 25/day).
+- [ ] **Manufactured homes:** rental math ignores lot rent (23 Maple Dr $32K shows as a strong RENTAL) — exclude from the rental exit or require lot rent.
+- [ ] Each user sets their buy box (none set yet -> everyone gets every FLIP/RENTAL).
+- [ ] Pre-Phase-2 rentals lack `dscr` (show "DSCR —") until re-analyzed by a cut/recheck.
+- [ ] Deferred minors: `requestScan` double-click race; "Offer gap" sort ranks flips only; a recipient whose send fails misses that night's rows;
+  recipient email in error log (admin-only); `listKeepers`/`listRecent`/`users.activeEmailsInternal` now unused (remove); key listener
+  resubscribes every render; manual-run 1h Firecrawl cache on first attempt.
+- [ ] Backlog: auto-enrich new keepers (Street View condition + equity), dashboard "New on Monitor" panel, photo fallback to Street View,
+  promote source tag "Monitor", 4h cadence (only if needed).
+- [ ] Product Qs (user, still unanswered): no-list-price foreclosures as a "price TBD" section?; land listings section?; send "0 worth a look"
+  emails on empty nights (currently silent)?; allow 2-4 unit buildings in the rental lane (currently excluded)?
+- [ ] Key hygiene: rotate the chat-shared Firecrawl/Resend keys (standing punch list).
 
 ## ★ NEXT — Deep-dive follow-ups (2026-08-08, full detail in `memory/deep-dive-2026-08-08.md`)
 - [x] **Digest → all active users** + **apartment/MF/condo exclusion** + prod keeper cleanup (SHIPPED 2026-08-08).
@@ -47,56 +42,13 @@ Evidence: prod monitorRuns Aug 6-Oct 3 + backtest of 1,225 rows + 30 live Zillow
 - [ ] **P1-data (1-2 d):** spine freshness — `parcelKeys` CDC side table, monthly `seedSpine` cron, stale-"running"
   watchdog, one-time 365d foreclosure re-sweep + unmatched-ghost reconciliation (A25-6/A25-8).
 - [ ] **P1-security:** require `email_verified` before the byEmail account-link fallback (S25-1); split the Google
-  key into browser-restricted + server-only (S25-2); `startsWith("http")` guard on 3 scraped-URL hrefs (S25-3).
+  key into browser-restricted + server-only (S25-2); `startsWith("http")` guard on scraped-URL hrefs (S25-3: /monitor now uses safeHref; PropertyDetail.tsx + PropertyMap.tsx still open).
 - [ ] **P1-hygiene:** weekly retention cron (scrapeEvents/runs/errorLogs/parcelSync); stop sendDigest logging the
   missing-key config note daily (A25-7).
 - [ ] **P2-signals (build order):** eviction filings via CourtConnect (tired-landlord, ~1 wk) → Wilmington vacant
   XLSX (1-2 d) → monitor precision batch (absentee badge, keyword lexicon, price-cut cadence, back-on-market) →
   Register of Wills + RTSC PDF → obituaries pre-probate → monition/mechanic-lien case types → RECAP bankruptcy →
   PAXWorld deeds index. Product: saved searches + per-user alerts, "On N lists" stack chip, score explainability.
-
-## ★ SHIPPED — "Monitor the Web" (Zillow NCC deal finder) — LIVE ON PROD + PEN-TESTED (2026-07-01)
-- [x] **Design + live test + 15-task plan** — `docs/superpowers/{specs,plans,research}/2026-06-30-monitor-web-*` (committed on the branch).
-- [x] **BUILT (all 15 tasks, subagent-driven)** on branch `feat/monitor-web-zillow`. Pure `monitorListings.ts` (parsers +
-  multi-exit math + DeepSeek judge, 23 tests) · `monitorListings`/`monitorRuns` schema · `monitorData` (requireUser reads +
-  off-market cross-ref) · `monitorScrape` (Firecrawl v2 direct) · `monitorActions` (scan/enrich/judge/digest/createMonitor) ·
-  `http.ts` HMAC webhook · daily cron · `/monitor` page · `monitor-web` op skill. **312 tests, build clean.**
-- [x] **Final whole-branch review + fixes (`72eed27`):** #1 keeper gate no longer takes the LLM's soft `keep` (deterministic
-  math decides) · #2 off-market **house-number guard** in `crossRefOffMarket` (was the old #1 fast-follow — DONE) · #3 missing-Firecrawl-key fail-safe.
-- [x] **MERGED → `origin/main` `72eed27` + DEPLOYED TO PROD** `pastel-crocodile-994` (tables+indexes/functions/http-route/cron;
-  `FIRECRAWL_WEBHOOK_SECRET` set); frontend via CF. **LIVE PROD PEN-TEST:** 1-page scan 41→24→24 analyzed/0 failed; 16 keepers,
-  real insights (rentals cap 6.3–6.8%, flip -ve, comps-capped ARV, agent/price-history/DeepSeek reason); `/monitor` UI + Promote-to-Potential
-  (test-promoted 309 Cedar) + Flip handoff all work; auth gates + webhook HMAC fail closed (401/404).
-- [x] **(a) Keeper-precision tuning — SHIPPED + PROD-VERIFIED (2026-07-01 later, `b72f951`).** `decideKeeper` distress-only
-  keeps now require spread≥0 OR dealScore≥30 (`MONITOR.distressScoreFloor`; null spread ≠ free pass). 313 tests, reviews clean.
-  Live: 513 W 37th / 508 Lake Dr / 1805 W 8th re-analyzed → keeper=false; keepers 16→13 (survivors legitimately kept).
-- [x] **(c) Firecrawl Monitor — REGISTERED + ACTIVE (2026-07-01 later, `76197c8`).** `createFirecrawlMonitor` first aligned w/
-  current v2 docs (account-level signing — NO webhook `secret` body field; id at `data.id`; events `check.completed` only), then
-  run on prod: monitor `019f1f6e-de66-759e-ad19-7364acf49fd3`, cron `0 20 * * *` ET, first run 2026-07-02. Daily Convex cron stays as safety net.
-  - [x] **Webhook secret SYNCED + VERIFIED END-TO-END (2026-07-02).** User supplied the account webhook secret + a fresh API
-    key (`fc-76ff…`) from their personal account — SAME team as the old `fc-286…` key (verified: identical billing period +
-    the monitor is visible under it → no re-registration). Both set on prod. Proof: self-signed HMAC POST to
-    `/firecrawl-monitor` → **HTTP 200** → real webhook-triggered scan **166 scanned / 63 new / 87 analyzed / 0 failed** on the
-    new key; **42 keepers, 0 violate the tuned gate**; top finds 18 S Pennewell (90 FLIP, 43% spread) + 212 Bohemia Mill Pond
-    (90 FLIP, 51%). Last night's unsynced first check 401'd + cron 20h-guard skipped = fail-safe chain proven organically.
-  - [x] **Account decision RESOLVED (user, 2026-07-02): personal account (~17.8k credits, monthly) for now.** The ANNUAL 100k
-    key (`fc-3f8…`) stays local-only in `.env.local`. Old chat-shared `fc-286…` key can be revoked in the dashboard (new key
-    `fc-76ff…` + secret were also chat-shared → fold into the standing key-rotation punch list).
-- [x] **P0 audit-fix batch — SHIPPED + LIVE-VERIFIED (2026-07-03, `20ffa6e`+`1c7f0d9`+`ca63244` → prod).** From the 48h production
-  audit: webhook instant-ACK (1.4s, was ~60s → killed the 4-scans/night Firecrawl retry storm) + 10-min duplicate guard (2nd
-  signed POST absorbed) · LOT/LAND guard (Bohemia lot no longer a fake 90-score flip; land never underwritten, no comps/LLM spend) ·
-  honest header ("N new in last 24h" aggregate). All Opus subagent-built, per-task + final reviews clean.
-- [x] **DIGEST EMAIL LIVE (2026-07-03).** User supplied the Resend key; the account already had
-  **instantrealestatesolution.com verified for sending** → `RESEND_FROM="IRES Monitor <monitor@instantrealestatesolution.com>"`,
-  `RESEND_TO=nazhossain16@gmail.com`, `RESEND_API_KEY` set on prod. First live digest sent + **Resend-confirmed `delivered`**:
-  "IRES Monitor: 50 new deals (Zillow NCC)" (cleared the keeper backlog; 7 late-analyzed keepers roll into tonight's digest).
-  Every scan now ends with an inbox digest automatically. NOTE: key was pasted in chat → standing key-rotation list.
-- [ ] **P1 backlog (from the audit, in order):** dismiss/snooze on keeper cards (seen-state) · auto-enrich new keepers
-  (Street-View condition + equity/balances, funnel-only capped) · price-cut/relist signal from stored `priceHistory` ·
-  monitor cadence daily→every 4h (safe now the ACK fix landed) · dashboard "New on Monitor" panel · polish batch
-  (photo fallback to Street View, promote source tag "Monitor", hydration skeletons, run-row counts).
-- [ ] **Product Q (user):** surface no-list-price foreclosures as a separate "distress, price TBD" section, or keep them dropped (current mirage fix)? Also: land listings — keep as flagged-only in "All new", or give land its own section?
-- [ ] **Minor visual:** one card (218 W 23rd) rendered a broken-image placeholder (missing/404 photo URL). Deferred Minors — see ledger `.superpowers/sdd/progress.md`.
 
 ## ★ ACTIVE — Wholesaling Lead Engine (Phase 0 DONE → Phase 1 NEXT)
 - [x] **Spec written + committed** (`ce11b62`) — `docs/superpowers/specs/2026-06-06-wholesaling-lead-engine-design.md`.
