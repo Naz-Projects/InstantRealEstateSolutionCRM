@@ -664,7 +664,7 @@ export default defineSchema({
     dealScore: v.optional(v.number()), // max(flipScore, rentScore) — sort key
     flipScore: v.optional(v.number()),
     rentScore: v.optional(v.number()),
-    bestExit: v.optional(v.string()), // FLIP | RENTAL (floors met) | WHOLESALE (below market only) | PASS
+    bestExit: v.optional(v.string()), // FLIP | RENTAL (floors met) | WHOLESALE (below market) | DISTRESS (rule-based lane) | VERIFY (unverified ARV, board-only) | PASS
     riskFlags: v.optional(v.array(v.string())),
     keeper: v.optional(v.boolean()), // belowMarket || aiKeep
     aiKeep: v.optional(v.boolean()),
