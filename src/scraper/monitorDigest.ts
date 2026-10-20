@@ -11,6 +11,7 @@ export const esc = (s: string): string =>
 
 export interface DigestRow extends PresentRow {
   _id: string; address: string; photoUrls?: string[] | null;
+  url?: string | null; // the Zillow listing page (primary CTA when it passes safeHref)
   alertTag?: string | null; // Phase 4: an already-FRESH "PRICE CUT $X" / "BACK ON MARKET" (sendDigest computes it)
 }
 export interface DigestOpts { baseUrl: string; moreOnBoard: number; date: string }
@@ -72,6 +73,12 @@ function cardHtml(r: DigestRow, o: DigestOpts): string {
   const flag = displayFlags(r)[0];
   const note = analystNote(r);
   const link = dealLink(o.baseUrl, r._id);
+  const zillow = safeHref(r.url);
+  // Zillow is the primary CTA; the CRM sheet stays as a quieter text link. No valid
+  // Zillow URL -> the CRM button is primary, as before.
+  const cta = zillow
+    ? `<td style="background:${C.teal};border-radius:8px;"><a href="${esc(zillow)}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">View on Zillow</a></td><td style="padding:0 0 0 14px;"><a href="${esc(link)}" style="font-size:13px;font-weight:600;color:${C.teal};text-decoration:none;">Open in CRM</a></td>`
+    : `<td style="background:${C.teal};border-radius:8px;"><a href="${esc(link)}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">Review deal</a></td>`;
   return `<table ${TABLE} style="background:#ffffff;border:1px solid ${C.line};border-radius:10px;border-collapse:separate;margin:0 0 12px;">
 <tr><td style="padding:16px;">
   <table ${TABLE}><tr>
@@ -84,7 +91,7 @@ function cardHtml(r: DigestRow, o: DigestOpts): string {
   ${reason ? `<div style="font-size:13px;line-height:18px;color:${C.body};margin:0 0 8px;">${esc(reason)}</div>` : ""}
   ${flag ? `<div style="margin:0 0 8px;"><span style="display:inline-block;background:${C.flagBg};color:${C.flagFg};font-size:12px;font-weight:600;padding:3px 8px;border-radius:10px;">${esc(flag)}</span></div>` : ""}
   ${note ? `<div style="font-size:12px;line-height:16px;color:${C.muted};margin:0 0 8px;">${esc(note)}</div>` : ""}
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 0;"><tr><td style="background:${C.teal};border-radius:8px;"><a href="${esc(link)}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">Review deal</a></td></tr></table>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 0;"><tr>${cta}</tr></table>
 </td></tr></table>`;
 }
 
@@ -99,6 +106,8 @@ function cardText(r: DigestRow, o: DigestOpts): string {
   if (flag) lines.push(`   Flag: ${flag}`);
   const note = analystNote(r);
   if (note) lines.push(`   ${note}`);
+  const zillow = safeHref(r.url);
+  if (zillow) lines.push(`   Zillow: ${zillow}`);
   lines.push(`   Review: ${dealLink(o.baseUrl, r._id)}`);
   return lines.join("\n");
 }

@@ -269,6 +269,11 @@ export function DealSheet({
               ) : (
                 <Button onClick={onPromote} disabled={busy}><ClipboardPlus data-icon="inline-start" />Promote</Button>
               )}
+              {zillow && (
+                <Button variant="outline" className="border-teal/60 text-teal-glow" asChild>
+                  <a href={zillow} target="_blank" rel="noopener noreferrer"><ExternalLink data-icon="inline-start" />View on Zillow</a>
+                </Button>
+              )}
               <Button variant="outline" disabled={busy} aria-pressed={status === "shortlist"} onClick={() => act(status === "shortlist" ? "unshortlist" : "shortlist")}>
                 <Star data-icon="inline-start" className={cn(status === "shortlist" && "fill-current text-primary")} />
                 {status === "shortlist" ? "Shortlisted" : "Shortlist"}

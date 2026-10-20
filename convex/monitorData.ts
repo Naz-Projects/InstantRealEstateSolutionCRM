@@ -724,6 +724,7 @@ export const board = query({
     return keepers.map((r) => ({
       _id: r._id,
       address: r.address,
+      url: r.url, // the Zillow listing page (board row link)
       propCity: r.propCity,
       propZip: r.propZip,
       beds: r.beds,

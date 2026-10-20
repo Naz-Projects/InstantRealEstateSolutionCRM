@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
-import { ChevronRight, Eye, ImageOff, RotateCcw, Star, X } from "lucide-react";
+import { ChevronRight, ExternalLink, Eye, ImageOff, RotateCcw, Star, X } from "lucide-react";
 import type { api } from "../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -82,7 +82,7 @@ export function BoardTable(p: BoardTableProps) {
                   className={cn(
                     "h-9 text-xs font-medium uppercase tracking-wide text-muted-foreground",
                     i === 0 && "w-16", i === 1 && "w-28", (i === 3 || i === 4) && "text-right",
-                    i === 3 && "w-28", i === 4 && "w-40", i === 5 && "w-32",
+                    i === 3 && "w-28", i === 4 && "w-40", i === 5 && "w-40",
                   )}
                 >
                   {h}
@@ -95,6 +95,7 @@ export function BoardTable(p: BoardTableProps) {
               const v = verdictFor(r);
               const status = triageStatus(r.triage, p.now);
               const isSel = i === p.selected;
+              const zillow = safeHref(r.url);
               return (
                 <TableRow
                   key={r._id}
@@ -129,6 +130,13 @@ export function BoardTable(p: BoardTableProps) {
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
+                      {zillow && (
+                        <Button variant="ghost" size="icon-sm" className="text-teal-glow" asChild>
+                          <a href={zillow} target="_blank" rel="noopener noreferrer" aria-label="View on Zillow" title="View on Zillow">
+                            <ExternalLink />
+                          </a>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost" size="icon-sm"
                         aria-label={status === "shortlist" ? "Remove from shortlist" : "Shortlist"}
@@ -166,12 +174,14 @@ export function BoardTable(p: BoardTableProps) {
         {p.rows.map((r, i) => {
           const v = verdictFor(r);
           const status = triageStatus(r.triage, p.now);
+          const zillow = safeHref(r.url);
           return (
-            <li key={r._id}>
+            // The Zillow link is a sibling of the row button (no <a> inside a <button>).
+            <li key={r._id} className={cn("flex items-center", i === p.selected && "bg-accent")}>
               <button
                 type="button"
                 onClick={() => { p.onSelect(i); p.onOpen(r._id); }}
-                className={cn("flex w-full gap-3 px-4 py-3 text-left", i === p.selected && "bg-accent")}
+                className="flex min-w-0 flex-1 gap-3 py-3 pl-4 pr-2 text-left"
               >
                 <Thumb src={r.photo} alt="" className="size-16" />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -192,6 +202,13 @@ export function BoardTable(p: BoardTableProps) {
                   <AlertTagChip alertTag={r.alertTag} alertedEventAt={r.alertedEventAt} className="mt-0.5 self-start" />
                 </div>
               </button>
+              {zillow && (
+                <Button variant="ghost" size="icon-lg" className="mr-2 shrink-0 text-teal-glow" asChild>
+                  <a href={zillow} target="_blank" rel="noopener noreferrer" aria-label="View on Zillow" title="View on Zillow">
+                    <ExternalLink />
+                  </a>
+                </Button>
+              )}
             </li>
           );
         })}

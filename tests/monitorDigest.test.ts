@@ -9,6 +9,7 @@ const FLIP: DigestRow = {
   aiReason: "Deep below-market fixer with a halted renovation. More detail here.",
   redFlags: ["sparse_photos", "zipTier: city-high-risk", "Stop-work order"],
   exitTriage: "WHOLETAIL",
+  url: "https://www.zillow.com/homedetails/319-E-13th-St/123_zpid/",
 };
 const RENTAL: DigestRow = {
   _id: "def456", address: "1529 W 4th St, Wilmington, DE 19805", bestExit: "RENTAL", dealScore: 40,
@@ -57,10 +58,20 @@ describe("buildDigest", () => {
     expect(d.html).toMatch(/<head><meta charset="utf-8">/);
     expect(d.html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
   });
-  it("one Review deal CTA per card, deep-linked", () => {
-    expect(d.html.match(/>Review deal</g)).toHaveLength(2);
+  it("Zillow is the primary CTA; the CRM deep link stays as a secondary link", () => {
+    expect(d.html.match(/>View on Zillow</g)).toHaveLength(1); // FLIP has a url
+    expect(d.html).toContain('href="https://www.zillow.com/homedetails/319-E-13th-St/123_zpid/"');
+    expect(d.html).toContain(">Open in CRM<");
     expect(d.html).toContain('href="https://crm.example.com/monitor?id=abc123"');
+    expect(d.html.indexOf(">View on Zillow<")).toBeLessThan(d.html.indexOf(">Open in CRM<"));
+    expect(d.text).toContain("Zillow: https://www.zillow.com/homedetails/319-E-13th-St/123_zpid/");
     expect(d.text).toContain("Review: https://crm.example.com/monitor?id=abc123");
+  });
+  it("no Zillow url -> the CRM Review deal button is primary", () => {
+    expect(d.html.match(/>Review deal</g)).toHaveLength(1); // RENTAL has no url
+    expect(d.html.match(/>Open in CRM</g)).toHaveLength(1);
+    expect(d.html).toContain('href="https://crm.example.com/monitor?id=def456"');
+    expect(d.text).not.toContain("Zillow: undefined");
   });
   it("small 96px side thumbnail, not a hero", () => {
     expect(d.html).toContain('width="96" height="72"');
@@ -108,6 +119,16 @@ describe("buildDigest XSS + odd data", () => {
     const q = buildDigest([{ ...FLIP, photoUrls: [`https://x.com/a.jpg" onerror="alert(1)`] }], OPTS).html;
     expect(q).not.toContain(`" onerror="`);
     expect(q).toContain("&quot; onerror=&quot;");
+  });
+  it("drops a javascript: Zillow url (CRM button primary) and escapes a quote-bearing one", () => {
+    const js = buildDigest([{ ...FLIP, url: "javascript:alert(1)" }], OPTS);
+    expect(js.html).not.toContain("javascript:");
+    expect(js.html).not.toContain("View on Zillow");
+    expect(js.html).toContain(">Review deal<");
+    expect(js.text).not.toContain("Zillow:");
+    const q = buildDigest([{ ...FLIP, url: `https://www.zillow.com/a" onclick="alert(1)` }], OPTS).html;
+    expect(q).not.toContain(`" onclick="`);
+    expect(q).toContain("&quot; onclick=&quot;");
   });
   it("a card with no photo, no reason and no flags still renders its numbers and CTA", () => {
     const bare: DigestRow = { _id: "z", address: "1 Main St", bestExit: "FLIP", listPrice: 100000, flipMao: 90000, roomVsList: -10000 };
