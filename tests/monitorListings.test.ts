@@ -115,16 +115,16 @@ const mkComp = (soldPrice: number, sqft: number, beds = 4): Comp =>
   ({ address: "x", soldDate: "MAY 1, 2026", soldPrice, beds, baths: 2, sqft, pricePerSqft: soldPrice / sqft });
 
 describe("conservativeArv", () => {
-  it("caps comps at 1.15x Zestimate when comps are inflated", () => {
+  it("caps comps at 1.25x Zestimate when comps are inflated", () => {
     const comps = [mkComp(700000, 3101), mkComp(720000, 3101), mkComp(740000, 3101)];
     const r = conservativeArv({ comps, sqft: 3101, beds: 3, zestimate: 311400, homeType: "SINGLE_FAMILY", now: NOW });
-    expect(r.arv).toBe(Math.round(311400 * 1.15)); // capped
+    expect(r.arv).toBe(Math.round(311400 * 1.25)); // capped
   });
   it("uses comps when consistent with Zestimate", () => {
     const comps = [mkComp(230000, 1100), mkComp(220000, 1100), mkComp(226000, 1100)];
     const r = conservativeArv({ comps, sqft: 1100, beds: 3, zestimate: 176200, homeType: "SINGLE_FAMILY", now: NOW });
     expect(r.source).toBe("comps");
-    expect(r.arv).toBeLessThanOrEqual(Math.round(176200 * 1.15));
+    expect(r.arv).toBeLessThanOrEqual(Math.round(176200 * 1.25));
   });
   it("manufactured -> Zestimate only (comps invalid)", () => {
     const comps = [mkComp(270000, 1019), mkComp(260000, 1019), mkComp(280000, 1019)];
@@ -222,9 +222,9 @@ describe("keeper floors (user-approved 2026-10-03)", () => {
     expect(meetsFlipFloor(flipOf(80000, 0.1199))).toBe(false);
     expect(meetsFlipFloor(null)).toBe(false);
   });
-  it("RENTAL floor = cap >= 6% AND cash flow >= 0 AND DSCR >= 1.2 (all boundaries inclusive)", () => {
-    expect(meetsRentalFloor(rentalOf(0.06, 0, 1.2))).toBe(true);
-    expect(meetsRentalFloor(rentalOf(0.09, 300, 1.19))).toBe(false);
+  it("RENTAL floor = cap >= 6% AND cash flow >= 0 AND DSCR >= 1.0 (all boundaries inclusive)", () => {
+    expect(meetsRentalFloor(rentalOf(0.06, 0, 1.0))).toBe(true);
+    expect(meetsRentalFloor(rentalOf(0.09, 300, 0.99))).toBe(false);
     expect(meetsRentalFloor(rentalOf(0.0599, 500))).toBe(false);
     expect(meetsRentalFloor(rentalOf(0.09, -1))).toBe(false);
     expect(meetsRentalFloor(null)).toBe(false);
@@ -233,7 +233,7 @@ describe("keeper floors (user-approved 2026-10-03)", () => {
 
 describe("evaluateDeal (the single keep/exit decision)", () => {
   it("FLIP keeper: ARV 300k, list 180k, rehab 30k -> profit 42,000 / margin 14%", () => {
-    const d = evaluateDeal({ ...DEAL, listPrice: 180000, arv: 300000, rehabTotal: 30000 });
+    const d = evaluateDeal({ ...DEAL, listPrice: 180000, zestimate: 199000, arv: 300000, rehabTotal: 30000 });
     expect(d.flip!.profit).toBe(42000);
     expect(d.flip!.margin).toBeCloseTo(0.14, 10);
     expect(d).toMatchObject({ flipScore: 60, rentScore: 0, dealScore: 60, bestExit: "FLIP", keeper: true, belowMarket: false });
@@ -254,11 +254,11 @@ describe("evaluateDeal (the single keep/exit decision)", () => {
     expect(d.rental!.dscr).toBeCloseTo(1.419, 3);
     expect(d).toMatchObject({ rentScore: 90, bestExit: "RENTAL", keeper: true });
   });
-  it("cap 7.1% and +$114/mo but DSCR 1.13 < 1.2 is not a RENTAL (rent 2000, est. 1.6% tax)", () => {
+  it("cap 7.1%, +$114/mo, DSCR 1.13 clears the 1.0 DSCR bar -> RENTAL (rent 2000, est. 1.6% tax)", () => {
     const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 2000 });
     expect(d.rental!.cashFlow).toBe(114);
     expect(d.rental!.dscr).toBeCloseTo(1.127, 3);
-    expect(d).toMatchObject({ bestExit: "PASS", keeper: false });
+    expect(d).toMatchObject({ bestExit: "RENTAL", keeper: true });
   });
   it("the listing's real tax rate (0.68%) flips that same deal to RENTAL (+$229/mo, DSCR 1.26)", () => {
     const d = evaluateDeal({ ...DEAL, listPrice: 150000, rehabTotal: 20000, rent: 2000, taxRatePct: 0.68 });
@@ -277,18 +277,18 @@ describe("evaluateDeal (the single keep/exit decision)", () => {
     expect(d).toMatchObject({ rentScore: 40, bestExit: "PASS", keeper: false });
   });
   it("both floors met -> higher score wins, tie goes to FLIP", () => {
-    const d = evaluateDeal({ ...DEAL, listPrice: 120000, arv: 250000, rehabTotal: 20000, rent: 1900 });
+    const d = evaluateDeal({ ...DEAL, listPrice: 120000, zestimate: 130000, arv: 250000, rehabTotal: 20000, rent: 1900 });
     expect(d).toMatchObject({ flipScore: 90, rentScore: 90, bestExit: "FLIP", keeper: true });
   });
-  it("below market vs Zestimate: list <= 0.85 x Zestimate keeps (WHOLESALE label), 1 dollar over does not", () => {
-    expect(evaluateDeal({ ...DEAL, listPrice: 170000, zestimate: 200000 })).toMatchObject({ belowMarket: true, spreadPct: 15, bestExit: "WHOLESALE", keeper: true });
-    expect(evaluateDeal({ ...DEAL, listPrice: 170001, zestimate: 200000 })).toMatchObject({ belowMarket: false, bestExit: "PASS", keeper: false });
+  it("below market vs Zestimate: list <= 0.90 x Zestimate keeps (WHOLESALE label), 1 dollar over does not", () => {
+    expect(evaluateDeal({ ...DEAL, listPrice: 180000, zestimate: 200000 })).toMatchObject({ belowMarket: true, spreadPct: 10, bestExit: "WHOLESALE", keeper: true });
+    expect(evaluateDeal({ ...DEAL, listPrice: 180001, zestimate: 200000 })).toMatchObject({ belowMarket: false, bestExit: "PASS", keeper: false });
   });
-  it("no Zestimate -> the comps value basis runs the same 15% test", () => {
+  it("no Zestimate -> the comps value basis runs the same 10% test", () => {
     expect(evaluateDeal({ ...DEAL, listPrice: 170000, valueBasis: 200000 })).toMatchObject({ belowMarket: true, spread: 30000, keeper: true });
   });
   it("a Zestimate overrides an inflated comps basis (the 08-08 fake-spread lesson)", () => {
-    expect(evaluateDeal({ ...DEAL, listPrice: 170000, zestimate: 190000, valueBasis: 300000 })).toMatchObject({ belowMarket: false, spreadPct: 10.5, keeper: false });
+    expect(evaluateDeal({ ...DEAL, listPrice: 175000, zestimate: 190000, valueBasis: 300000 })).toMatchObject({ belowMarket: false, spreadPct: 7.9, keeper: false });
   });
   it("renovated -> no flip exit at all", () => {
     const d = evaluateDeal({ ...DEAL, listPrice: 180000, arv: 300000, rehabTotal: 30000, renovated: true });
@@ -644,13 +644,15 @@ describe("GUT regex is word-bounded (fireplace is not fire damage)", () => {
   });
 });
 
-describe("isDigestWorthy (digest = FLIP/RENTAL keepers only)", () => {
-  it("FLIP and RENTAL are emailed", () => {
+describe("isDigestWorthy (digest = FLIP/RENTAL + Below market + Distress keepers)", () => {
+  it("FLIP, RENTAL, WHOLESALE and DISTRESS are emailed", () => {
     expect(isDigestWorthy("FLIP")).toBe(true);
     expect(isDigestWorthy("RENTAL")).toBe(true);
+    expect(isDigestWorthy("WHOLESALE")).toBe(true);
+    expect(isDigestWorthy("DISTRESS")).toBe(true);
   });
-  it("WHOLESALE / PASS / unset are board-only", () => {
-    expect(isDigestWorthy("WHOLESALE")).toBe(false);
+  it("VERIFY / PASS / unset are board-only", () => {
+    expect(isDigestWorthy("VERIFY")).toBe(false);
     expect(isDigestWorthy("PASS")).toBe(false);
     expect(isDigestWorthy(undefined)).toBe(false);
     expect(isDigestWorthy(null)).toBe(false);
@@ -658,7 +660,7 @@ describe("isDigestWorthy (digest = FLIP/RENTAL keepers only)", () => {
 });
 
 describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip)", () => {
-  it("active FLIP/RENTAL go to toEmail; WHOLESALE/PASS/unset/archived go to toSkip", () => {
+  it("active FLIP/RENTAL/WHOLESALE go to toEmail; PASS/unset/archived go to toSkip", () => {
     const rows = [
       { id: "flip", bestExit: "FLIP" },
       { id: "rent", bestExit: "RENTAL" },
@@ -669,8 +671,8 @@ describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip
       { id: "archPass", bestExit: "PASS", archivedAt: 123 },
     ];
     const { toEmail, toSkip } = partitionDigestRows(rows);
-    expect(toEmail.map((r) => r.id)).toEqual(["flip", "rent"]);
-    expect(toSkip.map((r) => r.id)).toEqual(["whole", "pass", "unset", "archFlip", "archPass"]);
+    expect(toEmail.map((r) => r.id)).toEqual(["flip", "rent", "whole"]);
+    expect(toSkip.map((r) => r.id)).toEqual(["pass", "unset", "archFlip", "archPass"]);
   });
   it("empty in -> empty out", () => {
     expect(partitionDigestRows([])).toEqual({ toEmail: [], toSkip: [] });
@@ -680,7 +682,7 @@ describe("partitionDigestRows (never-emailed keepers -> email vs. stamp-and-skip
 describe("dealInputFromStored (re-gate adapter)", () => {
   it("maps a normal stored row; rehab recomputed (moderate 42/sqft x 1500 x 1.10)", () => {
     expect(dealInputFromStored({ listPrice: 180000, zestimate: 250000, conservativeArv: 300000, sqft: 1500, rentZestimate: 1900, description: "needs TLC", riskFlags: [] }))
-      .toEqual({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rehabTotal: 69300, rent: 1900, taxRatePct: null, renovated: false, holdingMonths: 6 });
+      .toEqual({ listPrice: 180000, zestimate: 250000, valueBasis: 300000, arv: 300000, rehabTotal: 69300, rent: 1900, taxRatePct: null, renovated: false, holdingMonths: 6, description: "needs TLC", homeType: null });
   });
   it("re-derives the keyword tier from the stored description (old fireplace rows were 'gut')", () => {
     const i = dealInputFromStored({ sqft: 1000, rehabTier: "gut", description: "Brick fireplace, needs TLC", yearBuilt: 1985 });

@@ -1,18 +1,21 @@
 export const MONITOR = {
   regionId: 2986, regionType: 4, // New Castle County, DE
   priceCeiling: 500000, minListPrice: 1000, dozDays: "7", sort: "days",
-  spreadThreshold: 0.15, flipMarginBar: 0.12, capRateBar: 0.06,
+  spreadThreshold: 0.10, flipMarginBar: 0.12, capRateBar: 0.06, // below market = list <= 0.90 x value (2026-10-20, was 0.15)
   flipProfitFloor: 25000, // FLIP keeper floor: profit >= $25K AND margin >= flipMarginBar (research §1.3)
   cashFlowFloor: 0, // RENTAL keeper floor: cap >= capRateBar AND monthly cash flow >= this
   // Comps (Phase 2): same type, sold <= compMaxAgeDays, nearest ring with >= compMinCount.
   compRadiiMi: [0.5, 1], compMinCount: 3, compMaxCount: 10, compMaxAgeDays: 183,
   arvPercentile: 0.75, // ARV = 75th-pct comps $/sqft (renovated proxy); as-is = median
+  arvZestimateCap: 1.25, // ARV sanity cap = this x Zestimate (2026-10-20, was 1.15: FLIP was near-impossible)
+  arvUnverifiedListMult: 1.6, // no Zestimate AND ARV > this x list -> VERIFY (board-only), never a FLIP on ARV alone
+  distressMaxListToValue: 0.95, // DISTRESS lane: distress words AND list <= this x value (Zestimate, else as-is comps)
   // Rehab (Phase 2): systems tier + era add-ons (research §4) + longer gut hold.
   systemsPerSqft: 55, leadPaintBeforeYear: 1978, leadPaintAddOn: 3000,
   rewireBeforeYear: 1950, rewireAddOn: 15000, gutHoldingMonths: 9,
   // Rental (Phase 2): opex reserve, tax fallback when the listing has no rate, DSCR bar,
   // BRRRR refi LTV (research §5: post-refi DSCR >= ~1.15 at <= 75% LTV).
-  rentalOpexPct: 0.35, rentalTaxFallbackPct: 1.6, dscrBar: 1.2, brrrrRefiLtv: 0.75,
+  rentalOpexPct: 0.35, rentalTaxFallbackPct: 1.6, dscrBar: 1.0, brrrrRefiLtv: 0.75, // dscrBar was 1.2 (implied a ~7.55% cap)
   keeperRetireDays: 30, // keepers not seen in any Zillow search for this long age off the board (archivedAt)
   // Firecrawl v2 cache: first attempt accepts a page cached <= 1h; retries force a live
   // scrape (maxAge 0). Unset, v2 defaults to a 2-day cache (lessons 2026-10-03).
@@ -258,7 +261,7 @@ function percentile(sorted: number[], p: number): number {
 }
 
 export interface Valuation {
-  arv: number | null;       // after-repair: 75th-pct comps $/sqft x sqft (renovated proxy), capped 1.15 x Zestimate
+  arv: number | null;       // after-repair: 75th-pct comps $/sqft x sqft (renovated proxy), capped arvZestimateCap x Zestimate
   asIsValue: number | null; // as-is: median comps $/sqft x sqft (the no-Zestimate spread basis)
   source: "comps" | "zestimate" | "none";
   compsPpsf: number | null; // median $/sqft (dealSignals' ppsf discount)
@@ -278,9 +281,9 @@ export function conservativeArv(opts: { comps: Comp[]; sqft: number | null; beds
   const ppsf = sel.map((c) => c.pricePerSqft as number).sort((a, b) => a - b);
   const med = percentile(ppsf, 0.5);
   let arv = Math.round(percentile(ppsf, MONITOR.arvPercentile) * opts.sqft);
-  // Sanity cap kept: Zestimate ~ as-is value, so 1.15x bounds the renovation uplift
+  // Sanity cap kept: Zestimate ~ as-is value, so arvZestimateCap bounds the renovation uplift
   // (research §1.1: renovated premium ~$25-35/sqft) and still catches type/size-skewed pools.
-  if (z && arv > z * 1.15) arv = Math.round(z * 1.15);
+  if (z && arv > z * MONITOR.arvZestimateCap) arv = Math.round(z * MONITOR.arvZestimateCap);
   // As-is never exceeds after-repair (the Zestimate cap can pull ARV below the median).
   return { arv, asIsValue: Math.min(Math.round(med * opts.sqft), arv), source: "comps", compsPpsf: Math.round(med), compsCount: sel.length };
 }
@@ -304,6 +307,39 @@ const RENOVATED_STRONG = /(fully|newly|completely|totally|beautifully|recently|f
 export function detectRenovated(description: string | null | undefined): boolean {
   const d = description || "";
   return RENOVATED_STRONG.test(d) && !MODERATE.test(d) && !GUT.test(d);
+}
+
+// DISTRESS lane lexicon (deterministic — the LLM's "distressed" tag never decides).
+// Word-bounded (the fire/fireplace lesson): "real estate" and "... Estates" never read as
+// an estate sale, and a bare "as is" needs a sale verb ("the yard is huge, as is the
+// basement" is English, not a condition). First label in order wins.
+const DISTRESS_TERMS: Array<[string, RegExp]> = [
+  ["as-is", /\bas-is\b|\b(?:sold|selling|sells|sale|conveyed|offered|strictly|being sold)\s+["']?as\s+is\b/gi],
+  ["cash only", /\bcash[\s-]+only\b/gi],
+  ["investor special", /\binvestor\s+special\b/gi],
+  ["short sale", /\bshort[\s-]+sale\b/gi],
+  ["auction", /\bauction(?:ed)?\b/gi],
+  // An estate SALE, not a grand home ("powder room estate has been renovated", live 2026-10).
+  ["estate", /(?<!\breal[\s-]+)\bestate[\s-]+(?:sale|of|settlement|owned|property)\b|\b(?:by|from)\s+the\s+estate\b/gi],
+  ["probate", /\bprobate\b/gi],
+  ["shell", /\bshell\b/gi],
+  ["power off", /\b(?:power|electric(?:ity)?)\s+(?:is\s+)?(?:off|shut\s+off|turned\s+off)\b/gi],
+  ["fixer", /\bfixer\b/gi],
+  ["needs work", /\bneeds?\s+(?:some\s+|a\s+lot\s+of\s+|a\s+little\s+)?work\b/gi],
+  ["TLC", /\btlc\b/gi],
+  ["major rehab", /\bmajor\s+(?:rehab|renovation|repairs?)\b/gi],
+  ["handyman special", /\bhandyman\s+special\b/gi],
+];
+// "not a short sale", "no auction": a negator earlier in the same clause cancels the hit.
+const DISTRESS_NEGATED = /\b(?:not|no|never|non)\b[^.,;:!?]*$/i;
+export function detectDistress(description: string | null | undefined): string | null {
+  const d = description || "";
+  for (const [label, re] of DISTRESS_TERMS) {
+    for (const m of d.matchAll(re)) {
+      if (!DISTRESS_NEGATED.test(d.slice(Math.max(0, (m.index ?? 0) - 20), m.index))) return label;
+    }
+  }
+  return null;
 }
 
 // Monitor rehab scope: max(description keyword tier, LLM conditionTier) — the judge
@@ -414,7 +450,9 @@ export function meetsRentalFloor(rental: RentalMetrics | null): boolean {
   return !!rental && rental.capRate >= MONITOR.capRateBar && rental.cashFlow >= MONITOR.cashFlowFloor && rental.dscr >= MONITOR.dscrBar;
 }
 
-export type BestExit = "FLIP" | "RENTAL" | "WHOLESALE" | "PASS";
+// VERIFY = would keep on comps alone, but the comps are unverified (no Zestimate and
+// ARV > arvUnverifiedListMult x list): kept on the board, never emailed.
+export type BestExit = "FLIP" | "RENTAL" | "WHOLESALE" | "DISTRESS" | "VERIFY" | "PASS";
 export interface DealInput {
   listPrice: number | null;
   zestimate: number | null;
@@ -425,6 +463,8 @@ export interface DealInput {
   renovated: boolean;        // already flipped by someone else -> no flip exit
   holdingMonths?: number;    // flip hold (monitorRehab: 9 for a gut, else the 6-month default)
   taxRatePct?: number | null; // listing's property-tax rate (percent); null -> 1.6% estimate
+  description?: string | null; // DISTRESS lane lexicon (detectDistress)
+  homeType?: string | null;    // land / manufactured / condo / multi-family never take the DISTRESS lane
 }
 export interface DealDecision {
   belowMarket: boolean;
@@ -438,29 +478,47 @@ export interface DealDecision {
   bestExit: BestExit;
   keeper: boolean;
   brrrrCashLeftIn: number | null; // all-in minus a 75%-of-ARV refi (negative = cash out)
+  arvUnverified: boolean;         // no Zestimate and ARV > arvUnverifiedListMult x list (VERIFY flag)
+  distressSignal: string | null;  // the DISTRESS-lane term found (set only when the lane qualifies)
 }
 // THE keeper decision — the only place keep/exit is decided (analyzeOne, the re-gate
 // mutation and the backtest script all call it). Deterministic: the LLM never keeps.
-// belowMarket basis = Zestimate when present (list <= 0.85 x Zestimate), else the
-// comps value. Distress is score/label only — it never keeps a listing.
+// belowMarket basis = Zestimate when present (list <= 0.90 x Zestimate), else the
+// comps value. DISTRESS = rule-based description terms AND list <= 0.95 x the same
+// basis AND not renovated (never land/manufactured/condo/multi-family). With no
+// Zestimate and ARV > 1.6 x list the comps are unverified: a row that would keep on
+// them (flip floors / comps spread / distress) is VERIFY (board-only); rental is
+// rent-driven and still wins. Lane order: FLIP/RENTAL > WHOLESALE > DISTRESS.
 export function evaluateDeal(i: DealInput): DealDecision {
-  const basis = i.zestimate != null && i.zestimate > 0 ? i.zestimate : i.valueBasis;
+  const hasZestimate = i.zestimate != null && i.zestimate > 0;
+  const basis = hasZestimate ? i.zestimate : i.valueBasis;
   const spread = basis != null && i.listPrice != null ? basis - i.listPrice : null;
   const spreadPct = spread != null && basis ? +((spread / basis) * 100).toFixed(1) : null;
   const belowMarket = basis != null && basis > 0 && i.listPrice != null && i.listPrice <= basis * (1 - MONITOR.spreadThreshold);
   const flip = i.renovated || i.rehabTotal == null ? null : analyzeFlip(i.arv, i.listPrice, i.rehabTotal, i.holdingMonths);
   const rental = i.rehabTotal == null || i.listPrice == null ? null : analyzeRental({ rent: i.rent, list: i.listPrice, rehab: i.rehabTotal, taxRatePct: i.taxRatePct });
   const s = scoreDeal(flip, rental);
-  const flipOk = meetsFlipFloor(flip);
+  const arvUnverified = !hasZestimate && i.arv != null && i.listPrice != null && i.listPrice > 0 && i.arv > i.listPrice * MONITOR.arvUnverifiedListMult;
+  const flipFloor = meetsFlipFloor(flip);
+  const flipOk = flipFloor && !arvUnverified;
   const rentalOk = meetsRentalFloor(rental);
+  const t = i.homeType;
+  const term = i.renovated || isLandType(t) || isManufacturedType(t) || isCondoType(t) || isMultiUnitType(t) ? null : detectDistress(i.description);
+  const distress = term != null && basis != null && basis > 0 && i.listPrice != null && i.listPrice <= basis * MONITOR.distressMaxListToValue;
   const bestExit: BestExit =
     flipOk && rentalOk ? (s.flipScore >= s.rentScore ? "FLIP" : "RENTAL")
     : flipOk ? "FLIP"
     : rentalOk ? "RENTAL"
+    : arvUnverified && (flipFloor || belowMarket || distress) ? "VERIFY"
     : belowMarket ? "WHOLESALE"
+    : distress ? "DISTRESS"
     : "PASS";
   const brrrrCashLeftIn = rental && i.arv != null ? Math.round(rental.allIn - MONITOR.brrrrRefiLtv * i.arv) : null;
-  return { belowMarket, spread, spreadPct, flip, rental, ...s, bestExit, keeper: flipOk || rentalOk || belowMarket, brrrrCashLeftIn };
+  return {
+    belowMarket, spread, spreadPct, flip, rental, ...s, bestExit,
+    keeper: flipFloor || rentalOk || belowMarket || distress,
+    brrrrCashLeftIn, arvUnverified, distressSignal: distress ? term : null,
+  };
 }
 // Re-gate adapter: rebuild a DealInput from a STORED monitorListings row (no scraping).
 // Old-row rules: sqft unknown -> rehab unknown and ARV = Zestimate-or-null (the old
@@ -480,6 +538,7 @@ export interface StoredListing {
   description?: string;
   riskFlags?: string[];
   propertyTaxRatePct?: number;
+  homeType?: string;
 }
 export function dealInputFromStored(r: StoredListing): DealInput {
   const sqftKnown = r.sqft != null && r.sqft > 0;
@@ -501,6 +560,8 @@ export function dealInputFromStored(r: StoredListing): DealInput {
     taxRatePct: r.propertyTaxRatePct ?? null,
     renovated: (r.riskFlags ?? []).some((f) => f.startsWith("RENOVATED")) || detectRenovated(r.description),
     holdingMonths: rehab.holdingMonths,
+    description: r.description ?? null,
+    homeType: r.homeType ?? null,
   };
 }
 // Row fields for a decision. `undefined` = REMOVE the field (ctx.db.patch semantics),
@@ -528,16 +589,19 @@ export function decisionFields(d: DealDecision) {
     brrrrCashLeftIn: d.brrrrCashLeftIn ?? undefined,
   };
 }
-// Digest = actionable exits only: a keeper whose bestExit is WHOLESALE/PASS (or unset)
-// stays on the /monitor board but never reaches the email.
-export function isDigestWorthy(bestExit: string | null | undefined): boolean {
-  return bestExit === "FLIP" || bestExit === "RENTAL";
+// Digest lanes, best first: FLIP/RENTAL (3) > WHOLESALE "Below market" (2) > DISTRESS (1).
+// 0 = board-only (VERIFY / PASS / unset): stays on /monitor, never reaches the email.
+export function digestLaneRank(bestExit: string | null | undefined): number {
+  return bestExit === "FLIP" || bestExit === "RENTAL" ? 3 : bestExit === "WHOLESALE" ? 2 : bestExit === "DISTRESS" ? 1 : 0;
 }
-// A board-only keeper (WHOLESALE/PASS/unset) may already carry emailedAt from
-// markDigestSkipped; when a re-analysis upgrades it to FLIP/RENTAL, emailedAt must be
-// cleared or the digest (keeper && emailedAt unset) never sees it.
+export function isDigestWorthy(bestExit: string | null | undefined): boolean {
+  return digestLaneRank(bestExit) > 0;
+}
+// A keeper may already carry emailedAt (sent, or stamped board-only by markDigestSkipped,
+// e.g. every pre-2026-10-20 WHOLESALE row); when a re-analysis moves it UP a lane,
+// emailedAt must be cleared or the digest (keeper && emailedAt unset) never sees it.
 export function shouldReopenForDigest(prevExit: string | null | undefined, nextExit: string | null | undefined): boolean {
-  return isDigestWorthy(nextExit) && !isDigestWorthy(prevExit);
+  return digestLaneRank(nextExit) > digestLaneRank(prevExit);
 }
 // Split never-emailed keepers: active digest-worthy rows get emailed; the rest
 // (board-only exits, archived) get emailedAt stamped as "processed" so they leave
@@ -548,7 +612,7 @@ export function partitionDigestRows<T extends { bestExit?: string | null; archiv
   for (const r of rows) (r.archivedAt == null && isDigestWorthy(r.bestExit) ? toEmail : toSkip).push(r);
   return { toEmail, toSkip };
 }
-export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean; sqftKnown?: boolean; arvSource?: string }): string[] {
+export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null; description?: string; rehabTier?: string; zestimate?: number | null; compsArv?: number | null; detailOk?: boolean; sqftKnown?: boolean; arvSource?: string; arvUnverified?: boolean }): string[] {
   const f: string[] = [];
   if ((r.homeType || "").toUpperCase() === "MANUFACTURED") f.push("MANUFACTURED (comps/lot-rent suspect)");
   if (r.monthlyHoaFee && r.monthlyHoaFee > 250) f.push("HIGH-HOA $" + r.monthlyHoaFee + "/mo");
@@ -558,6 +622,7 @@ export function riskFlags(r: { homeType?: string; monthlyHoaFee?: number | null;
   if (r.detailOk === false) f.push("detail-missing (VERIFY)");
   if (r.sqftKnown === false) f.push("sqft-missing (VERIFY)");
   if (r.arvSource === "none" && r.sqftKnown === true) f.push("thin comps, no Zestimate (VERIFY ARV)");
+  if (r.arvUnverified) f.push(`ARV unverified - no Zestimate, ARV > ${MONITOR.arvUnverifiedListMult}x list (VERIFY)`);
   return f;
 }
 

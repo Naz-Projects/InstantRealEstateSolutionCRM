@@ -549,7 +549,7 @@ export const analyzeOne = internalAction({
         return;
       }
 
-      // 3) Comps → ARV (75th-percentile comps $/sqft, capped 1.15x Zestimate) + as-is value (median $/sqft).
+      // 3) Comps → ARV (75th-percentile comps $/sqft, capped MONITOR.arvZestimateCap x Zestimate) + as-is value (median $/sqft).
       const comps = zip ? await compsForZip(ctx, zip, apiKey) : [];
       const arvRes = conservativeArv({ comps, sqft, beds: bedsNum, zestimate, homeType, lat: row.lat ?? null, lng: row.lng ?? null, now: Date.now() });
       const arv = arvRes.arv;
@@ -569,6 +569,8 @@ export const analyzeOne = internalAction({
         arv,
         rent,
         taxRatePct,
+        description,
+        homeType: homeType ?? null,
       };
       const pre = evaluateDeal({
         ...dealInput,
@@ -603,6 +605,7 @@ export const analyzeOne = internalAction({
         detailOk,
         sqftKnown: sqft != null && sqft > 0,
         arvSource: arvRes.source,
+        arvUnverified: pre.arvUnverified, // list/Zestimate/ARV only: the final decision agrees
       });
 
       // 8) Off-market cross-reference (internal query — no user identity).
@@ -641,8 +644,10 @@ export const analyzeOne = internalAction({
       if (rehab.tier === "gut" && !flags.includes("heavy-rehab")) flags.push("heavy-rehab");
       flags.push(...rehab.addOns);
 
-      // 10) Keeper decision — deterministic floors only (distress is a label, never a keep).
+      // 10) Keeper decision — deterministic floors + lanes only (the judge's "distressed" tag never keeps;
+      // the DISTRESS lane is the rule-based lexicon inside evaluateDeal).
       const deal = evaluateDeal({ ...dealInput, rehabTotal: rehab.total, holdingMonths: rehab.holdingMonths, renovated });
+      if (deal.distressSignal) flags.push(`Distress signal: ${deal.distressSignal}`);
       const { keeper, belowMarket, spread, spreadPct, rental } = deal;
       const flipFinal = deal.flip;
       if (leaseRent != null) flags.push(`LEASED at $${leaseRent.toLocaleString("en-US")}/mo`);
@@ -650,6 +655,7 @@ export const analyzeOne = internalAction({
 
       const matched = new Set<string>(verdict?.matchedRequirements ?? []);
       if (belowMarket) matched.add("below_market");
+      if (deal.distressSignal) matched.add("distressed");
 
       // 10b) Phase 4: re-alert on a NEW cut / back-on-market (decided here, after the new
       // numbers, so a failed re-analysis never emails stale ones) + detail re-check rotation.

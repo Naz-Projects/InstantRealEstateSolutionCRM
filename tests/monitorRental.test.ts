@@ -5,7 +5,7 @@ describe("analyzeRental v2 (35% opex, real tax rate, DSCR)", () => {
   it("constants", () => {
     expect(MONITOR.rentalOpexPct).toBe(0.35);
     expect(MONITOR.rentalTaxFallbackPct).toBe(1.6);
-    expect(MONITOR.dscrBar).toBe(1.2);
+    expect(MONITOR.dscrBar).toBe(1.0);
   });
   it("no rate -> 1.6% fallback, flagged estimated", () => {
     const r = analyzeRental({ rent: 2000, list: 150000, rehab: 20000 })!;

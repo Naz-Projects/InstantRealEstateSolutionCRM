@@ -90,15 +90,15 @@ describe("conservativeArv v2 (as-is = median, ARV = 75th pct)", () => {
   it("median 175 -> as-is 210,000; p75 212.5 -> ARV 255,000", () => {
     expect(conservativeArv({ ...base, zestimate: null })).toEqual({ arv: 255000, asIsValue: 210000, source: "comps", compsPpsf: 175, compsCount: 4 });
   });
-  it("ARV capped at 1.15 x Zestimate; as-is is not capped", () => {
+  it("ARV capped at 1.25 x Zestimate; as-is is not capped", () => {
     const r = conservativeArv({ ...base, zestimate: 200000 });
-    expect(r.arv).toBe(230000);
+    expect(r.arv).toBe(250000);
     expect(r.asIsValue).toBe(210000);
   });
   it("as-is clamped to ARV when the Zestimate cap pushes ARV below the median", () => {
     const r = conservativeArv({ ...base, zestimate: 150000 });
-    expect(r.arv).toBe(172500);
-    expect(r.asIsValue).toBe(172500);
+    expect(r.arv).toBe(187500);
+    expect(r.asIsValue).toBe(187500);
   });
   it("fewer than compMinCount comps -> Zestimate for both values", () => {
     expect(conservativeArv({ ...base, comps: four.slice(0, 2), zestimate: 190000 })).toEqual({ arv: 190000, asIsValue: 190000, source: "zestimate", compsPpsf: null, compsCount: 0 });
