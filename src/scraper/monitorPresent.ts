@@ -4,14 +4,14 @@
 
 import { classifyEvent } from "./dealSignals";
 
-export type Exit = "FLIP" | "RENTAL" | "WHOLESALE" | "PASS";
+export type Exit = "FLIP" | "RENTAL" | "WHOLESALE" | "DISTRESS" | "VERIFY" | "PASS";
 export type Tone = "pos" | "neg" | "neutral";
 
 type N = number | null;
 type S = string | null;
 export interface PresentRow {
   bestExit?: S; listPrice?: N; flipMao?: N; roomVsList?: N; flipMargin?: N;
-  cashFlow?: N; dscr?: N; capRate?: N; spread?: N; zestimate?: N; asIsValue?: N;
+  cashFlow?: N; dscr?: N; capRate?: N; spread?: N; spreadPct?: N; zestimate?: N; asIsValue?: N;
   conservativeArv?: N; rehabEstimate?: N; rentZestimate?: N; leaseRent?: N; brrrrCashLeftIn?: N;
   dealScore?: N; exitTriage?: S; aiReason?: S; redFlags?: string[] | null; riskFlags?: string[] | null;
   offMarketSignals?: string[] | null; offMarketBalances?: N; offMarketConditionScore?: N;
@@ -39,7 +39,7 @@ export function toneOf(n: N | undefined): Tone {
   return n > 0 ? "pos" : "neg";
 }
 
-const EXITS: readonly Exit[] = ["FLIP", "RENTAL", "WHOLESALE", "PASS"];
+const EXITS: readonly Exit[] = ["FLIP", "RENTAL", "WHOLESALE", "DISTRESS", "VERIFY", "PASS"];
 export function normalizeExit(s: S | undefined): Exit | null {
   const u = (s ?? "").toUpperCase();
   return (EXITS as readonly string[]).includes(u) ? (u as Exit) : null;
@@ -67,7 +67,7 @@ export function verdictFor(r: PresentRow): Verdict {
   if (exit === "RENTAL" && ok(r.cashFlow)) {
     return { value: `${signedMoney(r.cashFlow)}/mo`, caption: `DSCR ${ok(r.dscr) ? r.dscr.toFixed(2) : "—"}`, tone: toneOf(r.cashFlow), sortKey: r.cashFlow };
   }
-  if (exit === "WHOLESALE" && ok(r.spread)) {
+  if ((exit === "WHOLESALE" || exit === "DISTRESS") && ok(r.spread)) {
     return { value: signedMoney(r.spread), caption: `vs ${spreadBasisLabel(r)}`, tone: toneOf(r.spread), sortKey: r.spread };
   }
   return NO_VERDICT;

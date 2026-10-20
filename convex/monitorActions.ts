@@ -784,7 +784,7 @@ export const analyzeOne = internalAction({
 });
 
 /**
- * Email the un-emailed FLIP/RENTAL keepers as a 5-second brief (src/scraper/monitorDigest.ts) via Resend. Key-gated: with no
+ * Email the un-emailed FLIP/RENTAL + Below market + Distress keepers as a 5-second brief (src/scraper/monitorDigest.ts) via Resend. Key-gated: with no
  * RESEND_API_KEY it logs a note and returns {sent:false} (never throws) — the
  * /monitor page is the in-app review surface, so a missing key/failed send must
  * not break the run. Stamps emailedAt per row so a keeper is never emailed twice.

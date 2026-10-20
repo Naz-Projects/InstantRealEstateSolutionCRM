@@ -597,6 +597,11 @@ export function digestLaneRank(bestExit: string | null | undefined): number {
 export function isDigestWorthy(bestExit: string | null | undefined): boolean {
   return digestLaneRank(bestExit) > 0;
 }
+// Digest order (and what the keepersToEmail cap keeps): lane first, then deal score —
+// lane-only rows score ~0, so a score-only sort would let them crowd out FLIP/RENTAL.
+export function byDigestPriority(a: { bestExit?: string | null; dealScore?: number | null }, b: { bestExit?: string | null; dealScore?: number | null }): number {
+  return digestLaneRank(b.bestExit) - digestLaneRank(a.bestExit) || (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity);
+}
 // A keeper may already carry emailedAt (sent, or stamped board-only by markDigestSkipped,
 // e.g. every pre-2026-10-20 WHOLESALE row); when a re-analysis moves it UP a lane,
 // emailedAt must be cleared or the digest (keeper && emailedAt unset) never sees it.

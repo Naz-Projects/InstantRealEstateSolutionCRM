@@ -6,7 +6,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { requireUser } from "./helpers";
 import { requireAdmin, getAuthUser } from "./lib/getAuthUser";
 import { normalizeAddress } from "../src/scraper/potentialPipeline";
-import { MONITOR, partitionDigestRows, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
+import { MONITOR, partitionDigestRows, byDigestPriority, evaluateDeal, dealInputFromStored, decisionFields } from "../src/scraper/monitorListings";
 import { applyTriage, scanBlockedReason, type TriageState } from "../src/scraper/monitorTriage";
 import { sightingPatch, cardCutFields, recheckPatch } from "../src/scraper/monitorRecheck";
 import { normalizeBuyBox, isEmptyBuyBox, type BuyBox, type AudienceMember } from "../src/scraper/monitorBuyBox";
@@ -390,7 +390,7 @@ export const markEmailed = internalMutation({
 
 /**
  * Stamp emailedAt ("digest processed") on never-emailed keepers that will never
- * be emailed (WHOLESALE/PASS/unset bestExit, or archived) so they leave the
+ * be emailed (VERIFY/PASS/unset bestExit, or archived) so they leave the
  * by_keeper_emailed range and the nightly digest scan stays bounded. Run by
  * sendDigest before any send/key check. Returns the stamped count.
  */
@@ -443,9 +443,10 @@ export const keepersToEmail = internalQuery({
       .query("monitorListings")
       .withIndex("by_keeper_emailed", (q) => q.eq("keeper", true).eq("emailedAt", undefined))
       .collect();
-    // Filter BEFORE the cap so board-only keepers (WHOLESALE/PASS) can't crowd it.
+    // Filter BEFORE the cap so board-only keepers (VERIFY/PASS) can't crowd it; lane-first
+    // order so Below market / Distress rows never push FLIP/RENTAL out of the cap.
     const active = partitionDigestRows(rows).toEmail;
-    active.sort((a, b) => (b.dealScore ?? -Infinity) - (a.dealScore ?? -Infinity));
+    active.sort(byDigestPriority);
     return active.slice(0, limit ?? 50);
   },
 });

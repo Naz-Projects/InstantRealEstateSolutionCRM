@@ -220,6 +220,7 @@ export function MonitorPage() {
             <ToggleGroupItem value="FLIP">Flip</ToggleGroupItem>
             <ToggleGroupItem value="RENTAL">Rental</ToggleGroupItem>
             <ToggleGroupItem value="WHOLESALE">Wholesale</ToggleGroupItem>
+            <ToggleGroupItem value="DISTRESS">Distress</ToggleGroupItem>
           </ToggleGroup>
           <Select value={zip} onValueChange={setZip}>
             <SelectTrigger size="sm" className="w-32" aria-label="ZIP"><SelectValue /></SelectTrigger>

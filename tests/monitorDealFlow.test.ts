@@ -4,8 +4,9 @@
 import { describe, it, expect } from "vitest";
 import {
   MONITOR, evaluateDeal, detectDistress, conservativeArv, dealInputFromStored, meetsRentalFloor,
-  isDigestWorthy, digestLaneRank, partitionDigestRows, shouldReopenForDigest, riskFlags,
+  isDigestWorthy, digestLaneRank, partitionDigestRows, shouldReopenForDigest, riskFlags, byDigestPriority,
 } from "../src/scraper/monitorListings";
+import { matchesBuyBox } from "../src/scraper/monitorBuyBox";
 import type { DealInput, RentalMetrics } from "../src/scraper/monitorListings";
 import type { Comp } from "../src/scraper/comps";
 
@@ -183,6 +184,24 @@ describe("digest lanes", () => {
     const p = partitionDigestRows(rows);
     expect(p.toEmail.map((r) => r.id)).toEqual(["w", "d"]);
     expect(p.toSkip.map((r) => r.id)).toEqual(["v", "aw"]);
+  });
+  it("digest order: lane first, then score (the 50-row cap can never drop a FLIP for a Below market row)", () => {
+    const rows = [
+      { id: "w90", bestExit: "WHOLESALE", dealScore: 90 }, { id: "d", bestExit: "DISTRESS", dealScore: 99 },
+      { id: "f40", bestExit: "FLIP", dealScore: 40 }, { id: "w20", bestExit: "WHOLESALE", dealScore: 20 }, { id: "r75", bestExit: "RENTAL", dealScore: 75 },
+    ];
+    expect([...rows].sort(byDigestPriority).map((r) => r.id)).toEqual(["r75", "f40", "w90", "w20", "d"]);
+  });
+  it("buy box: zips/price/beds filter every lane; an explicit exits list (FLIP/RENTAL only) excludes the new lanes", () => {
+    const w = { address: "1 A St, Newark, DE 19702", propZip: "19702", listPrice: 170000, bestExit: "WHOLESALE" };
+    const d = { ...w, bestExit: "DISTRESS" };
+    const box = { zips: ["19702"], exits: [] as ("FLIP" | "RENTAL")[] };
+    expect(matchesBuyBox(w, box)).toBe(true);
+    expect(matchesBuyBox(d, box)).toBe(true);
+    expect(matchesBuyBox(w, { ...box, zips: ["19805"] })).toBe(false);
+    expect(matchesBuyBox(d, { ...box, priceMax: 150000 })).toBe(false);
+    expect(matchesBuyBox(w, { ...box, exits: ["FLIP"] })).toBe(false);
+    expect(matchesBuyBox(w, null)).toBe(true);
   });
   it("reopen on a lane upgrade only (a skipped-stamped WHOLESALE upgraded to FLIP is emailed again)", () => {
     expect(shouldReopenForDigest("WHOLESALE", "FLIP")).toBe(true);

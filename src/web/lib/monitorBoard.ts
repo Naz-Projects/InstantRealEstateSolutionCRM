@@ -5,7 +5,7 @@ import { normalizeExit, type PresentRow } from "../../scraper/monitorPresent";
 
 export type BoardTab = "new" | "shortlist" | "passed" | "all";
 export type SortKey = "gap" | "cashflow" | "score" | "newest";
-export type ExitFilter = "FLIP" | "RENTAL" | "WHOLESALE";
+export type ExitFilter = "FLIP" | "RENTAL" | "WHOLESALE" | "DISTRESS";
 export const SORT_LABELS: Record<SortKey, string> = { gap: "Offer gap", cashflow: "Cash flow", score: "Score", newest: "Newest" };
 
 export interface BoardRow extends PresentRow {

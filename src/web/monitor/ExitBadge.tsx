@@ -8,6 +8,8 @@ const HUE: Record<string, string> = {
   FLIP: "border-teal/40 bg-teal/10 text-teal-glow",
   RENTAL: "border-sky-500/40 bg-sky-500/10 text-sky-300",
   WHOLESALE: "border-violet-500/40 bg-violet-500/10 text-violet-300",
+  DISTRESS: "border-orange-500/40 bg-orange-500/10 text-orange-300",
+  VERIFY: "border-amber-500/40 bg-amber-500/10 text-amber-300",
   WHOLETAIL: "border-sky-500/40 bg-sky-500/10 text-sky-300",
   PASS: "border-border bg-muted/40 text-muted-foreground",
 };

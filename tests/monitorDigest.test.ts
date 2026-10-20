@@ -153,3 +153,55 @@ describe("Phase 4 alert tag", () => {
     expect(buildDigest([{ ...FLIP, alertTag: null }], OPTS).subject).toBe("IRES Monitor: 1 worth a look");
   });
 });
+
+describe("2026-10-20 lanes: Below market + Distress sections", () => {
+  const WHOLE: DigestRow = {
+    _id: "w1", address: "21 Poe Way, Newark, DE 19702", bestExit: "WHOLESALE", dealScore: 20,
+    listPrice: 170000, flipMao: 128564, spread: 26400, spreadPct: 13.4, zestimate: 196400,
+  };
+  const DIST: DigestRow = {
+    _id: "d1", address: "724 E 22nd St, Wilmington, DE 19802", bestExit: "DISTRESS", dealScore: 10,
+    listPrice: 120000, flipMao: 36337, spread: 7498, spreadPct: 5.9,
+    riskFlags: ["tax rate estimated 1.6% (VERIFY)", "Distress signal: investor special"],
+  };
+
+  it("WHOLESALE leads with the offer ceiling, then list, then how far below value", () => {
+    expect(digestCells(WHOLE)).toEqual([
+      { label: "Offer ceiling", value: "$128,564", tone: "neutral" },
+      { label: "List", value: "$170,000", tone: "neutral" },
+      { label: "Below Zestimate", value: "13.4%", tone: "pos" },
+    ]);
+    expect(digestCells({ ...WHOLE, zestimate: null })[2].label).toBe("Below as-is value");
+  });
+  it("no offer ceiling (renovated / rehab unknown) reads as a dash", () => {
+    expect(digestCells({ ...WHOLE, flipMao: null })[0]).toEqual({ label: "Offer ceiling", value: "—", tone: "neutral" });
+  });
+  it("DISTRESS leads with the offer ceiling and names the signal", () => {
+    expect(digestCells(DIST).map((c) => [c.label, c.value])).toEqual([["Offer ceiling", "$36,337"], ["List", "$120,000"], ["Signal", "Investor special"]]);
+    expect(digestCells({ ...DIST, riskFlags: [] })[2].value).toBe("—");
+  });
+  it("sections in lane order with headings (html + text); the count covers every lane", () => {
+    const d = buildDigest([FLIP, WHOLE, DIST], OPTS);
+    expect(d.subject).toBe("IRES Monitor: 3 worth a look");
+    const order = [d.html.indexOf(">Flip and rental<"), d.html.indexOf("319 E 13th St"), d.html.indexOf(">Below market<"),
+      d.html.indexOf("21 Poe Way"), d.html.indexOf(">Distress<"), d.html.indexOf("724 E 22nd St")];
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(d.text).toMatch(/FLIP AND RENTAL[\s\S]*319 E 13th St[\s\S]*BELOW MARKET[\s\S]*21 Poe Way[\s\S]*DISTRESS\n[\s\S]*724 E 22nd St/);
+  });
+  it("rows arriving out of lane order are still grouped by lane", () => {
+    const d = buildDigest([DIST, WHOLE, FLIP], OPTS);
+    expect(d.html.indexOf("319 E 13th St")).toBeLessThan(d.html.indexOf("21 Poe Way"));
+    expect(d.html.indexOf("21 Poe Way")).toBeLessThan(d.html.indexOf("724 E 22nd St"));
+  });
+  it("a single-lane digest has no section headings (Phase 3 look unchanged)", () => {
+    expect(buildDigest([FLIP, RENTAL], OPTS).html).not.toContain(">Flip and rental<");
+    expect(buildDigest([WHOLE], OPTS).html).not.toContain(">Below market<");
+  });
+  it("lane pills label the card's own exit, never a FLIP fallback", () => {
+    const d = buildDigest([DIST], OPTS);
+    expect(d.html).toContain(">DISTRESS<");
+    expect(d.html).not.toContain(">FLIP<");
+    expect(d.text).toContain("DISTRESS 10 · 724 E 22nd St");
+  });
+});

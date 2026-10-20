@@ -2,9 +2,10 @@
 // sendDigest). Light ground, Outlook-safe tables, all CSS inline (Gmail strips
 // <style>). Every interpolated value goes through esc(); every URL through safeHref.
 import {
-  money, signedMoney, toneOf, normalizeExit, displayFlags, oneLineReason, analystNote, safeHref,
+  money, signedMoney, toneOf, normalizeExit, displayFlags, oneLineReason, analystNote, safeHref, spreadBasisLabel,
   type PresentRow, type Tone,
 } from "./monitorPresent";
+import { digestLaneRank } from "./monitorListings";
 
 export const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -26,6 +27,8 @@ const C = {
 const PILL: Record<string, { bg: string; fg: string }> = {
   FLIP: { bg: "#E3F2EE", fg: "#1F7A66" },
   RENTAL: { bg: "#E6EEFB", fg: "#1E4FA3" },
+  WHOLESALE: { bg: "#F1EBFB", fg: "#5B3A9E" },
+  DISTRESS: { bg: "#FFF1E6", fg: "#9A4A00" },
 };
 const toneColor = (t: Tone) => (t === "pos" ? C.pos : t === "neg" ? C.neg : C.ink);
 const FONT = "-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
@@ -37,9 +40,24 @@ export function dealLink(baseUrl: string, id: string): string {
 
 const fin = (n: number | null | undefined): n is number => n != null && Number.isFinite(n);
 
+// The DISTRESS-lane term analyzeOne stores as a risk flag ("Distress signal: as-is").
+const SIGNAL_FLAG = "Distress signal: ";
+function distressSignal(r: PresentRow): string | null {
+  const f = (r.riskFlags ?? []).find((x) => x.startsWith(SIGNAL_FLAG));
+  const s = f ? f.slice(SIGNAL_FLAG.length).trim() : "";
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : null;
+}
+
 export function digestCells(r: PresentRow): DigestCell[] {
   const list: DigestCell = { label: "List", value: money(r.listPrice), tone: "neutral" };
-  if (normalizeExit(r.bestExit) === "RENTAL") {
+  const exit = normalizeExit(r.bestExit);
+  // Below market / Distress lead with the offer ceiling (the NCC 66.7%-rule MAO), not list.
+  if (exit === "WHOLESALE" || exit === "DISTRESS") {
+    const ceiling: DigestCell = { label: "Offer ceiling", value: money(r.flipMao), tone: "neutral" };
+    if (exit === "DISTRESS") return [ceiling, list, { label: "Signal", value: distressSignal(r) ?? "—", tone: "neutral" }];
+    return [ceiling, list, { label: `Below ${spreadBasisLabel(r)}`, value: fin(r.spreadPct) ? `${r.spreadPct.toFixed(1)}%` : "—", tone: fin(r.spreadPct) ? "pos" : "neutral" }];
+  }
+  if (exit === "RENTAL") {
     return [
       list,
       { label: "Cash flow", value: fin(r.cashFlow) ? `${signedMoney(r.cashFlow)}/mo` : "—", tone: toneOf(r.cashFlow) },
@@ -112,7 +130,18 @@ function cardText(r: DigestRow, o: DigestOpts): string {
   return lines.join("\n");
 }
 
+// Digest sections in lane order (digestLaneRank). Headings only when 2+ lanes are present,
+// so a FLIP/RENTAL-only night looks exactly as before.
+const SECTIONS: Array<{ rank: number; title: string }> = [
+  { rank: 3, title: "Flip and rental" },
+  { rank: 2, title: "Below market" },
+  { rank: 1, title: "Distress" },
+];
+
 export function buildDigest(rows: DigestRow[], o: DigestOpts): { subject: string; text: string; html: string } {
+  const groups = SECTIONS.map((s) => ({ title: s.title, rows: rows.filter((r) => (digestLaneRank(r.bestExit) || 3) === s.rank) }))
+    .filter((g) => g.rows.length > 0);
+  const headed = groups.length > 1;
   const title = `${rows.length} worth a look`;
   const board = `${base(o.baseUrl)}/monitor`;
   const footerLabel = o.moreOnBoard > 0 ? `${o.moreOnBoard} more on the board` : "Open the board";
@@ -120,7 +149,7 @@ export function buildDigest(rows: DigestRow[], o: DigestOpts): { subject: string
   const subject = `IRES Monitor: ${title}${alerts > 0 ? ` · ${alerts} price cut / back on market` : ""}`;
   const text =
     `IRES MONITOR\n${title}\nNew Castle County · ${o.date}\n\n` +
-    `${rows.map((r) => cardText(r, o)).join("\n\n")}\n\n` +
+    `${groups.map((g) => (headed ? `${g.title.toUpperCase()}\n\n` : "") + g.rows.map((r) => cardText(r, o)).join("\n\n")).join("\n\n")}\n\n` +
     `${footerLabel}: ${board}\nIRES CRM · automated nightly scan\n`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:0;background:${C.wash};">
 <div style="background:${C.wash};padding:20px 12px;font-family:${FONT};">
@@ -130,7 +159,7 @@ export function buildDigest(rows: DigestRow[], o: DigestOpts): { subject: string
       <div style="color:${C.ink};font-size:22px;font-weight:800;line-height:1.2;margin:0 0 4px;">${esc(title)}</div>
       <div style="color:${C.muted};font-size:13px;">New Castle County &middot; ${esc(o.date)}</div>
     </div>
-    ${rows.map((r) => cardHtml(r, o)).join("\n")}
+    ${groups.map((g) => (headed ? `<div style="color:${C.ink};font-size:15px;font-weight:700;margin:18px 4px 10px;">${esc(g.title)}</div>\n` : "") + g.rows.map((r) => cardHtml(r, o)).join("\n")).join("\n")}
     <div style="text-align:center;color:${C.muted};font-size:13px;line-height:1.7;padding:8px 4px 4px;">
       <a href="${esc(board)}" style="color:${C.teal};font-weight:600;text-decoration:none;">${esc(footerLabel)}</a><br>
       IRES CRM &middot; automated nightly scan
