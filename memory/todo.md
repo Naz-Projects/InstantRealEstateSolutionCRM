@@ -7,6 +7,10 @@ What's built and what's still ahead. `[x]` done · `[ ]` planned · `[~]` blocke
 - [x] Critique 2026-10-03 -> Phase 1 deal floors, Phase 2 comps/ARV/rehab/rental, Phase 3 triage inbox + 5-second digest,
   Phase 4 price-cut sweep + re-check rotation + status retire + re-alerts + per-user buy box. Plans: `docs/superpowers/plans/2026-10-04-monitor-*.md`.
 - [x] **First nightly on the new code verified (2026-10-05):** scanned 111 (was 109), 31 new analyzed, 0 failed, 3 keepers + all 3 PRICE CUT alerts emailed, no new errorLogs, no backOnMarketAt rows. 14:00 UTC re-check run not yet inspected.
+- [x] **Deal-flow fix + Zillow links + Sonnet 5.5 judge SHIPPED 2026-10-20** (memory.md). Strategy doc: https://claude.ai/code/artifact/5fcc9ece-9b80-4aea-97e0-fc0bdabe7e1a
+- [ ] **Verify first nightly after 2026-10-20:** Below market + Distress sections emailed (~2-3/night), judge errors in errorLogs (Anthropic spend limit until 11-01 unless raised).
+- [~] User: raise Anthropic spend limit; finish Jev labels (session scratchpad `jevtest/labels.html`, then `score.mts`); hard-reload /monitor (prod monitorSeen/monitorTriage empty, unexplained).
+- [ ] Next per strategy doc: compliance pack (SB 201 disclosure + 21-day cancel on PSA, 24B routing) -> fusion core (per-parcel score + one inbox) -> free vacant/monition/fees/permits feeds -> contact engine -> court docket (counsel-gated). Monitor: $0-price auction cards, weekly "as is"/"investor"/"cash" stale sweep, fix house-number-only parcel match (~7% wrong), buy-box exit picker lacks WHOLESALE/DISTRESS, 5 below-market cards with no MAO.
 - [ ] **Watch:** any row whose `backOnMarketAt` re-stamps within days (repeat-email loop signature); errorLogs for "covered X of Y" short sweeps;
   Lane B starvation if unknown-status retries pile up (cap 25/day).
 - [x] **Manufactured homes excluded like land (2026-10-05, `ab25d1e`)** + 10 prod MH keepers de-kept. User also chose: stay SILENT on empty nights (no "0 worth a look" email).
