@@ -16,6 +16,7 @@
     "integration:legal": "tsx scripts/legal-integration.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.136.0",
     "@clerk/clerk-react": "^5.22.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/inter": "^5.2.8",

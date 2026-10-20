@@ -673,8 +673,9 @@ function dealSignalsBlock(rec: any): string {
   backOnMarket: ${ds.backOnMarket ? "yes" : "no"}`;
 }
 
-export function buildJudgePrompt(rec: any): string {
-  return `You are a real-estate investment analyst for a New Castle County, DE flipping/rental firm. Judge whether this NEW listing is a deal worth surfacing. Keep it if it meets ANY of: (1) below_market (listed materially under value — the spread is ALREADY COMPUTED below), (2) fixer (needs renovation), (3) distressed (motivated/estate/foreclosure/as-is/must-sell), (4) flip (margin after rehab). DO NOT recompute any numbers — every number below is GIVEN, use it as-is; never recompute the spread, margin, cap rate, $/sqft, or signals.
+// The judge's stable instructions (the cached system prompt) — byte-identical across
+// listings so the prefix caches; everything per-listing goes in buildJudgePrompt.
+export const JUDGE_SYSTEM = `You are a real-estate investment analyst for a New Castle County, DE flipping/rental firm. Judge whether the NEW listing in the user message is a deal worth surfacing. Keep it if it meets ANY of: (1) below_market (listed materially under value — the spread is ALREADY COMPUTED in the listing), (2) fixer (needs renovation), (3) distressed (motivated/estate/foreclosure/as-is/must-sell), (4) flip (margin after rehab). DO NOT recompute any numbers — every number in the listing is GIVEN, use it as-is; never recompute the spread, margin, cap rate, $/sqft, or signals.
 
 RUBRIC (condense the description against this; the numbers are already computed):
 CONDITION TIERS (route the value-add):
@@ -693,8 +694,11 @@ EXIT TRIAGE (pick best-fit exitTriage + list exitFallbacks[]; score all, never o
 
 Return ONLY json of EXACTLY this shape:
 {"keep":true,"matchedRequirements":["fixer","distressed"],"renovated":false,"conditionTier":"moderate","valueAddScope":"...","redFlags":[],"verifyGates":[],"exitTriage":"FLIP","exitFallbacks":["WHOLETAIL"],"breakdown":"...","confidence":"high","conditionNotes":"...","reason":"one sentence <=200 chars"}
-Rules: conditionTier ∈ {cosmetic,moderate,systems,structural}; exitTriage ∈ {FLIP,WHOLETAIL,RENTAL,WHOLESALE,PASS}; valueAddScope ≤300 chars (the specific scope of work / value-add play); breakdown ≤900 chars (the analyst narrative tying signals→condition→exit); redFlags/verifyGates/exitFallbacks are short string arrays; renovated:true ONLY if the home was ALREADY renovated/remodeled/turnkey (someone else did the flip); missing/unknown → use null (do not fabricate).
-Listing:
+Rules: conditionTier ∈ {cosmetic,moderate,systems,structural}; exitTriage ∈ {FLIP,WHOLETAIL,RENTAL,WHOLESALE,PASS}; valueAddScope ≤300 chars (the specific scope of work / value-add play); breakdown ≤900 chars (the analyst narrative tying signals→condition→exit); redFlags/verifyGates/exitFallbacks are short string arrays; renovated:true ONLY if the home was ALREADY renovated/remodeled/turnkey (someone else did the flip); missing/unknown → use null (do not fabricate).`;
+
+// The per-listing user message (all GIVEN numbers + the description).
+export function buildJudgePrompt(rec: any): string {
+  return `Listing:
 address: ${rec.address ?? "n/a"}
 listPrice: ${rec.listPrice ?? "n/a"}
 conservativeARV: ${rec.conservativeArv ?? "n/a"}

@@ -4,6 +4,7 @@ import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
+import Anthropic from "@anthropic-ai/sdk";
 import { scrapeZillowJson, scrapeRedfinSold } from "./monitorScrape";
 import {
   MONITOR,
@@ -28,8 +29,6 @@ import {
   evaluateDeal,
   rentForListing,
   riskFlags,
-  buildJudgePrompt,
-  parseJudgeResponse,
   type SearchListing,
   type JudgeVerdict,
 } from "../src/scraper/monitorListings";
@@ -38,6 +37,7 @@ import { deriveDealSignals } from "../src/scraper/dealSignals";
 import { buildDigest } from "../src/scraper/monitorDigest";
 import { reAlertDecision, nextRecheckAt, digestAlertTag } from "../src/scraper/monitorRecheck";
 import { planRecipientDigests, shouldStampDigest } from "../src/scraper/monitorBuyBox";
+import { judgeModel, buildJudgeRequest, verdictFromMessage } from "../src/scraper/monitorJudge";
 
 // "Monitor the Web" (Zillow NCC deal-finder) — the "use node" action layer:
 // scan → per-listing enrich → keeper decision. ONE shared scan path (webhook /
@@ -47,10 +47,9 @@ import { planRecipientDigests, shouldStampDigest } from "../src/scraper/monitorB
 
 type ScanResult = { scanned: number; newCount: number; keeperCount: number };
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const RESEND_URL = "https://api.resend.com/emails";
 const FIRECRAWL_V2_MONITOR_URL = "https://api.firecrawl.dev/v2/monitor";
-const LLM_MODEL = process.env.MONITOR_LLM_MODEL ?? "deepseek/deepseek-v3.2";
+const LLM_MODEL = judgeModel(process.env.MONITOR_LLM_MODEL); // claude-sonnet-5-5 unless overridden
 const STAGGER_MS = 3000; // per-listing analyze fan-out (mirror sheriff enrich)
 // The digest is COMPLETION-triggered (noteAnalyzeDone at pendingCount 0). This
 // fallback fires late as a safety net for the killed-action case (a keeper is
@@ -58,8 +57,8 @@ const STAGGER_MS = 3000; // per-listing analyze fan-out (mirror sheriff enrich)
 // digest is a no-op).
 const DIGEST_FALLBACK_MS = 30 * 60_000;
 // Per-scrape retry budgets. analyzeOne does up to TWO scrapes (detail + comps)
-// plus a 30s LLM call inside ONE action, so each scrape's worst case must stay
-// small: 2 attempts × 60s + 12s gap ≈ 2.2 min each → ~5 min action worst case,
+// plus an LLM call (60s x 2 attempts) inside ONE action, so each scrape's worst case must stay
+// small: 2 attempts × 60s + 12s gap ≈ 2.2 min each → ~6.5 min action worst case,
 // under the 10-min kill limit (a killed action strands rows "pending"). The
 // top-level search scrape runs alone, so it keeps a longer envelope — capped so
 // one fully-blocked page (~3×90s+40s ≈ 5 min) plus 4 fast pages still fits.
@@ -105,30 +104,35 @@ function upsertArgsFromCard(l: SearchListing) {
 }
 
 /**
- * DeepSeek (via OpenRouter) text-only judge — condition/distress from the
- * description, never the numbers (those are computed deterministically). Mirrors
- * the OpenRouter call in conditionActions. Returns null on ANY failure (no key /
- * HTTP / timeout / unparseable) so the deterministic keep-gate still decides.
+ * Claude (Sonnet 5.5, official SDK) text-only judge — condition/distress from the
+ * description, never the numbers (those are computed deterministically). Returns
+ * null on ANY failure (no key / refusal / truncation / HTTP / timeout / unparseable)
+ * so the deterministic keep-gate still decides. Transient failures (429, 5xx,
+ * connection, timeout) are silent like before; config errors (bad key, unknown model,
+ * bad request) are logged, so a wrong ANTHROPIC_API_KEY or MONITOR_LLM_MODEL is
+ * visible instead of a quiet judge-less month (lessons 2026-06-02).
  */
-async function judgeWithDeepSeek(rec: unknown): Promise<JudgeVerdict | null> {
-  const orKey = (process.env.OPENROUTER_API_KEY ?? "").trim();
-  if (!orKey) return null;
+async function judgeWithClaude(ctx: ActionCtx, rec: unknown): Promise<JudgeVerdict | null> {
+  const apiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
+  if (!apiKey) return null;
+  // 60s per attempt + one SDK retry: inside analyzeOne's 10-min envelope (see the budget note above).
+  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   try {
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${orKey}`, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: [{ role: "user", content: buildJudgePrompt(rec) }],
-        temperature: 0,
-        max_tokens: 1200,
-      }),
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return parseJudgeResponse(json.choices?.[0]?.message?.content ?? "");
-  } catch {
+    return verdictFromMessage(await client.beta.messages.create(buildJudgeRequest(rec, LLM_MODEL)));
+  } catch (e) {
+    if (
+      e instanceof Anthropic.RateLimitError ||
+      e instanceof Anthropic.InternalServerError ||
+      e instanceof Anthropic.APIConnectionError // includes APIConnectionTimeoutError
+    ) {
+      return null;
+    }
+    if (e instanceof Anthropic.APIError) {
+      await ctx.runMutation(internal.errors.logServerError, {
+        message: `monitor judge (${LLM_MODEL}) failed: ${e.status ?? ""} ${e.message}`.slice(0, 500),
+        context: "monitorActions.judgeWithClaude",
+      });
+    }
     return null;
   }
 }
@@ -449,7 +453,7 @@ export const recheckOne = internalAction({
 
 /**
  * Enrich one discovered listing: detail scrape → comps → conservative ARV →
- * rehab tier → multi-exit (flip + rental) → off-market cross-ref → DeepSeek
+ * rehab tier → multi-exit (flip + rental) → off-market cross-ref → Claude
  * judge → renovated veto (an already-renovated house never keeps a flip exit) →
  * deal score → keeper decision. Patches the row `analyzed` (or `failed` +
  * lastError on a thrown error). Runs as a scheduled action (no user identity).
@@ -499,7 +503,7 @@ export const analyzeOne = internalAction({
       // meaningless on vacant land, and lot rent + chattel financing break them on
       // manufactured homes, so neither is ever underwritten or kept — surfaced in
       // "All new" only. Bail before comps/ARV/rehab/exits/off-market and the
-      // DeepSeek call (saves credits).
+      // LLM judge call (saves credits).
       if (isLandType(homeType) || isManufacturedType(homeType)) {
         await ctx.runMutation(internal.monitorData.patchAnalysis, {
           id,
@@ -614,8 +618,8 @@ export const analyzeOne = internalAction({
         ...(zip ? { zip } : {}),
       });
 
-      // 9) DeepSeek judge (may be null — the deterministic gate still decides).
-      const verdict = await judgeWithDeepSeek({
+      // 9) Claude judge (may be null — the deterministic gate still decides).
+      const verdict = await judgeWithClaude(ctx, {
         address: row.address,
         listPrice,
         conservativeArv: arv,

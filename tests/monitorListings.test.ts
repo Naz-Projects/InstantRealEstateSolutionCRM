@@ -6,7 +6,7 @@ import { conservativeArv, inferRehabTier, detectRenovated } from "../src/scraper
 import { analyzeFlip, analyzeRental, scoreDeal, evaluateDeal, meetsFlipFloor, meetsRentalFloor, riskFlags, MONITOR, dealInputFromStored, decisionFields, monitorRehab } from "../src/scraper/monitorListings";
 import type { DealInput, FlipResult, RentalMetrics } from "../src/scraper/monitorListings";
 import { isLandType, isManufacturedType, isMultiUnitType, isCondoType, digestRecipients, cronScanEnabled, isDigestWorthy, partitionDigestRows, shouldReopenForDigest } from "../src/scraper/monitorListings";
-import { parseJudgeResponse, buildJudgePrompt } from "../src/scraper/monitorListings";
+import { parseJudgeResponse, buildJudgePrompt, JUDGE_SYSTEM } from "../src/scraper/monitorListings";
 import { computeFlip, FLIP_DEFAULTS } from "../src/scraper/flip";
 import { deriveDealSignals } from "../src/scraper/dealSignals";
 import type { Comp } from "../src/scraper/comps";
@@ -415,7 +415,7 @@ describe("parseJudgeResponse", () => {
     expect(truthy.renovated).toBe(false); // tolerant: anything not === true is false
   });
   it("prompt contains the 4 requirements + says return json + forbids recomputing + asks for renovated", () => {
-    const p = buildJudgePrompt({ address: "1 X St", listPrice: 100000, conservativeArv: 200000, spreadPct: 50, description: "as-is" });
+    const p = JUDGE_SYSTEM + "\n" + buildJudgePrompt({ address: "1 X St", listPrice: 100000, conservativeArv: 200000, spreadPct: 50, description: "as-is" });
     expect(p.toLowerCase()).toContain("json");
     expect(p).toMatch(/below.market/i); expect(p).toMatch(/fixer|renovat/i); expect(p).toMatch(/distress/i);
     expect(p.toLowerCase()).toContain("do not recompute");
@@ -442,7 +442,7 @@ describe("buildJudgePrompt v2 (rubric + dealSignals block)", () => {
     zip: "19702",
     now: Date.parse("2026-07-04"),
   });
-  const p = buildJudgePrompt({
+  const p = JUDGE_SYSTEM + "\n" + buildJudgePrompt({
     address: "12 Motivated Ln, Newark, DE 19702",
     listPrice: 180000,
     conservativeArv: 260000,
@@ -503,6 +503,14 @@ describe("buildJudgePrompt v2 (rubric + dealSignals block)", () => {
     expect(dealSignals.motivationPoints).toBeGreaterThan(0);
   });
 
+  it("system = the stable rubric (cacheable, no listing data); user = the listing only", () => {
+    const user = buildJudgePrompt({ address: "12 Motivated Ln", listPrice: 180000, description: "needs TLC" });
+    expect(user.startsWith("Listing:\naddress: 12 Motivated Ln")).toBe(true);
+    expect(user).not.toContain("RUBRIC");
+    expect(JUDGE_SYSTEM).toContain("RUBRIC");
+    expect(JUDGE_SYSTEM).not.toContain("12 Motivated Ln");
+    expect(JUDGE_SYSTEM).not.toContain("${");
+  });
   it("omits the dealSignals block when rec.dealSignals is absent", () => {
     const bare = buildJudgePrompt({ address: "1 X St", listPrice: 100000, conservativeArv: 200000, spreadPct: 50, description: "as-is" });
     expect(bare).toContain("dealSignals: n/a");
